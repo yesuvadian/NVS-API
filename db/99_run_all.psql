@@ -1,0 +1,46 @@
+-- =============================================================================
+-- CFMS / NVS  -  run every script with psql (alternative to DBeaver)
+-- -----------------------------------------------------------------------------
+-- 1) As postgres:  psql -h localhost -U postgres -d postgres -f 00a_bootstrap_role_and_database.sql
+-- 2) As postgres:  psql -h localhost -U postgres -d nvs      -f 00b_bootstrap_database_setup.sql
+-- 3) As nvs:       psql -h localhost -U nvs      -d nvs      -f 99_run_all.psql
+--    (run from inside the db folder; password nvs_admin)
+-- =============================================================================
+\set ON_ERROR_STOP on
+\ir 01_schemas_and_context.sql
+\ir 02_platform.sql
+\ir 03_core_and_iam.sql
+\ir 04_settings_workflows_rules.sql
+\ir 05_workflow_runtime_approvals.sql
+\ir 06_audit.sql
+\ir 07_members.sql
+\ir 08_accounting.sql
+\ir 09_loans.sql
+\ir 10_operations.sql
+\ir 11_deposits_chit_notifications.sql
+\ir 12_gap_additions.sql
+\ir 13_functional_controls.sql
+\ir 14_exception_handling.sql
+\ir 16_loan_gap_tables.sql
+\ir 20_security_rls_audit.sql
+\ir 15_security_translations_archive.sql
+\ir 30_functions_provisioning.sql
+\ir 31_functions_api_queries.sql
+\ir 32_functions_loan_servicing.sql
+\ir 33_functions_loan_repayment.sql
+\ir 34_functions_loan_notifications.sql
+\ir 35_functions_loan_recovery.sql
+\ir 36_functions_loan_lifecycle.sql
+\ir 37_functions_loan_guarantors.sql
+\ir 38_functions_loan_restructure.sql
+\ir 39_functions_loan_reports.sql
+\ir 40_seed_platform.sql
+\ir 41_seed_additions.sql
+\ir 42_seed_templates.sql
+\ir 43_seed_common_data.sql
+\ir 44_seed_error_codes.sql
+\ir 46_seed_loan_gaps.sql
+\ir 45_indexes_and_search.sql
+-- optional demo organisation for local development:
+-- \ir 50_seed_demo_tenant.sql
+\ir 90_verify.sql

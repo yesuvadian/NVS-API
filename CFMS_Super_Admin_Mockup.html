@@ -1,0 +1,1002 @@
+<title>CFMS Super Admin Console</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600&display=swap">
+<style>
+/* Layout: fixed platform sidebar + working pane; org screens use a tab strip; tables and forms are the main material. */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --sunk:#e9edeb; --line:#d6ddd9; --fg:#18231f; --muted:#5d6b65;
+  --side:#14261f; --side-fg:#cfdcd6; --side-mute:#86a094; --side-hi:#21392f;
+  --accent:#1d6b52; --accent-fg:#ffffff; --accent-soft:#dcefe7;
+  --warn:#9a5b00; --warn-soft:#fbefd9; --bad:#a3302a; --bad-soft:#f8e1df; --ok:#1d6b52; --ok-soft:#dcefe7; --info:#2f5d8a; --info-soft:#e0eaf5;
+  --f-display:"Sora","IBM Plex Sans",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1714; --surface:#16211d; --sunk:#1c2924; --line:#2b3b35; --fg:#e3ebe7; --muted:#93a59d;
+  --side:#0a110e; --side-fg:#c9d7d0; --side-mute:#7a9288; --side-hi:#18271f;
+  --accent:#4cbf96; --accent-fg:#06140e; --accent-soft:#173a2d;
+  --warn:#e6a94a; --warn-soft:#3a2a12; --bad:#ef8a83; --bad-soft:#3d1c1a; --ok:#4cbf96; --ok-soft:#173a2d; --info:#8ab6e3; --info-soft:#18283a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1714; --surface:#16211d; --sunk:#1c2924; --line:#2b3b35; --fg:#e3ebe7; --muted:#93a59d;
+  --side:#0a110e; --side-fg:#c9d7d0; --side-mute:#7a9288; --side-hi:#18271f;
+  --accent:#4cbf96; --accent-fg:#06140e; --accent-soft:#173a2d;
+  --warn:#e6a94a; --warn-soft:#3a2a12; --bad:#ef8a83; --bad-soft:#3d1c1a; --ok:#4cbf96; --ok-soft:#173a2d; --info:#8ab6e3; --info-soft:#18283a; color-scheme:dark}
+*{box-sizing:border-box}
+.view a:not(.btn){color:var(--accent)}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--side)}
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100%}
+aside{background:var(--side);color:var(--side-fg);padding:18px 12px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;padding-left:max(12px,env(safe-area-inset-left,0px))}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px}
+.brand-mark{width:30px;height:30px;border-radius:7px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-family:var(--f-display);font-weight:600;font-size:13px}
+.brand b{font-family:var(--f-display);font-weight:600;font-size:15px;color:#fff;display:block;line-height:1.2}
+.brand small{color:var(--side-mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+nav{display:flex;flex-direction:column;gap:2px}
+nav .grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--side-mute);padding:12px 10px 4px}
+nav a{color:var(--side-fg);text-decoration:none;padding:7px 10px;border-radius:var(--r);display:flex;justify-content:space-between;align-items:center;font-size:13.5px}
+nav a:hover{background:var(--side-hi)}
+nav a.on{background:var(--side-hi);color:#fff;box-shadow:inset 3px 0 0 var(--accent)}
+nav .cnt{font-family:var(--f-mono);font-size:11px;background:var(--warn);color:#1b1200;border-radius:9px;padding:0 6px}
+.me{margin-top:auto;border-top:1px solid var(--side-hi);padding:12px 8px 0;font-size:12px;color:var(--side-mute)}
+.me b{color:var(--side-fg);font-weight:500;display:block}
+main{min-width:0;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.crumbs{font-size:13px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumbs a{color:var(--muted);text-decoration:none}.crumbs a:hover{color:var(--fg)}
+.crumbs b{color:var(--fg);font-weight:500}
+.topr{display:flex;gap:10px;align-items:center;flex-shrink:0}
+.lang-sel{font:inherit;font-size:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.load-more-row{display:flex;justify-content:center;padding:12px;border-top:1px solid var(--line)}
+.mfa{font-size:11.5px;color:var(--ok);background:var(--ok-soft);padding:3px 8px;border-radius:12px;font-weight:500}
+.mock{font-size:11.5px;color:var(--muted);border:1px dashed var(--line);padding:3px 8px;border-radius:12px}
+.view{padding-block:24px 48px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px;max-width:1240px;width:100%}
+h1{font-family:var(--f-display);font-weight:600;font-size:22px;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-family:var(--f-display);font-weight:600;font-size:16px;margin:0}
+h3{font-size:13px;font-weight:600;margin:0}
+p{margin:0}
+.sub{color:var(--muted);max-width:72ch}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.head>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{font:inherit;font-size:13px;font-weight:500;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:7px 13px;border-radius:var(--r);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-width:0}
+.panel>.ph{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.panel>.pb{padding:16px;display:flex;flex-direction:column;gap:14px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.stat span{font-size:12px;color:var(--muted)}
+.stat b{font-family:var(--f-display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat small{font-size:12px;color:var(--muted)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line);background:var(--sunk);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr.click{cursor:pointer}tbody tr.click:hover td{background:var(--sunk)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.mono{font-family:var(--f-mono);font-size:12px}
+.muted{color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-ok{color:var(--ok);background:var(--ok-soft)}.p-warn{color:var(--warn);background:var(--warn-soft)}.p-bad{color:var(--bad);background:var(--bad-soft)}.p-info{color:var(--info);background:var(--info-soft)}.p-mute{color:var(--muted);background:var(--sunk)}
+.tag{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--muted);white-space:nowrap}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs a{padding:9px 14px;color:var(--muted);text-decoration:none;font-size:13.5px;border-bottom:2px solid transparent;white-space:nowrap;margin-bottom:-1px}
+.tabs a:hover{color:var(--fg)}
+.tabs a.on{color:var(--fg);border-bottom-color:var(--accent);font-weight:500}
+.note{display:flex;gap:10px;padding:10px 14px;border-radius:var(--r);font-size:13px;align-items:flex-start}
+.note b{font-weight:600}
+.n-info{background:var(--info-soft);color:var(--fg);border:1px solid color-mix(in srgb,var(--info) 30%,transparent)}
+.n-warn{background:var(--warn-soft);color:var(--fg);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}
+.n-ico{font-family:var(--f-mono);font-weight:600;flex-shrink:0;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;margin-top:1px}
+.n-info .n-ico{background:var(--info);color:var(--surface)}.n-warn .n-ico{background:var(--warn);color:var(--surface)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fld label,.lbl{font-size:12px;font-weight:500;color:var(--muted)}
+.fld .hint{font-size:11.5px;color:var(--muted)}
+input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],select,textarea{font:inherit;font-size:13.5px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;width:100%;min-width:0}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.affix{display:flex;align-items:stretch}
+.affix input{border-radius:var(--r) 0 0 var(--r)}
+.affix span{border:1px solid var(--line);border-left:0;background:var(--sunk);padding:0 10px;display:flex;align-items:center;font-size:12.5px;color:var(--muted);border-radius:0 var(--r) var(--r) 0;white-space:nowrap}
+.affix.pre input{border-radius:0 var(--r) var(--r) 0}
+.affix.pre span{border-left:1px solid var(--line);border-right:0;border-radius:var(--r) 0 0 var(--r)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;flex-wrap:wrap}
+.seg button{font:inherit;font-size:12.5px;border:0;background:var(--surface);color:var(--muted);padding:6px 11px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent-soft);color:var(--fg);font-weight:500}
+.sw{position:relative;display:inline-block;width:34px;height:20px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw i{position:absolute;inset:0;background:var(--line);border-radius:10px;transition:.15s;cursor:pointer}
+.sw i::after{content:"";position:absolute;width:14px;height:14px;left:3px;top:3px;background:var(--surface);border-radius:50%;transition:.15s}
+.sw input:checked+i{background:var(--accent)}
+.sw input:checked+i::after{transform:translateX(14px)}
+.sw input:focus-visible+i{outline:2px solid var(--accent);outline-offset:2px}
+.swrow{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--line)}
+.swrow:last-child{border-bottom:0}
+.swrow>div{min-width:0}
+.swrow p{font-size:12.5px;color:var(--muted)}
+.sect{display:flex;flex-direction:column;gap:12px;padding:16px;border-top:1px solid var(--line)}
+.sect:first-child{border-top:0}
+.sect-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sect-h h3{font-size:13.5px}
+.ref{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+/* workflow designer */
+.wf{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;align-items:start}
+.wflist{display:flex;flex-direction:column}
+.wflist button{font:inherit;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:10px 14px;cursor:pointer;color:var(--fg);display:flex;flex-direction:column;gap:2px}
+.wflist button:last-child{border-bottom:0}
+.wflist button:hover{background:var(--sunk)}
+.wflist button.on{background:var(--accent-soft)}
+.wflist small{color:var(--muted);font-size:11.5px}
+.stages{display:flex;align-items:center;gap:0;overflow-x:auto;padding:4px 2px 8px}
+.stage{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:var(--r);padding:8px 12px;cursor:pointer;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-start;gap:1px;flex-shrink:0}
+.stage small{font-size:11px;color:var(--muted)}
+.stage.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.arrow{width:22px;height:1px;background:var(--line);flex-shrink:0;position:relative}
+.arrow::after{content:"";position:absolute;right:0;top:-3px;border:3.5px solid transparent;border-left-color:var(--muted);border-right:0}
+.seqbtn{font:inherit;border:1px solid var(--line);background:var(--surface);color:var(--muted);width:24px;height:22px;border-radius:4px;cursor:pointer;line-height:1;padding:0}
+.seqbtn:disabled{opacity:.3}
+/* matrix */
+.mx td,.mx th{padding:6px 8px}
+.mx td.mn{white-space:nowrap}
+.chips{display:flex;gap:3px}
+.chip{font:inherit;font-family:var(--f-mono);font-size:11px;width:21px;height:21px;border-radius:4px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;padding:0;opacity:.55}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);opacity:1}
+.chip:disabled{cursor:default}
+.mx tr.off td{opacity:.4}
+/* wizard */
+.steps{display:flex;gap:6px;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);padding:6px 12px 6px 6px;border-radius:20px;background:var(--surface);border:1px solid var(--line)}
+.step i{font-style:normal;font-family:var(--f-mono);font-size:11px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--sunk)}
+.step.on{color:var(--fg);border-color:var(--accent)}.step.on i{background:var(--accent);color:var(--accent-fg)}
+.step.done i{background:var(--accent-soft);color:var(--ok)}
+.chk{display:flex;gap:9px;align-items:flex-start;font-size:13px;cursor:pointer}
+.chk input{margin-top:3px;accent-color:var(--accent)}
+.kv{display:grid;grid-template-columns:minmax(120px,180px) 1fr;gap:6px 16px;font-size:13px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+/* modal + toast */
+.scrim{position:fixed;inset:0;background:rgba(8,14,12,.5);display:grid;place-items:center;z-index:50;padding:16px}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:10px;width:min(520px,100%);max-height:90vh;overflow:auto;display:flex;flex-direction:column}
+.modal .mh{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+.modal .mb{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.modal .mf{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.toast{position:fixed;right:max(20px,env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:var(--r);font-size:13px;z-index:60;max-width:calc(100% - 40px)}
+.diff{font-family:var(--f-mono);font-size:12px;background:var(--sunk);border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+.diff .o{color:var(--bad);text-decoration:line-through}.diff .n{color:var(--ok)}
+.readonly{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);background:var(--sunk);border-radius:var(--r);padding:8px 12px}
+.preview{font-variant-numeric:tabular-nums}
+.preview td{padding:6px 10px}
+.lbtn{font:inherit;font-size:13px;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
+@media (min-width:981px){.stats.s5{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.tools{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.tsearch{font:inherit;font-size:13px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:5px 10px;width:190px;max-width:100%}
+.tsearch:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.xbtn span{font-size:12px;line-height:1}
+.tcount,.tupd{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.rbtn .ri{display:inline-block;font-size:14px;line-height:1}
+.rbtn.spin .ri{animation:rspin .6s linear infinite}
+@keyframes rspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.rbtn.spin .ri{animation:none}}
+
+@media (max-width:980px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}.wf{grid-template-columns:1fr}}
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  aside,main{min-width:0}
+  aside{position:static;height:auto;padding:12px 16px;gap:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  nav{flex-direction:row;overflow-x:auto;gap:4px}
+  nav .grp,.me{display:none}
+  nav a{white-space:nowrap;gap:6px}
+  nav a.on{box-shadow:inset 0 -2px 0 var(--accent)}
+  .top{position:static;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .view{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .mock{display:none}
+  .kv{grid-template-columns:1fr}.kv dt{margin-top:6px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <aside>
+    <div class="brand"><div class="brand-mark">CF</div><div><b>CFMS Platform</b><small>Super Admin</small></div></div>
+    <nav id="nav">
+      <div class="grp">Tenants</div>
+      <a href="#orgs" data-k="orgs">Organisations</a>
+      <a href="#new-org" data-k="new-org">Create organisation</a>
+      <div class="grp">Engine library</div>
+      <a href="#templates" data-k="templates">Workflow templates</a>
+      <a href="#actions" data-k="actions">Action registry <span class="cnt" id="pendCnt">2</span></a>
+      <a href="#defaults" data-k="defaults">Default org settings</a>
+      <a href="#roles" data-k="roles">Default roles &amp; privileges</a>
+      <a href="#translations" data-k="translations">Language packs</a>
+      <div class="grp">Governance</div>
+      <a href="#audit" data-k="audit">Platform audit log</a>
+    </nav>
+    <div class="me"><b>R. Senthil</b>Platform Super Administrator</div>
+  </aside>
+  <main>
+    <div class="top">
+      <div class="crumbs" id="crumbs"></div>
+      <div class="topr"><span class="mock">Clickable mockup · sample data</span><select id="languageSel" class="lang-sel" aria-label="Language"><option value="en">English</option><option value="ta">தமிழ்</option></select><button class="btn sm" id="pgRefresh" title="Refresh this page"><span class="ri" aria-hidden="true">↻</span> Refresh</button><span class="mfa">MFA verified</span></div>
+    </div>
+    <div class="view" id="view"></div>
+  </main>
+</div>
+<div id="layer"></div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const uiLanguageKey="cfms-ui-language";
+const taText={"CFMS Platform":"CFMS தளம்","Super Admin":"சூப்பர் நிர்வாகி","Platform Super Administrator":"தள சூப்பர் நிர்வாகி","Tenants":"நிறுவனங்கள்","Organisations":"நிறுவனங்கள்","Create organisation":"நிறுவனத்தை உருவாக்கு","Engine library":"எஞ்சின் நூலகம்","Workflow templates":"பணிப்பாய்வு வார்ப்புருக்கள்","Action registry":"செயல் பதிவேடு","Default org settings":"இயல்புநிலை நிறுவன அமைப்புகள்","Default roles & privileges":"இயல்புநிலைப் பாத்திரங்கள் மற்றும் அனுமதிகள்","Language packs":"மொழித் தொகுப்புகள்","Governance":"நிர்வாகக் கட்டுப்பாடு","Platform audit log":"தளத் தணிக்கைப் பதிவு","Clickable mockup · sample data":"செயல்படும் மாதிரி · எடுத்துக்காட்டு தரவு","Refresh":"புதுப்பி","MFA verified":"பல காரணி சரிபார்க்கப்பட்டது","Search":"தேடு","Search this list":"இந்தப் பட்டியலில் தேடு","No matches":"பொருத்தங்கள் இல்லை","Updated":"புதுப்பிக்கப்பட்டது","Export":"ஏற்றுமதி","Excel":"Excel","PDF":"PDF","Save":"சேமி","Cancel":"ரத்து செய்","Create":"உருவாக்கு","Edit":"திருத்து","Delete":"நீக்கு","View":"பார்","Close":"மூடு","Back":"பின்","Next":"அடுத்து","Previous":"முந்தையது","Status":"நிலை","Active":"செயலில்","Inactive":"செயலற்றது","Pending":"நிலுவையில்","Approved":"அங்கீகரிக்கப்பட்டது","Rejected":"நிராகரிக்கப்பட்டது","Name":"பெயர்","Description":"விளக்கம்","Type":"வகை","Actions":"செயல்கள்","Settings":"அமைப்புகள்","Users":"பயனர்கள்","Roles":"பாத்திரங்கள்","Permissions":"அனுமதிகள்","Organisation":"நிறுவனம்","Workflow templates":"பணிப்பாய்வு வார்ப்புருக்கள்","Default settings":"இயல்புநிலை அமைப்புகள்","Audit log":"தணிக்கைப் பதிவு","English":"ஆங்கிலம்","Tamil":"தமிழ்","Language":"மொழி","Select language":"மொழியைத் தேர்ந்தெடு","Overview":"மேலோட்டம்","Modules":"தொகுதிகள்","Features":"அம்சங்கள்","Rules":"விதிகள்","Approvals":"ஒப்புதல்கள்","Audit":"தணிக்கை","Actions":"செயல்கள்","Organisation details":"நிறுவன விவரங்கள்","Create organisation":"நிறுவனத்தை உருவாக்கு","Add":"சேர்","Add user":"பயனரைச் சேர்","Update":"புதுப்பி","Reset":"மீட்டமை","Enabled":"இயக்கப்பட்டது","Disabled":"முடக்கப்பட்டது","Yes":"ஆம்","No":"இல்லை","All":"அனைத்தும்","Filter":"வடிகட்டு","Clear":"அழி","Select":"தேர்ந்தெடு","Details":"விவரங்கள்","General":"பொது","Required":"தேவை","Optional":"விருப்பத்தேர்வு","Version":"பதிப்பு","Created":"உருவாக்கப்பட்டது","Updated at":"புதுப்பிக்கப்பட்ட நேரம்","No data available":"தரவு இல்லை","No records found":"பதிவுகள் எதுவும் இல்லை"};
+Object.assign(taText,{"Overview":"மேலோட்டம்","Organisations":"நிறுவனங்கள்","Create organisation":"நிறுவனத்தை உருவாக்கு","Organisation details":"நிறுவன விவரங்கள்","Workflow templates":"பணிப்பாய்வு வார்ப்புருக்கள்","Action registry":"செயல் பதிவேடு","Default org settings":"இயல்புநிலை நிறுவன அமைப்புகள்","Default roles & privileges":"இயல்புநிலைப் பாத்திரங்கள் மற்றும் அனுமதிகள்","Language packs":"மொழித் தொகுப்புகள்","Platform audit log":"தளத் தணிக்கைப் பதிவு","Organisation settings":"நிறுவன அமைப்புகள்","Workflow":"பணிப்பாய்வு","Template":"வார்ப்புரு","Templates":"வார்ப்புருக்கள்","Version":"பதிப்பு","Created":"உருவாக்கப்பட்டது","Updated at":"புதுப்பிக்கப்பட்ட நேரம்","No data available":"தரவு இல்லை","No records found":"பதிவுகள் எதுவும் இல்லை","Always on":"எப்போதும் இயக்கத்தில்","Enabled":"இயக்கப்பட்டது","Disabled":"முடக்கப்பட்டது","Tenant":"நிறுவனம்","Tenants":"நிறுவனங்கள்","Engine library":"எஞ்சின் நூலகம்","Governance":"நிர்வாகக் கட்டுப்பாடு","Platform audit log":"தளத் தணிக்கைப் பதிவு","Display and lists":"காட்சி மற்றும் பட்டியல்கள்","List loading mode":"பட்டியல் ஏற்றும் முறை","Rows per load":"ஒவ்வொரு முறையும் காட்டும் வரிசைகள்","Load more":"மேலும் ஏற்று","Show all":"அனைத்தையும் காட்டு","25 rows":"25 வரிசைகள்","50 rows":"50 வரிசைகள்","100 rows":"100 வரிசைகள்"});
+let uiLanguage=localStorage.getItem(uiLanguageKey)==="ta"?"ta":"en";const originalText=new WeakMap();
+function applyLanguage(){if(typeof TRANSLATIONS!=="undefined")TRANSLATIONS.forEach(t=>{if(t.status==="APPROVED"&&t.ta)taText[t.en]=t.ta;});document.documentElement.lang=uiLanguage;const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while((n=walker.nextNode())){if(!n.parentElement||n.parentElement.closest("script,style")||n.parentElement.closest("#languageSel"))continue;if(!originalText.has(n))originalText.set(n,n.nodeValue);const en=originalText.get(n),key=en.trim();if(!key)continue;const translated=uiLanguage==="ta"?taText[key]:null;const start=en.indexOf(key);n.nodeValue=start<0?en:en.slice(0,start)+(translated||key)+en.slice(start+key.length);}document.querySelectorAll("[placeholder],[title],[aria-label]").forEach(el=>["placeholder","title","aria-label"].forEach(a=>{const k="i18n"+a;if(el.dataset[k]===undefined)el.dataset[k]=el.getAttribute(a)||"";const v=el.dataset[k];if(v)el.setAttribute(a,uiLanguage==="ta"?(taText[v]||v):v);}));const sel=$("#languageSel");if(sel)sel.value=uiLanguage;}
+$("#languageSel").value=uiLanguage;$("#languageSel").addEventListener("change",e=>{uiLanguage=e.target.value;localStorage.setItem(uiLanguageKey,uiLanguage);render();});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const inr=n=>"₹"+Number(n).toLocaleString("en-IN");
+
+/* ---------- sample data ---------- */
+const ROLES=["EMP","MGR","ACC","LDR","AUD","ADM"];
+const ROLE_NAMES={EMP:"Community Employee",MGR:"Manager",ACC:"Accountant",LDR:"Leadership Team",AUD:"Auditor",ADM:"System Administrator"};
+const MODS=[
+["1","Organisation Management","—|V|V|VA|V|VCED"],["2","User & Role Management","—|V|—|VA|V|VCED"],["3","Member Management","VCE|VEAD|V|V|V|—"],
+["4","Loan Management","VCE|VA|V|V|V|—"],["5","Loan Application Fee Management","VC|VAD|V|V|V|—"],["6","Loan Repayment Management","VC|VAD|V|V|V|—"],
+["7","Early Full Settlement","VC|VA|V|V|V|—"],["8","Default & Full Settlement Management","VC|VEA|V|V|V|—"],["9","Nominee Management","VCE|VA|—|V|V|—"],
+["10","Deceased Member Management","VC|VA|V|V|V|—"],["11","Education Assistance","VCE|VA|V|V|V|—"],["12","Cremation Assistance","VCE|VA|V|V|V|—"],
+["13","Birthday Grants","—|VCE|V|VA|V|—"],["14","Daily Expense Management","VCE|VA|V|VA|V|—"],["15","Employee Payroll","—|VA|VCE|VA|V|—"],
+["16","Marriage Hall Management","VCE|VAD|V|V|V|—"],["17","Community Asset Management","V|VCE|V|V|V|—"],["18","Asset Purchase & Approval","VCE|VA|V|VA|V|—"],
+["19","Asset Maintenance & Depreciation","VC|VA|VCE|V|V|—"],["20","Asset Transfer & Disposal","VC|VA|V|VA|V|—"],["21","General Community Fund","—|V|V|V|V|—"],
+["22","General Ledger","—|V|V|V|V|—"],["23","Chart of Accounts","—|V|VCED|VA|V|—"],["24","Journal & Voucher Management","—|V|VCED|VA|V|—"],
+["25","Trial Balance","—|V|V|V|V|—"],["26","Financial Statements","—|V|V|V|V|—"],["27","Cash Reconciliation","—|VA|VCE|V|V|—"],
+["28","Financial Period Management","—|V|VCE|VA|V|—"],["29","Financial Reports","—|V|V|V|V|—"],["30","Management Reports & Analytics","—|V|V|V|V|—"],
+["31","Workflow Engine","—|V|—|V|V|V"],["32","Business Rules Engine","—|V|V|V|V|V"],["33","Flexible Approval Management","VC|VCA|—|VA|V|VE"],
+["34","Notification Engine","VC|V|—|—|V|VCED"],["35","Audit Management","—|V|V|V|V|V"],["36","Member Deposits","VC|VAD|V|V|V|—"],
+["37","Chit Fund Schemes","VC|VAD|V|V|V|—"],["38","Contributions & Donations","VC|VAD|V|V|V|—"],
+["D1","Employee Dashboard","V|V|—|—|—|—"],["D2","Manager Dashboard","—|V|—|V|—|—"],["D3","Accountant Dashboard","—|—|V|V|V|—"],
+["D4","Leadership Dashboard","—|—|—|V|—|—"],["D5","Auditor Dashboard","—|—|—|—|V|—"],["D6","Administration Dashboard","—|—|—|—|—|V"]
+];
+const OPTIONAL_MODS={"36":"deposits","37":"chits"};
+const CORE_MODS=["1","2","3","22","23","24","25","26","27","28","35","D6"];
+const MOD_GROUPS=[
+ ["Core platform","Organisation settings, users and roles, and audit are always on.",["1","2","35","31","32","33","34"]],
+ ["Members","Member Management is always on.",["3","9","10"]],
+ ["Loans","",["4","5","6","7","8"]],
+ ["Welfare and assistance","",["11","12","13"]],
+ ["Expenses, payroll and hall","",["14","15","16"]],
+ ["Assets","",["17","18","19","20"]],
+ ["Accounting and reports","Ledger, Chart of Accounts, journals, trial balance, statements, cash reconciliation and periods are always on.",["21","22","23","24","25","26","27","28","29","30"]],
+ ["Savings, schemes and donations","Member Deposits and Chit Funds can only be turned on through Optional features, with the legal warning.",["36","37","38"]],
+ ["Dashboards","Dashboards are modules too. The Administration Dashboard is always on.",["D1","D2","D3","D4","D5","D6"]]
+];
+const MOD_DEPS={"4":"3","5":"4","6":"4","7":"4","8":"4","9":"3","10":"3","11":"3","12":"3","13":"3","18":"17","19":"17","20":"17","36":"3","37":"3","38":"3"};
+const modName=id=>(MODS.find(m=>m[0]===id)||[,id])[1];
+function modRoles(id){const r=DEFAULT_MATRIX[id]||{};return ROLES.filter(x=>r[x]);}
+function modulePicker(mods,feats){
+ return MOD_GROUPS.map(([g,desc,ids])=>{const on=ids.filter(i=>mods.includes(i)).length;const toggleable=ids.filter(i=>!CORE_MODS.includes(i)&&!OPTIONAL_MODS[i]);
+  return `<div class="panel"><div class="ph"><div><h2>${g}</h2>${desc?`<span class="muted" style="font-size:12px">${desc}</span>`:""}</div><div class="row"><span class="muted" style="font-size:12px">${on} of ${ids.length} on</span>${toggleable.length?`<button class="btn sm" data-gall="${g}">Turn all on</button><button class="btn sm ghost" data-gnone="${g}">Turn all off</button>`:""}</div></div>
+  <div class="pb" style="gap:0;padding-block:4px">${ids.map(id=>{const core=CORE_MODS.includes(id),opt=OPTIONAL_MODS[id],dep=MOD_DEPS[id],depOff=dep&&!mods.includes(dep);
+   const why=core?"Always on":opt?(feats[opt]?"On through Optional features":"Turn on in Optional features"):depOff?"Needs "+modName(dep)+" first":dep?"Uses "+modName(dep):"";
+   return `<div class="swrow"><div><h3><span class="mono muted" style="font-weight:400">${id}</span> ${esc(modName(id))}</h3><p>${modRoles(id).length?"Default roles: "+modRoles(id).join(", "):"No default role access"}${why?" · "+why:""}</p></div>${sw("md_"+id,mods.includes(id),core||opt||depOff)}</div>`;}).join("")}</div></div>`;}).join("");
+}
+function bindModulePicker(get,set){
+ const root=document.getElementById("view");
+ root.querySelectorAll("input[id^=md_]").forEach(c=>{if(c.disabled)return;c.addEventListener("change",()=>{const id=c.id.slice(3);let m=get();
+  if(c.checked)m=[...m,id];else{const drop=[id];let more=true;while(more){more=false;Object.keys(MOD_DEPS).forEach(k=>{if(drop.includes(MOD_DEPS[k])&&!drop.includes(k)&&m.includes(k)){drop.push(k);more=true;}});}
+   m=m.filter(x=>!drop.includes(x));if(drop.length>1)toast("Also turned off: "+drop.slice(1).map(modName).join(", "));}
+  set(m);});});
+ root.querySelectorAll("[data-gall],[data-gnone]").forEach(b=>b.addEventListener("click",()=>{const g=MOD_GROUPS.find(x=>x[0]===(b.dataset.gall||b.dataset.gnone));const ids=g[2].filter(i=>!CORE_MODS.includes(i)&&!OPTIONAL_MODS[i]);let m=get();
+  if(b.dataset.gall){ids.forEach(i=>{const d=MOD_DEPS[i];if(!m.includes(i)&&(!d||m.includes(d)||ids.includes(d)))m.push(i);});}
+  else{let drop=[...ids];let more=true;while(more){more=false;Object.keys(MOD_DEPS).forEach(k=>{if(drop.includes(MOD_DEPS[k])&&!drop.includes(k)&&!OPTIONAL_MODS[k]){drop.push(k);more=true;}});}m=m.filter(x=>!drop.includes(x)||CORE_MODS.includes(x));}
+  set(m);}));
+}
+function baseMatrix(){const m={};MODS.forEach(([id,,p])=>{const parts=p.split("|");m[id]={};ROLES.forEach((r,i)=>m[id][r]=parts[i]==="—"?"":parts[i]);});return m;}
+const DEFAULT_MATRIX=baseMatrix();
+
+const FEATURES=[
+ ["gst","GST","GSTIN, GST rates by service, tax invoices and GST reports",false],
+ ["payroll","Payroll statutory deductions","TDS on salary, PF, ESI, Professional Tax and LWF",false],
+ ["tds","TDS on payments","TDS on vendor and service payments",false],
+ ["g80","Donation receipts (80G)","Donor records and 80G-compliant receipts",false],
+ ["deposits","Member deposits","Member Deposits module. Legal advice strongly recommended",true],
+ ["chits","Chit funds","Chit Fund Schemes module. Legal advice and registration strongly recommended",true],
+ ["fcra","Foreign contributions (FCRA)","Separate tracking and reporting of foreign contributions",false],
+ ["purge","Data purge","Purge of archived records at the organisation's written request",false]
+];
+
+/* Default organisation settings: [key,label,default,options|null,maintained by after provisioning] */
+const SA="Super Admin",ADMN="Org admin",ACCT="Accountant (LDR approval)";
+const SETTINGS=[
+ ["Loan configuration","4.1, 6.8, 8",[
+  ["defMonths","Loan becomes defaulted after","2 months",null,SA],["nomFirst","Nominee for a member's first loan","Mandatory",["Mandatory","Optional"],SA],
+  ["nomAbove","Nominee required on later loans above","₹50,000",null,SA],["maxLoans","Active loans per member","2",null,SA],
+  ["cooling","Cooling-off after settling a defaulted loan","6 months",null,SA],["coolES","Cooling-off also after early settlement","No",["No","Yes"],SA],
+  ["restructure","Loan restructuring","Allowed, Manager approval",["Allowed, Manager approval","Not allowed"],SA],
+  ["alloc","Payment allocation order","Late fee → overdue interest → overdue principal → current interest → current principal",null,SA],
+  ["loanTypes","Loan types provisioned","Interest-Bearing, Interest-Free, Normal",null,SA]]],
+ ["Assistance","4.2",[
+  ["edu","Education assistance per student","₹5,000",null,SA],["eduDeadline","Education application deadline","31 July",null,SA],
+  ["crem","Cremation assistance","₹10,000",null,SA],["bday","Leadership birthday grant","₹1,000",null,SA]]],
+ ["Expenses and payroll","4.3, 16, 17",[
+  ["expApprover","Daily expense approving role","Manager",["Manager","Leadership"],SA],["imprest","Petty cash imprest limit","₹10,000",null,SA],
+  ["payFreq","Payroll frequency","Monthly",["Monthly","Fortnightly"],SA],["payFlow","Payroll approval","Accountant prepares, Manager verifies, Leadership approves",null,SA]]],
+ ["Marriage hall","4.4, 18",[
+  ["halls","Halls","1 hall: Main Hall, capacity 300",null,ADMN],["hallMem","Member rate, weekday full day","₹15,000",null,SA],
+  ["hallNon","Non-member rate, weekday full day","₹25,000",null,SA],["hallWeekend","Weekend and holiday surcharge","20%",null,SA],
+  ["hallHalf","Half-day rate","60% of full day",null,SA],["hallDep","Security deposit","₹5,000",null,SA]]],
+ ["Assets","4.5, 19",[
+  ["depMethod","Depreciation method","Straight line",["Straight line","Written-down value"],SA],["assetApprover","Asset purchase approval","Manager; Leadership above ₹50,000",null,SA],
+  ["disposal","Transfer and disposal approval","Leadership",["Leadership","Manager"],SA]]],
+ ["Financial","4.6, 21, 22",[
+  ["fy","Financial year","1 April – 31 March",["1 April – 31 March","1 January – 31 December"],SA],["basis","Accounting basis","Cash basis",["Cash basis"],SA],
+  ["coa","Chart of Accounts","Standard cash-basis template v1.2",null,SA],["cashAcct","Cash account","1110 Cash in Hand (one common account)",null,SA],
+  ["modes","Payment modes","Cash only",["Cash only"],SA],["currency","Currency format","₹ Indian grouping (1,00,000.00)",null,ADMN],
+  ["workingDate","Working date","Selected at top of screen, defaults to today",null,SA]]],
+ ["Workflow and approvals","4.7, 28",[
+  ["approver","Final approver for loans, assistance, waivers","Manager",["Manager","Leadership"],SA],["offline","Roles that may record offline decisions","Employee, Manager",null,SA],
+  ["evidence","Offline evidence types","Verbal instruction, Meeting, Phone call, Signed paper",null,SA],["evUpload","Evidence upload","Optional",["Optional","Mandatory"],SA],
+  ["cancel","Receipt cancellation","Same day: Manager. After day-end: Manager and Accountant",null,SA],["escalate","Defaulter escalation","Manager on Overdue, Leadership on Default",null,SA]]],
+ ["Rounding","4.9",[
+  ["rEmi","Loan instalments (EMI)","Floor, ₹1",null,ACCT],["rInt","Interest amounts","Nearest, ₹1",null,ACCT],["rSet","Settlement amounts","Nearest, ₹1",null,ACCT],
+  ["rFee","Application fees (%)","Nearest, ₹1",null,ACCT],["rHall","Marriage hall charges","Nearest, ₹1",null,ACCT],["rPay","Payroll net salary","Nearest, ₹1",null,ACCT],
+  ["rDep","Depreciation","None, ₹0.01",null,ACCT],["rAss","Assistance amounts","None, ₹0.01",null,ACCT]]],
+ ["Legal and tax","4.8",[
+  ["lgGst","GST","Off",["Off","On"],SA],["lgPay","Payroll statutory deductions","Off",["Off","On"],SA],["lgTds","TDS on payments","Off",["Off","On"],SA],
+  ["lg80","Donation receipts (80G)","Off",["Off","On"],SA],["lgFcra","Foreign contributions (FCRA)","Off",["Off","On"],SA]]],
+ ["Branding and notifications","35.6, 34",[
+  ["theme","Colour theme","CFMS Green",["CFMS Green","Indigo","Maroon"],ADMN],["logo","Logo","None (organisation name shown)",null,ADMN],
+  ["lang","Language","English",["English","Tamil","English and Tamil"],ADMN],["sms","SMS sender ID","CFMSIN",null,ADMN],
+  ["notif","Notification templates","Standard set v2 (24 templates)",null,ADMN],["receiptHdr","Receipt and report header","Organisation name, address, registration no.",null,ADMN]]],
+ ["Display and lists","3.10",[
+  ["listMode","List loading mode","Load more",["Load more","Show all"],ADMN],
+  ["listPageSize","Rows per load","25 rows",["25 rows","50 rows","100 rows"],ADMN]]],
+ ["Security and data","3.10, 36",[
+  ["platforms","Platforms available to this organisation","Web and mobile app",["Web and mobile app","Web only","Mobile app only"],SA],["platDefault","Default access for a new user","Web only",["Web only","Mobile app only","Web and mobile app"],ADMN],["customRoles","Custom roles the organisation may create","Allowed, up to 10",["Allowed, up to 10","Allowed, up to 5","Not allowed"],SA],["mfa","MFA","Mandatory for admin, optional for others",["Mandatory for admin, optional for others","Mandatory for all"],SA],
+  ["session","Session timeout","15 minutes",null,SA],["activation","Activation link validity","72 hours",null,SA],
+  ["archive","Archive records after","8 years",null,SA],["purge","Data purge","Off",["Off","On"],SA]]]
+];
+let DEFAULTS_VER=3;const DEFAULTS={};SETTINGS.forEach(([,,rows])=>rows.forEach(r=>DEFAULTS[r[0]]=r[2]));
+const SETTING_COUNT=Object.keys(DEFAULTS).length;
+function settingRow(key){for(const [g,,rows] of SETTINGS){const r=rows.find(x=>x[0]===key);if(r)return [g,...r];}}
+function loanTypes(){return [
+ {id:"ib",name:"Interest-Bearing Loan",code:"LN-IB",interest:12,method:"flat",min:5000,max:200000,tmin:3,tmax:24,fee:true,feeType:"fixed",feeVal:200,feeWhen:"before",lateOn:true,grace:5,lateType:"fixed",lateVal:100,lateFreq:"instalment",lateCap:500,esOn:true,esPolicy:"B",esCharge:0,esApproval:true,overpay:"reduce-emi",defMonths:2,penType:"pct",penVal:2,nominee:"first",guarantors:1,guarAbove:100000},
+ {id:"if",name:"Interest-Free Loan",code:"LN-IF",interest:0,method:"flat",min:1000,max:50000,tmin:3,tmax:12,fee:false,feeType:"fixed",feeVal:0,feeWhen:"before",lateOn:true,grace:7,lateType:"fixed",lateVal:50,lateFreq:"instalment",lateCap:250,esOn:true,esPolicy:"B",esCharge:0,esApproval:false,overpay:"reduce-tenure",defMonths:2,penType:"fixed",penVal:500,nominee:"first",guarantors:0,guarAbove:0},
+ {id:"nl",name:"Normal Loan",code:"LN-NL",interest:10,method:"flat",min:10000,max:300000,tmin:6,tmax:36,fee:true,feeType:"pct",feeVal:0.5,feeWhen:"before",lateOn:true,grace:3,lateType:"pct",lateVal:1,lateFreq:"monthly",lateCap:1000,esOn:true,esPolicy:"A",esCharge:1,esApproval:true,overpay:"reduce-emi",defMonths:3,penType:"pct",penVal:2,nominee:"first",guarantors:2,guarAbove:150000}
+];}
+
+const WF_TEMPLATES=[
+ ["Loan Application","v3.1",["Draft","Fee Collected","Manager Verification","Approved","Disbursed","Closed"]],
+ ["Application Fee Waiver","v1.2",["Requested","Manager Approval","Waived"]],
+ ["Early Settlement","v2.0",["Requested","Statement Generated","Manager Verification","Collected","Settled"]],
+ ["Default and Recovery","v2.2",["Overdue","Defaulted","Recovery Notice","Settlement","Closed"]],
+ ["Education Assistance","v1.4",["Applied","Documents Verified","Manager Approval","Paid"]],
+ ["Cremation Assistance","v1.1",["Reported","Manager Approval","Paid"]],
+ ["Daily Expense","v1.3",["Submitted","Manager Approval","Paid"]],
+ ["Payroll","v1.2",["Prepared","Manager Verification","Leadership Approval","Paid"]],
+ ["Hall Booking","v1.5",["Enquiry","Booked","Event Completed","Settled"]],
+ ["Asset Purchase","v1.2",["Requested","Quotations","Manager Approval","Leadership Approval","Purchased"]],
+ ["Manual Journal","v1.0",["Draft","Leadership Approval","Posted"]]
+];
+
+let ACTIONS=[
+ {code:"VALIDATE_MEMBER_STATUS",name:"Validate Member Status",cat:"Validation",ver:"1.2",status:"approved",orgs:"all"},
+ {code:"VALIDATE_LOAN_ELIGIBILITY",name:"Validate Loan Eligibility",cat:"Validation",ver:"2.0",status:"approved",orgs:"all"},
+ {code:"VALIDATE_APPLICATION_FEE",name:"Validate Application Fee",cat:"Validation",ver:"1.1",status:"approved",orgs:"all"},
+ {code:"VALIDATE_NOMINEE",name:"Validate Nominee",cat:"Validation",ver:"1.0",status:"approved",orgs:"all"},
+ {code:"VALIDATE_GUARANTORS",name:"Validate Guarantors",cat:"Validation",ver:"1.0",status:"approved",orgs:"all"},
+ {code:"SEND_NOTIFICATION",name:"Send Notification",cat:"Notification",ver:"1.4",status:"approved",orgs:"all"},
+ {code:"GENERATE_REPAYMENT_SCHEDULE",name:"Generate Repayment Schedule",cat:"Loan",ver:"2.1",status:"approved",orgs:"all"},
+ {code:"GENERATE_JOURNAL_ENTRY",name:"Generate Journal Entry",cat:"Accounting",ver:"1.3",status:"approved",orgs:"all"},
+ {code:"RECORD_OFFLINE_APPROVAL",name:"Record Offline Approval",cat:"Approval",ver:"1.1",status:"approved",orgs:"all"},
+ {code:"GENERATE_RECEIPT",name:"Generate Receipt",cat:"Finance",ver:"1.2",status:"approved",orgs:"all"},
+ {code:"START_COOLING_OFF",name:"Start Cooling-off Period",cat:"Loan",ver:"1.0",status:"approved",orgs:"3 orgs"},
+ {code:"CHECK_HALL_AVAILABILITY",name:"Check Hall Availability",cat:"Validation",ver:"1.0",status:"pending",orgs:"—",found:"12 Nov 2026"},
+ {code:"SEND_WHATSAPP_REMINDER",name:"Send WhatsApp Reminder",cat:"Notification",ver:"1.0",status:"pending",orgs:"—",found:"14 Nov 2026"},
+ {code:"CALC_DEPRECIATION_LEGACY",name:"Calculate Depreciation (legacy)",cat:"Accounting",ver:"0.9",status:"retired",orgs:"—"}
+];
+
+function stagesFor(name){
+ const t=WF_TEMPLATES.find(w=>w[0]===name);
+ return t[2].map((s,i)=>({name:s,approver:/Manager/.test(s)?"MGR":/Leadership/.test(s)?"LDR":i===0?"EMP":"System",actions:[]}));
+}
+function orgWorkflows(){
+ return WF_TEMPLATES.map(([n,v])=>{
+  const w={name:n,ver:n==="Loan Application"?"v3.1 · org rev 4":v+" · org rev 1",tpl:v,status:"Published",stages:stagesFor(n)};
+  if(n==="Loan Application"){
+   w.stages[2].actions=[
+    {code:"VALIDATE_MEMBER_STATUS",exec:"Synchronous",val:true,mand:true,on:true},
+    {code:"VALIDATE_APPLICATION_FEE",exec:"Synchronous",val:true,mand:true,on:true},
+    {code:"VALIDATE_NOMINEE",exec:"Synchronous",val:true,mand:true,on:true},
+    {code:"VALIDATE_LOAN_ELIGIBILITY",exec:"Synchronous",val:true,mand:true,on:true},
+    {code:"SEND_NOTIFICATION",exec:"Asynchronous",val:false,mand:false,on:true,retry:3}];
+   w.stages[3].actions=[{code:"GENERATE_REPAYMENT_SCHEDULE",exec:"Synchronous",val:false,mand:true,on:true},{code:"SEND_NOTIFICATION",exec:"Asynchronous",val:false,mand:false,on:true,retry:3}];
+   w.stages[4].actions=[{code:"GENERATE_JOURNAL_ENTRY",exec:"Synchronous",val:false,mand:true,on:true},{code:"GENERATE_RECEIPT",exec:"Synchronous",val:false,mand:true,on:true}];
+   w.stages[1].actions=[{code:"GENERATE_RECEIPT",exec:"Synchronous",val:false,mand:true,on:true}];
+  } else {
+   w.stages.forEach((s,i)=>{ if(/Approval|Verification/.test(s.name)) s.actions=[{code:"VALIDATE_MEMBER_STATUS",exec:"Synchronous",val:true,mand:true,on:true},{code:"SEND_NOTIFICATION",exec:"Asynchronous",val:false,mand:false,on:true,retry:3}];
+     if(/Paid|Posted|Collected|Purchased|Settled/.test(s.name)) s.actions=[{code:"GENERATE_JOURNAL_ENTRY",exec:"Synchronous",val:false,mand:true,on:true}];});
+  }
+  return w;
+ });
+}
+function mkOrg(o){
+ const feats={};FEATURES.forEach(f=>feats[f[0]]=false);Object.assign(feats,o.feats||{});
+ return Object.assign({settings:Object.assign({},DEFAULTS),settingsVer:DEFAULTS_VER,modules:MODS.map(m=>m[0]).filter(id=>!OPTIONAL_MODS[id]||feats[OPTIONAL_MODS[id]]),matrix:baseMatrix(),loans:loanTypes(),workflows:orgWorkflows(),
+  approval:{offlineRoles:["EMP","MGR"],evidence:["Verbal instruction","Meeting","Phone call","Signed paper"],defaultMonths:2,cooling:6,coolingAfterES:false},
+  enabledActions:ACTIONS.filter(a=>a.status==="approved").map(a=>a.code)},o,{feats});
+}
+let ORGS0=[
+ mkOrg({id:"kaveri",name:"Kaveri Community Welfare Trust",short:"KCWT",sub:"kaveri",city:"Tiruchirappalli",reg:"TRUST/TRY/2011/0442",status:"Active",created:"02 Sep 2026",members:1284,users:9,admin:{name:"Meena Rajagopal",mobile:"+91 98430 11872",email:"admin@kaveri-trust.org",state:"Active",last:"Today, 08:41"},feats:{g80:true}}),
+ mkOrg({id:"anbu",name:"Anbu Nagar Residents Fund",short:"ANRF",sub:"anbunagar",city:"Coimbatore",reg:"SOC/CBE/2016/118",status:"Active",created:"21 Sep 2026",members:612,users:6,admin:{name:"Joseph Arul",mobile:"+91 94433 50219",email:"office@anbunagar.in",state:"Active",last:"Yesterday, 19:02"},feats:{deposits:true}}),
+ mkOrg({id:"sevai",name:"Sevai Fellowship Society",short:"SFS",sub:"sevai",city:"Madurai",reg:"SOC/MDU/2009/031",status:"Onboarding",created:"10 Nov 2026",members:0,users:1,admin:{name:"Farhana Begum",mobile:"+91 90034 77120",email:"farhana@sevai.org",state:"Activation link sent",last:"—"}}),
+ mkOrg({id:"nilgiri",name:"Nilgiri Hill Workers Mutual Aid",short:"NHWMA",sub:"nilgiri",city:"Ooty",reg:"TRUST/NLG/2014/207",status:"Suspended",created:"18 Aug 2026",members:430,users:5,admin:{name:"Pradeep Kumar",mobile:"+91 97890 22431",email:"pk@nilgirimutual.org",state:"Locked (tenant suspended)",last:"28 Oct 2026"}})
+];
+let ORGS=ORGS0;Object.assign(ORGS[0].settings,{lang:"English and Tamil",edu:"₹7,500",logo:"kaveri-logo.png"});Object.assign(ORGS[1].settings,{cooling:"3 months",lg80:"Off",hallMem:"₹12,000"});ORGS[3].settingsVer=2;ORGS[1].modules=ORGS[1].modules.filter(m=>!["16","17","18","19","20","D5"].includes(m));ORGS[2].modules=ORGS[2].modules.filter(m=>!["13","15","16","21"].includes(m));
+ORGS[0].workflows[0].ver="v3.1 · org rev 4";ORGS[1].workflows[0].ver="v3.0 · org rev 2";ORGS[1].workflows[0].tpl="v3.0";
+let AUDIT=[
+ ["15 Nov 2026 08:12","Kaveri Community Welfare Trust","Loan rule published","Interest-Bearing Loan: late fee cap ₹400 → ₹500","Requested by organisation leadership, meeting 12 Nov"],
+ ["14 Nov 2026 17:40","Platform","Action discovered","SEND_WHATSAPP_REMINDER v1.0 registered, pending approval","Release 2026.11.2"],
+ ["13 Nov 2026 11:05","Anbu Nagar Residents Fund","Workflow published","Early Settlement rev 2: Manager Verification made mandatory","Organisation asked for single approver on all settlements"],
+ ["10 Nov 2026 15:22","Sevai Fellowship Society","Organisation created","Templates applied, admin user Farhana Begum created, activation link sent","New onboarding"],
+ ["03 Nov 2026 09:48","Anbu Nagar Residents Fund","Feature enabled","Member deposits enabled from 01 Dec 2026, legal warning acknowledged, advice document uploaded","Written request from organisation"],
+ ["28 Oct 2026 18:30","Nilgiri Hill Workers Mutual Aid","Organisation suspended","All logins blocked, data retained","Organisation requested pause pending committee elections"]
+];
+
+/* ---------- helpers ---------- */
+function toast(msg){const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);}
+function modal(html,onOk){const L=$("#layer");L.innerHTML=`<div class="scrim"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+ L.querySelector(".scrim").addEventListener("click",e=>{if(e.target.classList.contains("scrim")||e.target.dataset.close!==undefined)L.innerHTML="";});
+ const ok=L.querySelector("[data-ok]");if(ok)ok.addEventListener("click",()=>{if(onOk(L)!==false)L.innerHTML="";});
+ const template=L.querySelector("#trTemplate");if(template)template.addEventListener("click",()=>downloadCsv("cfms-language-import-template.csv",[["text_id","module","text_type","english_text","tamil_text","status"],["LOAN.APPLICATION.TITLE","Loan Management","PAGE","Loan application","","DRAFT"]]));
+ const f=L.querySelector("input,select,textarea,button");if(f)f.focus();}
+function statusPill(s){const m={Active:"p-ok",Onboarding:"p-info",Suspended:"p-warn",Closed:"p-mute",Published:"p-ok",Draft:"p-warn",approved:"p-ok",pending:"p-warn",retired:"p-mute"};const label={approved:"Approved",pending:"Pending approval",retired:"Retired"}[s]||s;return `<span class="pill ${m[s]||"p-mute"}">${label}</span>`;}
+function sw(id,checked,dis){return `<label class="sw"><input type="checkbox" id="${id}" ${checked?"checked":""} ${dis?"disabled":""}><i></i></label>`;}
+function seg(name,opts,val){return `<div class="seg" data-seg="${name}">${opts.map(([v,l])=>`<button type="button" data-v="${v}" class="${String(v)===String(val)?"on":""}">${l}</button>`).join("")}</div>`;}
+function bindSeg(root,cb){root.querySelectorAll("[data-seg]").forEach(s=>s.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;s.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));cb(s.dataset.seg,b.dataset.v);}));}
+function publishModal(title,changes,onDone){
+ const today=new Date("2026-11-15");const eff=new Date(today.getTime()+86400000*1).toISOString().slice(0,10);
+ modal(`<div class="mh"><h2>${esc(title)}</h2><p class="sub">Publishing creates a new version for this organisation only. Loans and transactions already in progress keep their current version.</p></div>
+ <div class="mb">${changes.length?`<div class="diff">${changes.map(c=>`<div>${esc(c[0])}: <span class="o">${esc(c[1])}</span> <span class="n">${esc(c[2])}</span></div>`).join("")}</div>`:`<p class="muted">No field changes detected; a new version will still be recorded.</p>`}
+ <div class="grid2"><div class="fld"><label for="effd">Effective from</label><input type="date" id="effd" value="${eff}" min="${eff}"></div>
+ <div class="fld"><label for="tested">Tested with</label><select id="tested"><option>Sandbox test transaction</option><option>Rule simulator only</option><option>Not tested</option></select></div></div>
+ <div class="fld"><label for="reason">Reason for change (required)</label><textarea id="reason" rows="3" placeholder="For example: discussed with organisation leadership on 12 Nov, they want a ₹500 cap"></textarea><span class="hint" id="reasonErr"></span></div>
+ <p class="hint muted" style="font-size:12px">Recorded in the platform audit log and the organisation's own audit log, visible to its Auditor and Leadership.</p></div>
+ <div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Publish</button></div>`,L=>{
+  const r=L.querySelector("#reason").value.trim();if(r.length<5){const e=L.querySelector("#reasonErr");e.textContent="Enter the reason so the organisation can see why this changed.";e.style.color="var(--bad)";return false;}
+  onDone(r,L.querySelector("#effd").value);});
+}
+
+/* ---------- views ---------- */
+let route="",sel={wf:0,stage:2,loan:0,matrixOrg:null};
+const views={};
+
+views.orgs=()=>{
+ const act=ORGS.filter(o=>o.status==="Active").length,onb=ORGS.filter(o=>o.status==="Onboarding").length,sus=ORGS.filter(o=>o.status==="Suspended").length,pend=ACTIONS.filter(a=>a.status==="pending").length;
+ return {crumbs:`<b>Organisations</b>`,html:`
+ <div class="head"><div><h1>Organisations</h1><p class="sub">Every organisation is a separate tenant with its own data, users, workflows and rules. Only you can create organisations; there is no self sign-up.</p></div>
+ <a class="btn pri" href="#new-org">+ Create organisation</a></div>
+ <div class="stats">
+  <div class="stat"><span>Active</span><b>${act}</b><small>Live on CFMS</small></div>
+  <div class="stat"><span>Onboarding</span><b>${onb}</b><small>Admin not yet activated</small></div>
+  <div class="stat"><span>Suspended</span><b>${sus}</b><small>Logins blocked, data kept</small></div>
+  <div class="stat"><span>Actions awaiting approval</span><b>${pend}</b><small><a href="#actions" class="muted">Review in Action registry</a></small></div>
+ </div>
+ <div class="panel"><div class="ph"><div class="row"><input type="text" id="q" placeholder="Search by name, code or subdomain" style="width:260px"><select id="fs" style="width:auto"><option value="">All statuses</option><option>Active</option><option>Onboarding</option><option>Suspended</option></select></div><span class="muted" style="font-size:12px">Cash-only operation · no billing in current scope</span></div>
+ <div class="tw"><table><thead><tr><th>Organisation</th><th>Subdomain</th><th>Status</th><th>Organisation admin</th><th class="num">Members</th><th class="num">Modules</th><th>Loan workflow</th><th>Created</th></tr></thead><tbody id="orgRows"></tbody></table></div></div>`,
+ after(){const draw=()=>{const q=$("#q").value.toLowerCase(),f=$("#fs").value;
+  $("#orgRows").innerHTML=ORGS.filter(o=>(!f||o.status===f)&&(o.name+o.short+o.sub).toLowerCase().includes(q)).map(o=>`<tr class="click" data-id="${o.id}"><td><b style="font-weight:500">${esc(o.name)}</b><div class="muted" style="font-size:12px">${esc(o.short)} · ${esc(o.city)}</div></td><td class="mono">${esc(o.sub)}.cfms-domain.com</td><td>${statusPill(o.status)}</td><td>${esc(o.admin.name)}<div class="muted" style="font-size:12px">${esc(o.admin.state)}</div></td><td class="num">${o.members.toLocaleString("en-IN")}</td><td class="num">${o.modules.length}/${MODS.length}</td><td><span class="tag">${esc(o.workflows[0].tpl)}</span>${o.workflows[0].tpl!=="v3.1"?' <span class="pill p-warn">Upgrade available</span>':""}</td><td class="muted">${o.created}</td></tr>`).join("")||`<tr><td colspan="8" class="muted">No organisations match.</td></tr>`;
+  document.querySelectorAll("#orgRows tr[data-id]").forEach(r=>r.addEventListener("click",()=>location.hash="org-"+r.dataset.id+"-overview"));};
+  $("#q").addEventListener("input",draw);$("#fs").addEventListener("change",draw);draw();}};
+};
+
+/* create org wizard */
+let wiz=null;
+function newWiz(){wiz={step:0,name:"",short:"",sub:"",city:"",reg:"",fy:"April – March",adminName:"",adminMobile:"",adminEmail:"",templates:WF_TEMPLATES.map(w=>w[0]),modules:MODS.map(m=>m[0]).filter(id=>!OPTIONAL_MODS[id]),coa:true,roles:true,feats:{},ack:{},sandbox:true};FEATURES.forEach(f=>wiz.feats[f[0]]=false);}
+views["new-org"]=()=>{
+ if(!wiz)newWiz();
+ const S=["Organisation","Admin user","Templates","Modules","Optional features","Review"];
+ const stepper=`<div class="steps">${S.map((s,i)=>`<div class="step ${i===wiz.step?"on":i<wiz.step?"done":""}"><i>${i<wiz.step?"✓":i+1}</i>${s}</div>`).join("")}</div>`;
+ let body="";
+ if(wiz.step===0) body=`<div class="pb"><div class="grid2">
+  <div class="fld"><label for="w_name">Organisation name</label><input type="text" id="w_name" value="${esc(wiz.name)}" placeholder="Sevai Fellowship Society"></div>
+  <div class="fld"><label for="w_short">Short code</label><input type="text" id="w_short" value="${esc(wiz.short)}" placeholder="SFS"><span class="hint">Used as the prefix for member IDs and receipt numbers</span></div>
+  <div class="fld"><label for="w_sub">Subdomain</label><div class="affix"><input type="text" id="w_sub" value="${esc(wiz.sub)}" placeholder="sevai"><span>.cfms-domain.com</span></div></div>
+  <div class="fld"><label for="w_city">City</label><input type="text" id="w_city" value="${esc(wiz.city)}" placeholder="Madurai"></div>
+  <div class="fld"><label for="w_reg">Registration number</label><input type="text" id="w_reg" value="${esc(wiz.reg)}" placeholder="SOC/MDU/2009/031"></div>
+  <div class="fld"><label for="w_fy">Financial year</label><select id="w_fy"><option>April – March</option><option>January – December</option></select></div>
+ </div><div class="readonly">Cash only. One common cash account is created; bank accounts are not used in the current scope.</div></div>`;
+ if(wiz.step===1) body=`<div class="pb"><p class="sub">One organisation administrator (ADM role, app user) is created with the organisation. They create the other users and appoint role holders. You only enter their name, mobile and email.</p><div class="grid3">
+  <div class="fld"><label for="w_an">Full name</label><input type="text" id="w_an" value="${esc(wiz.adminName)}" placeholder="Farhana Begum"></div>
+  <div class="fld"><label for="w_am">Mobile number</label><div class="affix pre"><span>+91</span><input type="tel" id="w_am" value="${esc(wiz.adminMobile)}" placeholder="90034 77120"></div></div>
+  <div class="fld"><label for="w_ae">Email</label><input type="email" id="w_ae" value="${esc(wiz.adminEmail)}" placeholder="farhana@sevai.org"></div>
+ </div><div class="note n-info"><span class="n-ico">i</span><div>An activation link goes to this email and mobile. At first login they set a password and MFA. The link expires in 72 hours and you can resend it from the organisation page.</div></div></div>`;
+ if(wiz.step===2) body=`<div class="pb"><div class="grid2"><div class="fld"><span class="lbl">Workflow and rule templates to clone</span><div style="display:flex;flex-direction:column;gap:7px;margin-top:4px">${WF_TEMPLATES.map(([n,v])=>`<label class="chk"><input type="checkbox" data-tpl="${esc(n)}" ${wiz.templates.includes(n)?"checked":""}> <span>${esc(n)} <span class="tag">${v}</span></span></label>`).join("")}</div></div>
+ <div style="display:flex;flex-direction:column;gap:14px"><div class="fld"><span class="lbl">Configuration templates</span>
+ <label class="chk"><input type="checkbox" id="w_coa" ${wiz.coa?"checked":""}> <span>Standard Chart of Accounts (cash basis)</span></label>
+ <label class="chk"><input type="checkbox" id="w_roles" ${wiz.roles?"checked":""}> <span>Default roles and privileges <span class="muted">(<a href="#roles">view template</a>)</span></span></label>
+ <label class="chk"><input type="checkbox" checked disabled> <span>Loan types: Interest-Bearing, Interest-Free, Normal</span></label>
+ <label class="chk"><input type="checkbox" checked disabled> <span>Notification templates and default dashboards</span></label>
+ <label class="chk"><input type="checkbox" checked disabled> <span>All ${SETTING_COUNT} organisation settings from <a href="#defaults">Default org settings v${DEFAULTS_VER}</a></span></label></div>
+ <div class="note n-info"><span class="n-ico">i</span><div>The organisation gets its own copy. Later changes to a template never change this organisation's live workflows; you offer an upgrade instead.</div></div>
+ <label class="chk"><input type="checkbox" id="w_sb" ${wiz.sandbox?"checked":""}> <span>Also create a sandbox tenant for training (no real data)</span></label></div></div></div>`;
+ if(wiz.step===3) body=`<div class="pb" style="gap:12px"><p class="sub">Choose the modules this organisation gets. The organisation admin cannot change this later; you can, from the organisation's Modules tab. <b>${wiz.modules.length} of ${MODS.length}</b> enabled.</p>${modulePicker(wiz.modules,wiz.feats)}</div>`;
+ if(wiz.step===4) body=`<div class="pb"><p class="sub">All legal and tax features are off by default. Organisation users, including the admin, cannot turn them on or off.</p><div>${FEATURES.map(([k,n,d,legal])=>`<div class="swrow"><div><h3>${n}</h3><p>${d}</p>${legal&&wiz.feats[k]?`<div class="note n-warn" style="margin-top:8px"><span class="n-ico">!</span><div><b>Legal warning.</b> ${k==="deposits"?"Accepting deposits may be regulated. ":"Running chit funds generally needs registration under the Chit Funds Act. "}Obtaining legal advice is the organisation's responsibility. <label class="chk" style="margin-top:6px"><input type="checkbox" data-ack="${k}" ${wiz.ack[k]?"checked":""}> I confirm the organisation has been warned. This acknowledgement is recorded in the audit log.</label></div></div>`:""}</div>${sw("f_"+k,wiz.feats[k])}</div>`).join("")}</div></div>`;
+ if(wiz.step===5){const on=FEATURES.filter(f=>wiz.feats[f[0]]).map(f=>f[1]);body=`<div class="pb"><dl class="kv">
+  <dt>Organisation</dt><dd>${esc(wiz.name||"—")} <span class="tag">${esc(wiz.short||"—")}</span></dd>
+  <dt>Subdomain</dt><dd class="mono">${esc(wiz.sub||"—")}.cfms-domain.com</dd>
+  <dt>City · Registration</dt><dd>${esc(wiz.city||"—")} · ${esc(wiz.reg||"—")}</dd>
+  <dt>Financial year</dt><dd>${esc(wiz.fy)}</dd>
+  <dt>Organisation admin</dt><dd>${esc(wiz.adminName||"—")} · +91 ${esc(wiz.adminMobile||"—")} · ${esc(wiz.adminEmail||"—")}</dd>
+  <dt>Organisation settings</dt><dd>${SETTING_COUNT} settings in ${SETTINGS.length} groups provisioned with default values (Default org settings v${DEFAULTS_VER}). Change any of them afterwards on the organisation's Settings tab.</dd>
+  <dt>Templates</dt><dd>${wiz.templates.length} workflow templates${wiz.coa?", Chart of Accounts":""}${wiz.roles?", default roles":""}</dd>
+  <dt>Modules</dt><dd>${wiz.modules.length} of ${MODS.length} enabled${MODS.length-wiz.modules.length?" · off: "+MODS.map(m=>m[0]).filter(i=>!wiz.modules.includes(i)).map(modName).join(", "):""}</dd>
+  <dt>Optional features</dt><dd>${on.length?on.join(", "):"None (all off)"}</dd>
+  <dt>Sandbox</dt><dd>${wiz.sandbox?"Yes":"No"}</dd></dl>
+  <div class="note n-info"><span class="n-ico">i</span><div>Creating provisions the tenant record, subdomain and storage, fills every organisation setting with its default value, applies the templates, creates the admin user and sends the activation link. Nothing is left blank.</div></div><p id="wErr" style="color:var(--bad);font-size:13px"></p></div>`;}
+ return {crumbs:`<a href="#orgs">Organisations</a> / <b>Create organisation</b>`,html:`
+ <div class="head"><div><h1>Create organisation</h1><p class="sub">Step ${wiz.step+1} of 6</p></div><button class="btn ghost" id="wReset">Clear form</button></div>${stepper}
+ <div class="panel">${body}<div class="ph" style="border-top:1px solid var(--line);border-bottom:0;justify-content:flex-end"><button class="btn" id="wBack" ${wiz.step===0?"disabled":""}>Back</button>${wiz.step<5?`<button class="btn pri" id="wNext">Continue</button>`:`<button class="btn pri" id="wCreate">Create organisation</button>`}</div></div>`,
+ after(){
+  const v=id=>{const e=$("#"+id);return e?e.value:undefined};
+  const save=()=>{if(wiz.step===0){wiz.name=v("w_name");wiz.short=v("w_short");wiz.sub=v("w_sub");wiz.city=v("w_city");wiz.reg=v("w_reg");wiz.fy=v("w_fy");}
+   if(wiz.step===1){wiz.adminName=v("w_an");wiz.adminMobile=v("w_am");wiz.adminEmail=v("w_ae");}
+   if(wiz.step===2){wiz.templates=[...document.querySelectorAll("[data-tpl]")].filter(c=>c.checked).map(c=>c.dataset.tpl);wiz.coa=$("#w_coa").checked;wiz.roles=$("#w_roles").checked;wiz.sandbox=$("#w_sb").checked;}};
+  if(wiz.step===0){const n=$("#w_name");if(n.value)null;n.addEventListener("input",()=>{if(!$("#w_sub").dataset.touched)$("#w_sub").value=n.value.toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g,"");});$("#w_sub").addEventListener("input",e=>e.target.dataset.touched=1);const fy=$("#w_fy");fy.value=wiz.fy;}
+  if(wiz.step===3)bindModulePicker(()=>wiz.modules,m=>{wiz.modules=m;render();});
+  if(wiz.step===4){FEATURES.forEach(([k])=>$("#f_"+k).addEventListener("change",e=>{wiz.feats[k]=e.target.checked;if(!e.target.checked)wiz.ack[k]=false;const mid=Object.keys(OPTIONAL_MODS).find(x=>OPTIONAL_MODS[x]===k);if(mid)wiz.modules=e.target.checked?[...wiz.modules.filter(x=>x!==mid),mid]:wiz.modules.filter(x=>x!==mid);render();}));document.querySelectorAll("[data-ack]").forEach(c=>c.addEventListener("change",()=>wiz.ack[c.dataset.ack]=c.checked));}
+  $("#wReset").addEventListener("click",()=>{newWiz();render();});
+  $("#wBack").addEventListener("click",()=>{save();wiz.step--;render();});
+  const nx=$("#wNext");if(nx)nx.addEventListener("click",()=>{save();
+   if(wiz.step===4){const miss=["deposits","chits"].filter(k=>wiz.feats[k]&&!wiz.ack[k]);if(miss.length){toast("Confirm the legal warning before continuing.");return;}}
+   wiz.step++;render();});
+  const cr=$("#wCreate");if(cr)cr.addEventListener("click",()=>{
+   if(!wiz.name||!wiz.sub||!wiz.adminName||!wiz.adminEmail){$("#wErr").textContent="Fill in the organisation name, subdomain, and the admin's name and email before creating.";return;}
+   const id=wiz.sub.replace(/[^a-z0-9]/gi,"").toLowerCase()||"neworg";
+   ORGS.push(mkOrg({id,name:wiz.name,short:wiz.short||"NEW",sub:wiz.sub,city:wiz.city||"—",reg:wiz.reg||"—",status:"Onboarding",created:"15 Nov 2026",members:0,users:1,admin:{name:wiz.adminName,mobile:"+91 "+wiz.adminMobile,email:wiz.adminEmail,state:"Activation link sent",last:"—"},feats:Object.assign({},wiz.feats)}));ORGS[ORGS.length-1].modules=[...wiz.modules];{const S=ORGS[ORGS.length-1].settings;[["gst","lgGst"],["payroll","lgPay"],["tds","lgTds"],["g80","lg80"],["fcra","lgFcra"],["purge","purge"]].forEach(([f,k])=>{if(wiz.feats[f])S[k]="On";});}
+   AUDIT.unshift(["15 Nov 2026 09:05",wiz.name,"Organisation created",`Templates applied, admin user ${wiz.adminName} created, activation link sent`,"New onboarding"]);
+   newWiz();location.hash="org-"+id+"-overview";toast("Organisation created. Activation link sent to the admin.");});
+ }};
+};
+
+/* org detail */
+const ORG_TABS=[["overview","Overview"],["modules","Modules"],["users","Users & roles"],["roles","Roles & privileges"],["rules","Loan rules"],["workflows","Workflows"],["settings","Settings"],["approvals","Approval settings"],["actions","Actions"],["features","Optional features"],["audit","Change history"]];
+function orgView(o,tab){
+ const tabs=`<div class="tabs">${ORG_TABS.map(([k,l])=>`<a href="#org-${o.id}-${k}" class="${k===tab?"on":""}">${l}</a>`).join("")}</div>`;
+ const hdr=`<div class="head"><div><div class="row"><h1>${esc(o.name)}</h1>${statusPill(o.status)}</div><p class="sub"><span class="mono">${esc(o.sub)}.cfms-domain.com</span> · ${esc(o.city)} · ${esc(o.reg)}</p></div>
+  <div class="row">${o.status==="Suspended"?`<button class="btn" id="oRes">Reactivate</button>`:`<button class="btn" id="oSus">Suspend</button>`}<button class="btn" id="oBg">Request break-glass access</button></div></div>`;
+ const ro=`<div class="readonly"><span class="n-ico" style="background:var(--muted);color:var(--surface);border-radius:50%;width:18px;height:18px;display:grid;place-items:center;font-size:11px;font-family:var(--f-mono)">i</span>The organisation admin and leadership see this page read-only. Only you can change it, and changes here never affect other organisations.</div>`;
+ const T=orgTabs[tab]?orgTabs[tab](o,ro):{html:""};
+ return {crumbs:`<a href="#orgs">Organisations</a> / <a href="#org-${o.id}-overview">${esc(o.name)}</a> / <b>${ORG_TABS.find(t=>t[0]===tab)[1]}</b>`,html:hdr+tabs+T.html,after(){
+  const s=$("#oSus");if(s)s.addEventListener("click",()=>modal(`<div class="mh"><h2>Suspend ${esc(o.name)}?</h2><p class="sub">All users are logged out and cannot sign in. Data, workflows and rules are kept. You can reactivate at any time.</p></div><div class="mb"><div class="fld"><label for="sr">Reason (required)</label><textarea id="sr" rows="2"></textarea></div></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Suspend organisation</button></div>`,L=>{if(!L.querySelector("#sr").value.trim())return false;o.status="Suspended";o.admin.state="Locked (tenant suspended)";AUDIT.unshift(["15 Nov 2026 09:10",o.name,"Organisation suspended","All logins blocked, data retained",L.querySelector("#sr").value]);render();toast("Organisation suspended.");}));
+  const r=$("#oRes");if(r)r.addEventListener("click",()=>{o.status="Active";o.admin.state="Active";render();toast("Organisation reactivated.");});
+  $("#oBg").addEventListener("click",()=>modal(`<div class="mh"><h2>Request break-glass access</h2><p class="sub">You can see configuration and anonymised statistics without approval. Viewing members, loans or other personal data needs the organisation's approval.</p></div><div class="mb"><div class="fld"><label for="bgr">Reason</label><textarea id="bgr" rows="2" placeholder="Investigating failed schedule generation on loan LN-IB-0231"></textarea></div><div class="fld"><label for="bgd">Access window</label><select id="bgd"><option>2 hours</option><option>4 hours</option><option>24 hours</option></select></div><p class="muted" style="font-size:12px">The organisation admin approves the request. Every record you view is logged in both audit logs.</p></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Send request</button></div>`,L=>{if(!L.querySelector("#bgr").value.trim())return false;toast("Request sent to the organisation admin for approval.");}));
+  if(T.after)T.after(o);}};
+}
+const orgTabs={};
+const ROLE_NAMES2={EMP:"Community Employee",MGR:"Manager",ACC:"Accountant",LDR:"Leadership Team",AUD:"Auditor",ADM:"System Administrator"};
+function orgUserStats(o){if(!o._us){const n=Math.max(o.users,1);const base=o.users<=1?{EMP:0,MGR:0,ACC:0,LDR:0,AUD:0,ADM:1}:{EMP:Math.max(1,Math.round(n*0.35)),MGR:1,ACC:1,LDR:Math.max(1,Math.round(n*0.2)),AUD:1,ADM:1};
+ o._us={by:base,app:o.users<=1?1:o.users-1,rec:o.users<=1?0:1,pend:o.admin.state==="Activation link sent"?1:o.id==="kaveri"?2:0,inact:o.id==="kaveri"?1:0};}return o._us;}
+orgTabs.users=(o)=>{const u=orgUserStats(o);const max=Math.max(...Object.values(u.by),1);const total=Object.values(u.by).reduce((a,b)=>a+b,0);
+ const cnt=r=>{const c={V:0,C:0,E:0,A:0,D:0};MODS.forEach(([id])=>{if(id[0]==="D"||!o.modules.includes(id))return;"VCEAD".split("").forEach(p=>{if((o.matrix[id][r]||"").includes(p))c[p]++;});});return c;};
+ return {html:`<div class="readonly"><span class="n-ico" style="background:var(--muted);color:var(--surface);border-radius:50%;width:18px;height:18px;display:grid;place-items:center;font-size:11px;font-family:var(--f-mono)">i</span>Counts only. Users are created and appointed by the organisation admin; names other than the admin need break-glass access.</div>
+ <div class="stats s5"><div class="stat"><span>Users</span><b>${total+u.inact}</b><small>${total} active</small></div><div class="stat"><span>App users</span><b>${u.app}</b><small>${u.app>1?Math.ceil(u.app*0.4)+" both · "+Math.floor(u.app*0.35)+" web · "+(u.app-Math.ceil(u.app*0.4)-Math.floor(u.app*0.35))+" mobile":"Web only"}</small></div><div class="stat"><span>Record only</span><b>${u.rec}</b><small>No login</small></div><div class="stat ${u.pend?"hot":""}"><span>Activation pending</span><b>${u.pend}</b><small>${o.admin.state==="Activation link sent"?"Including the org admin":"Link sent, not used"}</small></div><div class="stat"><span>Inactive</span><b>${u.inact}</b><small>History kept</small></div></div>
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Users by role</h2></div><div class="pb" style="gap:10px">
+ ${Object.entries(u.by).map(([r,n])=>`<div style="display:grid;grid-template-columns:150px 1fr 28px;gap:10px;align-items:center;font-size:13px"><span>${ROLE_NAMES2[r]}</span><div style="background:var(--sunk);border-radius:4px;height:14px;overflow:hidden"><div style="width:${n/max*100}%;height:100%;background:var(--accent);border-radius:4px"></div></div><b class="num">${n}</b></div>`).join("")}
+ ${!u.by.MGR?'<div class="note n-warn"><span class="n-ico">!</span><div>No Manager appointed yet. Loan and other approvals have no approver.</div></div>':""}</div></div>
+ <div class="panel"><div class="ph"><h2>Organisation admin</h2>${o.admin.state==="Activation link sent"?'<span class="pill p-warn">Activation pending</span>':statusPill(o.status==="Suspended"?"Suspended":"Active")}</div><div class="pb"><dl class="kv"><dt>Name</dt><dd>${esc(o.admin.name)}</dd><dt>Email</dt><dd>${esc(o.admin.email)}</dd><dt>Last login</dt><dd>${esc(o.admin.last)}</dd></dl><div class="row"><a class="btn sm" href="#org-${o.id}-overview">Manage admin</a></div></div></div></div>
+ <div class="panel"><div class="ph"><h2>Roles and privilege summary</h2><a class="btn sm" href="#org-${o.id}-roles">Edit privilege ceiling</a></div><div class="tw"><table><thead><tr><th>Role</th><th class="num">Holders</th><th class="num">View</th><th class="num">Create</th><th class="num">Edit</th><th class="num">Approve</th><th class="num">Delete</th></tr></thead><tbody>
+ ${Object.keys(ROLE_NAMES2).map(r=>{const c=cnt(r);return `<tr><td><span class="tag">${r}</span> ${ROLE_NAMES2[r]}</td><td class="num">${u.by[r]||'<span class="pill p-bad">0</span>'}</td><td class="num">${c.V}</td><td class="num">${c.C}</td><td class="num">${c.E}</td><td class="num">${c.A}</td><td class="num">${c.D}</td></tr>`;}).join("")}</tbody></table></div></div>
+ <div class="note n-info"><span class="n-ico">i</span><div>Platforms for this organisation: <b>${esc(o.settings.platforms)}</b>. The organisation admin chooses web, mobile app or both for each user within that. <a href="#org-${o.id}-settings">Change in Settings</a></div></div>
+ <div class="panel"><div class="ph"><div><h2>Custom roles created by the organisation</h2><span class="muted" style="font-size:12px">Setting: ${esc(o.settings.customRoles)} · <a href="#org-${o.id}-settings">change</a></span></div></div><div class="tw"><table><thead><tr><th>Role</th><th>Based on</th><th class="num">Holders</th><th class="num">Modules</th><th>Status</th></tr></thead><tbody>
+ ${(o.id==="kaveri"?[["CSH","Cashier","Community Employee",1,7,"Active"],["HCO","Hall Coordinator","Community Employee",0,3,"Awaiting Leadership approval"]]:o.id==="anbu"?[["COL","Field Collector","Community Employee",2,5,"Active"]]:[]).map(r=>`<tr><td><span class="tag">${r[0]}</span> ${r[1]}</td><td>${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4]}</td><td><span class="pill ${r[5]==="Active"?"p-ok":"p-warn"}">${r[5]}</span></td></tr>`).join("")||'<tr><td colspan="5" class="muted">No custom roles yet.</td></tr>'}</tbody></table></div></div>
+ <p class="muted" style="font-size:12px">Custom roles can only use privileges inside the ceiling you set on Roles &amp; privileges, never the configuration modules. Counts are within the ${o.modules.length} modules enabled for this organisation and the privilege ceiling you set.</p>`};
+};
+orgTabs.overview=(o)=>({html:`
+ <div class="grid2">
+  <div class="panel"><div class="ph"><h2>Organisation admin user</h2>${o.admin.state==="Activation link sent"?statusPill("Onboarding"):statusPill(o.status==="Suspended"?"Suspended":"Active")}</div><div class="pb">
+   <dl class="kv"><dt>Name</dt><dd>${esc(o.admin.name)}</dd><dt>Role</dt><dd>System Administrator <span class="tag">ADM</span> · App user</dd><dt>Mobile</dt><dd>${esc(o.admin.mobile)}</dd><dt>Email</dt><dd>${esc(o.admin.email)}</dd><dt>Login status</dt><dd>${esc(o.admin.state)}</dd><dt>Last login</dt><dd>${esc(o.admin.last)}</dd></dl>
+   <div class="row"><button class="btn sm" id="aResend">Resend activation link</button><button class="btn sm" id="aReset">Reset MFA</button><button class="btn sm" id="aReplace">Replace admin</button></div>
+   <p class="muted" style="font-size:12px">Other users and role holders are created by this admin inside the organisation.</p></div></div>
+  <div class="panel"><div class="ph"><h2>At a glance</h2><span class="muted" style="font-size:12px">Anonymised statistics</span></div><div class="pb">
+   <dl class="kv"><dt>Created</dt><dd>${o.created}</dd><dt>Members</dt><dd>${o.members.toLocaleString("en-IN")}</dd><dt>Users</dt><dd>${o.users} · <a href="#org-${o.id}-users">by role</a></dd><dt>Modules enabled</dt><dd>${o.modules.length} of ${MODS.length} · <a href="#org-${o.id}-modules">change</a></dd><dt>Loan types</dt><dd>${o.loans.map(l=>esc(l.name)).join(", ")}</dd><dt>Workflows</dt><dd>${o.workflows.length} published</dd><dt>Settings</dt><dd>${Object.keys(DEFAULTS).filter(k=>o.settings[k]!==DEFAULTS[k]).length} changed from default · <a href="#org-${o.id}-settings">view</a></dd><dt>Payment mode</dt><dd>Cash only</dd><dt>Optional features</dt><dd>${FEATURES.filter(f=>o.feats[f[0]]).map(f=>f[1]).join(", ")||"None"}</dd></dl></div></div>
+ </div>
+ <div class="panel"><div class="ph"><h2>Workflow health, last 30 days</h2><span class="muted" style="font-size:12px">Counts and failure rates only; no personal data</span></div>
+ <div class="tw"><table><thead><tr><th>Workflow</th><th class="num">Started</th><th class="num">Completed</th><th class="num">Avg. stage time</th><th class="num">Validation blocks</th><th class="num">Action failures</th></tr></thead><tbody>
+ ${[["Loan Application",48,41,"1.6 days",7,1],["Early Settlement",9,9,"0.4 days",0,0],["Daily Expense",112,108,"0.2 days",3,0],["Hall Booking",14,11,"—",1,0]].map(r=>`<tr><td>${r[0]}</td><td class="num">${o.members?r[1]:0}</td><td class="num">${o.members?r[2]:0}</td><td class="num">${o.members?r[3]:"—"}</td><td class="num">${o.members?r[4]:0}</td><td class="num">${o.members&&r[5]?`<span class="pill p-bad">${r[5]}</span>`:"0"}</td></tr>`).join("")}
+ </tbody></table></div></div>`,
+ after(o){$("#aResend").addEventListener("click",()=>toast("Activation link resent to "+o.admin.email));$("#aReset").addEventListener("click",()=>toast("MFA reset. The admin sets it up again at next login."));
+  $("#aReplace").addEventListener("click",()=>modal(`<div class="mh"><h2>Replace organisation admin</h2><p class="sub">Use this only when the organisation has lost access to its admin account. The current admin is deactivated.</p></div><div class="mb"><div class="fld"><label for="rn">Full name</label><input type="text" id="rn"></div><div class="fld"><label for="rm">Mobile</label><input type="tel" id="rm"></div><div class="fld"><label for="re">Email</label><input type="email" id="re"></div><div class="fld"><label for="rr">Reason</label><input type="text" id="rr"></div></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Replace and send link</button></div>`,L=>{const n=L.querySelector("#rn").value.trim(),e=L.querySelector("#re").value.trim();if(!n||!e||!L.querySelector("#rr").value.trim())return false;o.admin={name:n,mobile:L.querySelector("#rm").value,email:e,state:"Activation link sent",last:"—"};render();toast("New admin created. Activation link sent.");}));}
+});
+
+function matrixTable(matrix,mods,editable,idp){
+ return `<div class="tw"><table class="mx"><thead><tr><th>No.</th><th>Module</th>${ROLES.map(r=>`<th title="${ROLE_NAMES[r]}">${r}</th>`).join("")}</tr></thead><tbody>
+ ${MODS.map(([id,name])=>{const off=mods&&!mods.includes(id);return `<tr class="${off?"off":""}"><td class="mono muted">${id}</td><td class="mn">${esc(name)}</td>${ROLES.map(r=>`<td><div class="chips">${"VCEAD".split("").map(p=>`<button class="chip ${matrix[id][r].includes(p)?"on":""}" data-m="${id}" data-r="${r}" data-p="${p}" ${editable&&!off?"":"disabled"} aria-label="${name} ${r} ${p}">${p}</button>`).join("")}</div></td>`).join("")}</tr>`;}).join("")}
+ </tbody></table></div>`;
+}
+function bindMatrix(root,matrix){root.querySelectorAll(".chip:not([disabled])").forEach(c=>c.addEventListener("click",()=>{const {m,r,p}=c.dataset;const cur=matrix[m][r];matrix[m][r]=cur.includes(p)?cur.replace(p,""):"VCEAD".split("").filter(x=>x===p||cur.includes(x)).join("");c.classList.toggle("on");}));}
+
+orgTabs.modules=(o,ro)=>{if(!o._modOrig)o._modOrig=[...o.modules];const added=o.modules.filter(m=>!o._modOrig.includes(m)),removed=o._modOrig.filter(m=>!o.modules.includes(m));
+ return {html:`<div class="readonly"><span class="n-ico" style="background:var(--muted);color:var(--surface);border-radius:50%;width:18px;height:18px;display:grid;place-items:center;font-size:11px;font-family:var(--f-mono)">i</span>Only you decide which modules this organisation has. The organisation admin sees the enabled list read-only and cannot turn modules on or off.</div>
+ <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat"><span>Enabled</span><b>${o.modules.length}</b><small>of ${MODS.length} modules</small></div><div class="stat"><span>Always on</span><b>${CORE_MODS.length}</b><small>Core platform and accounting</small></div><div class="stat"><span>Unsaved changes</span><b>${added.length+removed.length}</b><small>${added.length} on · ${removed.length} off</small></div></div>
+ <div class="note n-info"><span class="n-ico">i</span><div>A module that is off disappears from the organisation's menus, dashboards and role privileges. Its data is kept, and turning it back on restores access. Turning off a module also turns off the modules that depend on it.</div></div>
+ ${modulePicker(o.modules,o.feats)}
+ <div class="row" style="justify-content:flex-end;position:sticky;bottom:0;background:var(--bg);padding-block:10px;border-top:1px solid var(--line)"><button class="btn" id="mdUndo" ${added.length+removed.length?"":"disabled"}>Discard changes</button><button class="btn pri" id="mdSave" ${added.length+removed.length?"":"disabled"}>Save modules</button></div>`,
+ after(o){bindModulePicker(()=>o.modules,m=>{o.modules=m;render();});
+  $("#mdUndo").addEventListener("click",()=>{o.modules=[...o._modOrig];render();});
+  $("#mdSave").addEventListener("click",()=>publishModal("Save modules for "+o.short,[...added.map(m=>[modName(m),"off","on"]),...removed.map(m=>[modName(m),"on","off"])],(r,eff)=>{AUDIT.unshift(["15 Nov 2026 09:12",o.name,"Modules changed",(added.length?"On: "+added.map(modName).join(", ")+". ":"")+(removed.length?"Off: "+removed.map(modName).join(", ")+". ":"")+"Effective "+eff,r]);o._modOrig=[...o.modules];render();toast("Modules saved. The organisation admin is notified.");}));}};
+};
+orgTabs.roles=(o,ro)=>({html:`${ro}
+ <div class="note n-info"><span class="n-ico">i</span><div>This is the <b>ceiling</b> you hand to the organisation for its <a href="#org-${o.id}-modules">${o.modules.length} enabled modules</a>. Their admin assigns users to roles and can remove privileges within it, but cannot grant privileges you have not provided. Rows for modules that are off are greyed out. Custom roles the organisation creates can only use privileges inside this ceiling. <b>V</b> View · <b>C</b> Create · <b>E</b> Edit · <b>A</b> Approve · <b>D</b> Delete/cancel.</div></div>
+ <div class="panel"><div class="ph"><h2>Role privileges ceiling</h2><div class="row"><button class="btn sm" id="mReset">Reset to platform default</button><button class="btn sm pri" id="mSave">Save and notify admin</button></div></div>${matrixTable(o.matrix,o.modules,true)}</div>`,
+ after(o){bindMatrix($("#view"),o.matrix);$("#mReset").addEventListener("click",()=>{o.matrix=baseMatrix();render();toast("Privileges reset to the platform default template.");});
+  $("#mSave").addEventListener("click",()=>{AUDIT.unshift(["15 Nov 2026 09:14",o.name,"Modules and privileges updated","Default set changed by Super Administrator","Onboarding adjustment"]);toast("Saved. The organisation admin is notified of the new default set.");});}
+});
+
+orgTabs.rules=(o,ro)=>{
+ const L=o.loans[sel.loan]||o.loans[0];
+ const f=(id,label,val,suffix,pre,hint)=>`<div class="fld"><label for="r_${id}">${label}</label><div class="affix ${pre?"pre":""}">${pre?`<span>${pre}</span>`:""}<input type="number" step="any" id="r_${id}" data-k="${id}" value="${val}">${suffix?`<span>${suffix}</span>`:""}</div>${hint?`<span class="hint">${hint}</span>`:""}</div>`;
+ return {html:`${ro}
+ <div class="row" style="justify-content:space-between"><div class="seg" id="ltSeg">${o.loans.map((l,i)=>`<button type="button" data-i="${i}" class="${i===sel.loan?"on":""}">${esc(l.name)}</button>`).join("")}</div>
+ <div class="row"><button class="btn sm" id="addLt">+ Add loan type</button><span class="muted" style="font-size:12px">Rule set <span class="tag">${L.code} · rev ${L.rev||3}</span> · published 15 Nov 2026</span></div></div>
+ <div class="wf" style="grid-template-columns:minmax(0,1fr) 300px">
+ <div class="panel">
+  <div class="sect"><div class="sect-h"><h3>Interest and amount</h3><span class="ref">Scope 6, 6.3, 6.4</span></div><div class="grid3">
+   ${f("interest","Interest rate",L.interest,"% p.a.")}
+   <div class="fld"><label>Method</label>${seg("method",[["flat","Flat"]],L.method)}<span class="hint">Only flat interest is in scope</span></div>
+   <div></div>
+   ${f("min","Minimum amount",L.min,"","₹")}${f("max","Maximum amount",L.max,"","₹")}<div></div>
+   ${f("tmin","Shortest tenure",L.tmin,"months")}${f("tmax","Longest tenure",L.tmax,"months")}</div></div>
+  <div class="sect"><div class="sect-h"><h3>Application fee</h3><div class="row"><span class="ref">Scope 6.2</span>${sw("r_fee",L.fee)}</div></div>
+   ${L.fee?`<div class="grid3"><div class="fld"><label>Fee type</label>${seg("feeType",[["fixed","Fixed ₹"],["pct","% of amount"]],L.feeType)}</div>${f("feeVal","Fee",L.feeVal,L.feeType==="pct"?"%":"",L.feeType==="pct"?"":"₹")}<div class="fld"><label>Collect</label>${seg("feeWhen",[["before","Before submission"],["after","After submission"]],L.feeWhen)}</div></div><p class="muted" style="font-size:12px">Fees are non-refundable. Submission is blocked while the fee is unpaid.</p>`:`<p class="muted" style="font-size:12.5px">No application fee for this loan type.</p>`}</div>
+  <div class="sect"><div class="sect-h"><h3>Late fee</h3><div class="row"><span class="ref">Scope 7.6</span>${sw("r_lateOn",L.lateOn)}</div></div>
+   ${L.lateOn?`<div class="grid3">${f("grace","Grace period",L.grace,"days")}<div class="fld"><label>Charge as</label>${seg("lateType",[["fixed","Fixed ₹"],["pct","% of overdue instalment"]],L.lateType)}</div>${f("lateVal","Amount",L.lateVal,L.lateType==="pct"?"%":"",L.lateType==="pct"?"":"₹")}
+   <div class="fld"><label>Frequency</label>${seg("lateFreq",[["instalment","Once per instalment"],["monthly","Monthly"]],L.lateFreq)}</div>${f("lateCap","Maximum cap",L.lateCap,"per instalment","₹")}</div>`:`<p class="muted" style="font-size:12.5px">No late fee.</p>`}</div>
+  <div class="sect"><div class="sect-h"><h3>Early full settlement</h3><div class="row"><span class="ref">Scope 7.3</span>${sw("r_esOn",L.esOn)}</div></div>
+   ${L.esOn?`<div class="fld"><label>Interest policy</label>${seg("esPolicy",[["A","A · Collect all remaining scheduled interest"],["B","B · Interest only up to settlement date"]],L.esPolicy)}</div>
+   <div class="grid3">${f("esCharge","Settlement charge",L.esCharge,"% of outstanding","","0 means no charge")}<div class="fld"><label>Manager verification</label>${seg("esApproval",[["true","Required"],["false","Not required"]],L.esApproval)}</div><div class="fld"><label>Waivers</label><select><option>Manager approval required</option><option>Not allowed</option></select></div></div>`:`<p class="muted" style="font-size:12.5px">Early settlement not allowed for this loan type.</p>`}</div>
+  <div class="sect"><div class="sect-h"><h3>Lump-sum and overpayments</h3><span class="ref">Scope 7.5</span></div>
+   <div class="fld"><label>Excess reduces principal, then</label>${seg("overpay",[["reduce-emi","Reduce instalment, same tenure"],["reduce-tenure","Shorten tenure, same instalment"]],L.overpay)}</div></div>
+  <div class="sect"><div class="sect-h"><h3>Default and penalty</h3><span class="ref">Scope 8.1</span></div><div class="grid3">
+   ${f("defMonths","Default after",L.defMonths,"months unpaid","","Oldest unpaid instalment, counted from due date")}
+   <div class="fld"><label>Penalty as</label>${seg("penType",[["pct","% of outstanding"],["fixed","Fixed ₹"]],L.penType)}</div>${f("penVal","Default penalty",L.penVal,L.penType==="pct"?"%":"",L.penType==="pct"?"":"₹")}</div>
+   <p class="muted" style="font-size:12px">On default the member owes the full outstanding amount plus this penalty.</p></div>
+  <div class="sect"><div class="sect-h"><h3>Nominee and guarantors</h3><span class="ref">Scope 6.9, 11</span></div><div class="grid3">
+   <div class="fld"><label>Nominee</label><select id="r_nominee"><option value="first">Mandatory for first loan only</option><option value="always">Mandatory for every loan</option></select></div>
+   ${f("guarantors","Guarantors required",L.guarantors,"")}${f("guarAbove","When amount above",L.guarAbove,"","₹")}</div></div>
+  <div class="ph" style="border-top:1px solid var(--line);border-bottom:0;justify-content:flex-end"><button class="btn" id="rDiscard">Discard changes</button><button class="btn" id="rDraft">Save draft</button><button class="btn pri" id="rPub">Publish rule set</button></div>
+ </div>
+ <div style="display:flex;flex-direction:column;gap:16px;position:sticky;top:70px">
+  <div class="panel"><div class="ph"><h2>Rule simulator</h2></div><div class="pb">
+   <div class="grid2"><div class="fld"><label for="sAmt">Principal</label><input type="number" id="sAmt" value="100000"></div><div class="fld"><label for="sTen">Months</label><input type="number" id="sTen" value="7"></div></div>
+   <div id="simOut"></div></div></div>
+  <div class="panel"><div class="ph"><h2>Pending draft</h2></div><div class="pb" id="draftBox"><p class="muted" style="font-size:12.5px">No unpublished changes.</p></div></div>
+ </div></div>`,
+ after(o){
+  const L=o.loans[sel.loan];if(!L._orig)L._orig=JSON.parse(JSON.stringify(L,(k,v)=>k==="_orig"?undefined:v));
+  const labels={interest:"Interest rate",min:"Minimum amount",max:"Maximum amount",tmin:"Shortest tenure",tmax:"Longest tenure",fee:"Application fee",feeType:"Fee type",feeVal:"Fee",feeWhen:"Fee collection",lateOn:"Late fee",grace:"Grace period",lateType:"Late fee type",lateVal:"Late fee amount",lateFreq:"Late fee frequency",lateCap:"Late fee cap",esOn:"Early settlement",esPolicy:"Interest policy",esCharge:"Settlement charge",esApproval:"Manager verification",overpay:"Overpayment",defMonths:"Default after (months)",penType:"Penalty type",penVal:"Default penalty",nominee:"Nominee",guarantors:"Guarantors",guarAbove:"Guarantor threshold"};
+  const diff=()=>Object.keys(labels).filter(k=>String(L[k])!==String(L._orig[k])).map(k=>[labels[k],String(L._orig[k]),String(L[k])]);
+  const sim=()=>{const P=+$("#sAmt").value||0,n=Math.max(1,+$("#sTen").value||1);const I=P*L.interest/100*n/12;const emi=Math.floor((P+I)/n);const last=Math.round(P+I-emi*(n-1));
+   const fee=L.fee?(L.feeType==="pct"?Math.round(P*L.feeVal/100):+L.feeVal):0;const late=L.lateOn?Math.min(L.lateType==="pct"?Math.round(emi*L.lateVal/100):+L.lateVal,L.lateCap):0;
+   const pen=L.penType==="pct"?Math.round(P*L.penVal/100):+L.penVal;const range=P<L.min||P>L.max||n<L.tmin||n>L.tmax;
+   $("#simOut").innerHTML=`${range?`<div class="note n-warn"><span class="n-ico">!</span><div>Outside this loan type's limits (${inr(L.min)}–${inr(L.max)}, ${L.tmin}–${L.tmax} months). Eligibility validation would block it.</div></div>`:""}
+   <table class="preview"><tbody><tr><td class="muted">Total interest (flat)</td><td class="num">${inr(Math.round(I))}</td></tr><tr><td class="muted">Instalments 1–${n-1}</td><td class="num">${inr(emi)}</td></tr><tr><td class="muted">Final instalment</td><td class="num">${inr(last)}</td></tr><tr><td class="muted">Application fee</td><td class="num">${fee?inr(fee):"None"}</td></tr><tr><td class="muted">Late fee per instalment</td><td class="num">${late?inr(late):"None"}</td></tr><tr><td class="muted">Default after</td><td class="num">${L.defMonths} months</td></tr><tr><td class="muted">Default penalty</td><td class="num">${inr(pen)}</td></tr></tbody></table><p class="muted" style="font-size:11.5px">EMI rounded down to ₹1; difference goes to the final instalment.</p>`;};
+  const drawDraft=()=>{const d=diff();$("#draftBox").innerHTML=d.length?`<div class="diff">${d.map(c=>`<div>${esc(c[0])}: <span class="o">${esc(c[1])}</span> <span class="n">${esc(c[2])}</span></div>`).join("")}</div>`:`<p class="muted" style="font-size:12.5px">No unpublished changes.</p>`;};
+  const upd=()=>{sim();drawDraft();};
+  document.querySelectorAll("#view input[data-k]").forEach(i=>i.addEventListener("input",()=>{L[i.dataset.k]=i.value===""?"":+i.value;upd();}));
+  ["fee","lateOn","esOn"].forEach(k=>{const e=$("#r_"+k);e.addEventListener("change",()=>{L[k]=e.checked;render();});});
+  const nm=$("#r_nominee");nm.value=L.nominee;nm.addEventListener("change",()=>{L.nominee=nm.value;upd();});
+  bindSeg($("#view"),(k,v)=>{if(!(k in L))return;L[k]=v==="true"?true:v==="false"?false:v;if(["feeType","lateType","penType"].includes(k))render();else upd();});
+  $("#ltSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;sel.loan=+b.dataset.i;render();});
+  $("#sAmt").addEventListener("input",sim);$("#sTen").addEventListener("input",sim);
+  $("#rDiscard").addEventListener("click",()=>{const o2=L._orig;Object.assign(L,JSON.parse(JSON.stringify(o2)));L._orig=o2;render();});
+  $("#rDraft").addEventListener("click",()=>toast(diff().length?"Draft saved. Not live until published.":"Nothing to save."));
+  $("#rPub").addEventListener("click",()=>publishModal(`Publish ${L.name} rules`,diff(),(reason,eff)=>{AUDIT.unshift(["15 Nov 2026 09:20",o.name,"Loan rule published",`${L.name}: ${diff().map(d=>d[0]+" "+d[1]+" → "+d[2]).join("; ")||"no field changes"} (effective ${eff})`,reason]);L.rev=(L.rev||3)+1;delete L._orig;render();toast("Published. New loans use it from "+eff+".");}));
+  $("#addLt").addEventListener("click",()=>modal(`<div class="mh"><h2>Add loan type</h2><p class="sub">Starts from a copy of an existing loan type's rules. No code change is needed.</p></div><div class="mb"><div class="fld"><label for="ltn">Loan type name</label><input type="text" id="ltn" placeholder="Festival Loan"></div><div class="fld"><label for="ltc">Copy rules from</label><select id="ltc">${o.loans.map((l,i)=>`<option value="${i}">${esc(l.name)}</option>`).join("")}</select></div></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Add as draft</button></div>`,M=>{const n=M.querySelector("#ltn").value.trim();if(!n)return false;const src=o.loans[+M.querySelector("#ltc").value];const c=JSON.parse(JSON.stringify(src,(k,v)=>k==="_orig"?undefined:v));c.name=n;c.code="LN-"+n.slice(0,2).toUpperCase();c.rev=0;o.loans.push(c);sel.loan=o.loans.length-1;render();toast("Loan type added as a draft.");}));
+  upd();
+ }};
+};
+
+orgTabs.workflows=(o,ro)=>{
+ const w=o.workflows[sel.wf]||o.workflows[0];if(sel.stage>=w.stages.length)sel.stage=0;const st=w.stages[sel.stage];
+ const avail=ACTIONS.filter(a=>a.status==="approved"&&o.enabledActions.includes(a.code));
+ const an=c=>(ACTIONS.find(a=>a.code===c)||{name:c}).name;
+ return {html:`${ro}
+ <div class="wf">
+  <div class="panel"><div class="ph"><h2>Workflows</h2><span class="muted" style="font-size:12px">${o.workflows.length}</span></div><div class="wflist">${o.workflows.map((x,i)=>`<button data-wf="${i}" class="${i===sel.wf?"on":""}"><span>${esc(x.name)}</span><small>${esc(x.ver)} · ${x.status}</small></button>`).join("")}</div></div>
+  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+   <div class="panel"><div class="ph"><div><h2>${esc(w.name)}</h2><span class="muted" style="font-size:12px">Cloned from template ${esc(w.tpl)} · ${esc(w.ver)} · ${statusPill(w.status)}</span></div><div class="row"><button class="btn sm" id="wfRoll">Roll back</button><button class="btn sm" id="wfDeact">Deactivate</button><button class="btn sm pri" id="wfPub">Publish</button></div></div>
+    <div class="pb"><span class="lbl">Stages and transitions · select a stage to configure its actions</span>
+    <div class="stages">${w.stages.map((s,i)=>`${i?'<span class="arrow"></span>':""}<button class="stage ${i===sel.stage?"on":""}" data-st="${i}"><span>${esc(s.name)}</span><small>${s.actions.length} action${s.actions.length===1?"":"s"} · ${s.approver}</small></button>`).join("")}</div></div></div>
+   <div class="panel"><div class="ph"><div><h2>Stage: ${esc(st.name)}</h2><span class="muted" style="font-size:12px">Validations run first; if any mandatory validation fails the transaction stays in this stage. Data-changing actions run in one database transaction and roll back on failure.</span></div>
+    <div class="row"><label for="stApp" class="lbl">Approving role</label><select id="stApp" style="width:auto">${["System","EMP","MGR","ACC","LDR"].map(r=>`<option ${r===st.approver?"selected":""}>${r}</option>`).join("")}</select></div></div>
+    <div class="tw"><table><thead><tr><th>Seq.</th><th>Action</th><th>Execution</th><th>Validation</th><th>Mandatory</th><th>Enabled</th><th>Retries</th><th></th></tr></thead><tbody>
+    ${st.actions.length?st.actions.map((a,i)=>`<tr><td><div class="row" style="gap:4px;flex-wrap:nowrap"><span class="mono" style="width:16px">${i+1}</span><button class="seqbtn" data-up="${i}" ${i===0?"disabled":""} aria-label="Move up">↑</button><button class="seqbtn" data-dn="${i}" ${i===st.actions.length-1?"disabled":""} aria-label="Move down">↓</button></div></td>
+     <td>${esc(an(a.code))}<div class="mono muted" style="font-size:11px">${a.code}</div></td>
+     <td><select data-ex="${i}" style="width:auto">${["Synchronous","Asynchronous"].map(x=>`<option ${x===a.exec?"selected":""}>${x}</option>`).join("")}</select></td>
+     <td>${sw("v"+i,a.val)}</td><td>${sw("m"+i,a.mand)}</td><td>${sw("e"+i,a.on)}</td>
+     <td>${(ACTIONS.find(x=>x.code===a.code)||{}).cat==="Notification"?`<input type="number" data-rt="${i}" value="${a.retry||3}" min="0" max="10" style="width:64px">`:'<span class="muted" title="Only notifications are retried">—</span>'}</td>
+     <td><button class="btn sm ghost danger" data-rm="${i}">Remove</button></td></tr>`).join(""):`<tr><td colspan="8" class="muted">No actions on this stage yet. Add one below.</td></tr>`}
+    </tbody></table></div>
+    <div class="ph" style="border-top:1px solid var(--line);border-bottom:0"><div class="row"><select id="addAct" style="width:auto">${avail.map(a=>`<option value="${a.code}">${esc(a.name)} · ${a.cat}</option>`).join("")}</select><button class="btn sm" id="addBtn">+ Add action</button></div><span class="muted" style="font-size:12px">Only approved actions enabled for this organisation are listed</span></div>
+   </div>
+  </div>
+ </div>`,
+ after(o){
+  const mark=()=>{w.status="Draft";};
+  document.querySelectorAll("[data-wf]").forEach(b=>b.addEventListener("click",()=>{sel.wf=+b.dataset.wf;sel.stage=0;render();}));
+  document.querySelectorAll("[data-st]").forEach(b=>b.addEventListener("click",()=>{sel.stage=+b.dataset.st;render();}));
+  $("#stApp").addEventListener("change",e=>{st.approver=e.target.value;mark();render();});
+  st.actions.forEach((a,i)=>{["v","m","e"].forEach(p=>$("#"+p+i).addEventListener("change",ev=>{a[{v:"val",m:"mand",e:"on"}[p]]=ev.target.checked;mark();render();}));});
+  document.querySelectorAll("[data-ex]").forEach(s=>s.addEventListener("change",()=>{st.actions[+s.dataset.ex].exec=s.value;mark();render();}));
+  document.querySelectorAll("[data-rt]").forEach(s=>s.addEventListener("change",()=>{st.actions[+s.dataset.rt].retry=+s.value;mark();}));
+  document.querySelectorAll("[data-up]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.up;[st.actions[i-1],st.actions[i]]=[st.actions[i],st.actions[i-1]];mark();render();}));
+  document.querySelectorAll("[data-dn]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.dn;[st.actions[i+1],st.actions[i]]=[st.actions[i],st.actions[i+1]];mark();render();}));
+  document.querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{st.actions.splice(+b.dataset.rm,1);mark();render();}));
+  $("#addBtn").addEventListener("click",()=>{const c=$("#addAct").value;const cat=(ACTIONS.find(a=>a.code===c)||{}).cat;st.actions.push({code:c,exec:cat==="Notification"?"Asynchronous":"Synchronous",val:cat==="Validation",mand:cat!=="Notification",on:true,retry:3});mark();render();});
+  $("#wfPub").addEventListener("click",()=>publishModal(`Publish ${w.name}`,[["Workflow",w.ver,w.ver.replace(/rev (\d+)/,(m,n)=>"rev "+(+n+1))]],(reason,eff)=>{w.ver=w.ver.replace(/rev (\d+)/,(m,n)=>"rev "+(+n+1));w.status="Published";AUDIT.unshift(["15 Nov 2026 09:25",o.name,"Workflow published",`${w.name} ${w.ver}, effective ${eff}`,reason]);render();toast("Workflow published. In-flight transactions stay on their original version.");}));
+  $("#wfRoll").addEventListener("click",()=>toast("Previous versions: rev 1 to current. Rolling back creates a new version from the selected one."));
+  $("#wfDeact").addEventListener("click",()=>toast("Deactivating stops new transactions; in-flight ones finish on their version."));
+ }};
+};
+
+function settingsInput(id,r,val,dis){const opts=r[3];return opts?`<select id="${id}" ${dis?"disabled":""}>${(opts.includes(val)?opts:[val,...opts]).map(x=>`<option ${x===val?"selected":""}>${esc(x)}</option>`).join("")}</select>`:`<input type="text" id="${id}" value="${esc(val)}" ${dis?"disabled":""}>`;}
+let setFilter={changed:false,q:""};
+orgTabs.settings=(o,ro)=>{if(!o._setOrig)o._setOrig=Object.assign({},o.settings);
+ const changedN=Object.keys(DEFAULTS).filter(k=>o.settings[k]!==DEFAULTS[k]).length;const unsaved=Object.keys(DEFAULTS).filter(k=>o.settings[k]!==o._setOrig[k]);
+ return {html:`<div class="note n-info"><span class="n-ico">i</span><div>Every setting was provisioned with its default value when this organisation was created (<a href="#defaults">Default org settings</a> v${o.settingsVer}${o.settingsVer<DEFAULTS_VER?`, current is v${DEFAULTS_VER}`:""}). Settings marked <b>Org admin</b> or <b>Accountant</b> are maintained by the organisation after go-live; the rest only you can change.</div></div>
+ <div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat"><span>Settings</span><b>${SETTING_COUNT}</b><small>${SETTINGS.length} groups</small></div><div class="stat"><span>At default value</span><b>${SETTING_COUNT-changedN}</b><small>Same as platform default</small></div><div class="stat"><span>Changed from default</span><b>${changedN}</b><small>${unsaved.length?unsaved.length+" unsaved":"All saved"}</small></div></div>
+ <div class="row" style="justify-content:space-between"><div class="row"><input type="text" id="sQ" placeholder="Search settings" value="${esc(setFilter.q)}" style="width:220px"><label class="chk"><input type="checkbox" id="sCh" ${setFilter.changed?"checked":""}> Only show changed</label></div>${o.settingsVer<DEFAULTS_VER?`<button class="btn sm" id="sNewDef">Apply new defaults from v${DEFAULTS_VER} to settings still at default</button>`:""}</div>
+ ${SETTINGS.map(([g,ref,rows])=>{const vis=rows.filter(r=>(!setFilter.changed||o.settings[r[0]]!==DEFAULTS[r[0]])&&(r[1]+" "+o.settings[r[0]]).toLowerCase().includes(setFilter.q.toLowerCase()));if(!vis.length)return "";const gch=rows.filter(r=>o.settings[r[0]]!==DEFAULTS[r[0]]).length;
+  return `<div class="panel"><div class="ph"><div class="row"><h2>${g}</h2><span class="ref">Scope ${ref}</span></div><div class="row"><span class="muted" style="font-size:12px">${gch?gch+" changed":"All default"}</span>${gch?`<button class="btn sm ghost" data-greset="${g}">Reset group to default</button>`:""}</div></div>
+  <div class="tw"><table><thead><tr><th style="width:28%">Setting</th><th style="width:30%">Value</th><th>Platform default</th><th>Status</th><th>Maintained by</th><th></th></tr></thead><tbody>
+  ${vis.map(r=>{const k=r[0],v=o.settings[k],ch=v!==DEFAULTS[k];return `<tr><td>${esc(r[1])}</td><td style="min-width:200px">${settingsInput("st_"+k,r,v,false)}</td><td class="muted" style="font-size:12.5px">${esc(DEFAULTS[k])}</td><td>${ch?'<span class="pill p-info">Changed</span>':'<span class="pill p-mute">Default</span>'}${o.settings[k]!==o._setOrig[k]?' <span class="pill p-warn">Unsaved</span>':""}</td><td class="muted" style="font-size:12.5px;white-space:nowrap">${r[4]}</td><td>${ch?`<button class="btn sm ghost" data-sreset="${k}">Reset</button>`:""}</td></tr>`;}).join("")}
+  </tbody></table></div></div>`;}).join("")||'<p class="muted">No settings match.</p>'}
+ <div class="row" style="justify-content:flex-end;position:sticky;bottom:0;background:var(--bg);padding-block:10px;border-top:1px solid var(--line)"><button class="btn" id="sUndo" ${unsaved.length?"":"disabled"}>Discard changes</button><button class="btn pri" id="sSave" ${unsaved.length?"":"disabled"}>Publish settings</button></div>`,
+ after(o){
+  Object.keys(DEFAULTS).forEach(k=>{const e=$("#st_"+k);if(e)e.addEventListener("change",()=>{o.settings[k]=e.value;render();});});
+  document.querySelectorAll("[data-sreset]").forEach(b=>b.addEventListener("click",()=>{o.settings[b.dataset.sreset]=DEFAULTS[b.dataset.sreset];render();}));
+  document.querySelectorAll("[data-greset]").forEach(b=>b.addEventListener("click",()=>{SETTINGS.find(x=>x[0]===b.dataset.greset)[2].forEach(r=>o.settings[r[0]]=DEFAULTS[r[0]]);render();}));
+  $("#sQ").addEventListener("change",e=>{setFilter.q=e.target.value;render();});$("#sCh").addEventListener("change",e=>{setFilter.changed=e.target.checked;render();});
+  const nd=$("#sNewDef");if(nd)nd.addEventListener("click",()=>{o.settingsVer=DEFAULTS_VER;render();toast("Settings still at their default now follow v"+DEFAULTS_VER+". Changed settings kept.");});
+  $("#sUndo").addEventListener("click",()=>{o.settings=Object.assign({},o._setOrig);render();});
+  $("#sSave").addEventListener("click",()=>{const ch=Object.keys(DEFAULTS).filter(k=>o.settings[k]!==o._setOrig[k]);publishModal("Publish settings for "+o.short,ch.map(k=>[settingRow(k)[2],o._setOrig[k],o.settings[k]]),(r,eff)=>{AUDIT.unshift(["15 Nov 2026 09:16",o.name,"Settings published",ch.map(k=>settingRow(k)[2]+": "+o._setOrig[k]+" → "+o.settings[k]).join("; ")+" (effective "+eff+")",r]);localStorage.setItem("cfms-org-pagination",JSON.stringify({mode:o.settings.listMode||"Load more",size:parseInt(o.settings.listPageSize,10)||25,orgId:o.id}));o._setOrig=Object.assign({},o.settings);render();toast("Settings published.");});});
+ }};
+};
+views.defaults=()=>{const orgCounts=ver=>ORGS.filter(o=>o.settingsVer===ver).length;
+ return {crumbs:`<b>Default org settings</b>`,html:`
+ <div class="head"><div><h1>Default organisation settings</h1><p class="sub">Every new organisation is provisioned with these values for all ${SETTING_COUNT} settings, so nothing starts blank. Changing a default here affects only organisations created afterwards; existing ones keep their values.</p></div><div class="row"><span class="tag">v${DEFAULTS_VER} · ${orgCounts(DEFAULTS_VER)} orgs on this version</span><button class="btn pri" id="dSave">Save as v${DEFAULTS_VER+1}</button></div></div>
+ ${SETTINGS.map(([g,ref,rows])=>`<div class="panel"><div class="ph"><div class="row"><h2>${g}</h2><span class="ref">Scope ${ref}</span></div><span class="muted" style="font-size:12px">${rows.length} settings</span></div>
+ <div class="tw"><table><thead><tr><th style="width:34%">Setting</th><th style="width:40%">Default value</th><th>Maintained after go-live by</th></tr></thead><tbody>
+ ${rows.map(r=>`<tr><td>${esc(r[1])}</td><td style="min-width:200px">${settingsInput("df_"+r[0],r,DEFAULTS[r[0]],false)}</td><td class="muted" style="font-size:12.5px">${r[4]}</td></tr>`).join("")}</tbody></table></div></div>`).join("")}`,
+ after(){const pending={};Object.keys(DEFAULTS).forEach(k=>{const e=$("#df_"+k);e.addEventListener("change",()=>pending[k]=e.value);});
+  $("#dSave").addEventListener("click",()=>{const ch=Object.keys(pending).filter(k=>pending[k]!==DEFAULTS[k]);
+   publishModal("Save default settings v"+(DEFAULTS_VER+1),ch.map(k=>[settingRow(k)[2],DEFAULTS[k],pending[k]]),(r)=>{ch.forEach(k=>DEFAULTS[k]=pending[k]);DEFAULTS_VER++;AUDIT.unshift(["15 Nov 2026 09:45","Platform","Default settings saved","v"+DEFAULTS_VER+": "+(ch.map(k=>settingRow(k)[2]+" → "+pending[k]).join("; ")||"no value changes"),r]);render();toast("Saved as v"+DEFAULTS_VER+". Applies to organisations created from now on.");});});}};
+};
+orgTabs.approvals=(o,ro)=>({html:`${ro}
+ <div class="grid2">
+ <div class="panel"><div class="ph"><h2>Offline decisions</h2><span class="ref">Scope 4.7, 28</span></div><div class="pb">
+  <div class="fld"><span class="lbl">Roles that may record verbal and other offline decisions</span><div class="row">${["EMP","MGR","ACC","LDR"].map(r=>`<label class="chk"><input type="checkbox" data-off="${r}" ${o.approval.offlineRoles.includes(r)?"checked":""}> ${ROLE_NAMES[r]}</label>`).join("")}</div></div>
+  <div class="fld"><span class="lbl">Evidence types (dropdown shown to the person recording)</span><div style="display:flex;flex-direction:column;gap:6px" id="evList">${o.approval.evidence.map((e,i)=>`<div class="row" style="justify-content:space-between;border:1px solid var(--line);border-radius:var(--r);padding:5px 10px"><span>${esc(e)}</span><button class="btn sm ghost danger" data-ev="${i}">Remove</button></div>`).join("")}</div>
+  <div class="row"><input type="text" id="evNew" placeholder="Add evidence type" style="flex:1;min-width:160px"><button class="btn sm" id="evAdd">Add</button></div><span class="hint">Document upload is optional, not mandatory.</span></div>
+ </div></div>
+ <div class="panel"><div class="ph"><h2>Approvers, default and cooling-off</h2><span class="ref">Scope 3.3, 8.1, 8.4</span></div><div class="pb">
+  <div class="readonly">Single approver for every request, irrespective of amount. No committee or voting. Approver must differ from the requester.</div>
+  <div class="grid2"><div class="fld"><label for="apL">Final approver: loans, assistance, waivers</label><select id="apL"><option>Manager (MGR)</option><option>Leadership (LDR)</option></select></div>
+  <div class="fld"><label for="apP">Payroll approval</label><select id="apP"><option>Leadership (LDR)</option><option>Manager (MGR)</option></select></div>
+  <div class="fld"><label for="cool">Cooling-off after default settlement</label><div class="affix"><input type="number" id="cool" value="${o.approval.cooling}"><span>months</span></div></div>
+  <div class="fld"><label>Also after early settlement</label>${seg("coolES",[["false","No"],["true","Yes"]],o.approval.coolingAfterES)}</div></div>
+  <div class="fld"><label for="esc">Escalation for defaulters</label><select id="esc"><option>Notify Manager on Overdue, Leadership on Default</option><option>Notify Manager only</option></select></div>
+ </div></div></div>
+ <div class="row" style="justify-content:flex-end"><button class="btn pri" id="apPub">Publish approval settings</button></div>`,
+ after(o){document.querySelectorAll("[data-off]").forEach(c=>c.addEventListener("change",()=>{o.approval.offlineRoles=c.checked?[...o.approval.offlineRoles,c.dataset.off]:o.approval.offlineRoles.filter(r=>r!==c.dataset.off);}));
+  document.querySelectorAll("[data-ev]").forEach(b=>b.addEventListener("click",()=>{o.approval.evidence.splice(+b.dataset.ev,1);render();}));
+  $("#evAdd").addEventListener("click",()=>{const v=$("#evNew").value.trim();if(v){o.approval.evidence.push(v);render();}});
+  bindSeg($("#view"),(k,v)=>{o.approval.coolingAfterES=v==="true";});
+  $("#apPub").addEventListener("click",()=>publishModal("Publish approval settings",[],(r,eff)=>{AUDIT.unshift(["15 Nov 2026 09:30",o.name,"Approval settings published","Offline roles: "+o.approval.offlineRoles.join(", ")+"; evidence types: "+o.approval.evidence.length,r]);toast("Approval settings published from "+eff+".");}));}
+});
+
+orgTabs.actions=(o,ro)=>({html:`${ro}
+ <div class="note n-info"><span class="n-ico">i</span><div>Choose which approved platform actions appear in this organisation's Workflow Designer. New actions are approved centrally in the <a href="#actions">Action registry</a> first.</div></div>
+ <div class="panel"><div class="tw"><table><thead><tr><th>Action</th><th>Category</th><th>Version</th><th>Platform status</th><th>Used in stages</th><th>Enabled here</th></tr></thead><tbody>
+ ${ACTIONS.filter(a=>a.status!=="retired").map(a=>{const used=o.workflows.reduce((n,w)=>n+w.stages.filter(s=>s.actions.some(x=>x.code===a.code)).length,0);return `<tr><td>${esc(a.name)}<div class="mono muted" style="font-size:11px">${a.code}</div></td><td>${a.cat}</td><td class="mono">${a.ver}</td><td>${statusPill(a.status)}</td><td class="num">${used}</td><td>${a.status==="approved"?sw("ea_"+a.code,o.enabledActions.includes(a.code),used>0&&o.enabledActions.includes(a.code)):'<span class="muted" style="font-size:12px">Approve first</span>'}</td></tr>`;}).join("")}
+ </tbody></table></div></div><p class="muted" style="font-size:12px">An action in use by a stage cannot be disabled until it is removed from those stages.</p>`,
+ after(o){ACTIONS.forEach(a=>{const e=$("#ea_"+a.code);if(e&&!e.disabled)e.addEventListener("change",()=>{o.enabledActions=e.checked?[...o.enabledActions,a.code]:o.enabledActions.filter(c=>c!==a.code);toast((e.checked?"Enabled ":"Disabled ")+a.name+" for "+o.short);});});}
+});
+
+orgTabs.features=(o,ro)=>({html:`${ro}
+ <div class="panel"><div class="ph"><h2>Optional features</h2><span class="muted" style="font-size:12px">Off by default · changed only at the organisation's request · effective from a date, never changes posted transactions</span></div><div class="pb">
+ ${FEATURES.map(([k,n,d,legal])=>`<div class="swrow"><div><h3>${n}${legal?' <span class="pill p-warn">Legal warning</span>':""}</h3><p>${d}${o.feats[k]&&k==="deposits"?" · Enabled from 01 Dec 2026, advice document on file":""}</p></div>${sw("of_"+k,o.feats[k])}</div>`).join("")}
+ </div></div>
+ <div class="panel"><div class="ph"><h2>Rounding</h2><span class="muted" style="font-size:12px">Set at creation; afterwards changed by the organisation's Accountant with Leadership approval</span></div><div class="tw"><table><thead><tr><th>Area</th><th>Mode</th><th>Precision</th></tr></thead><tbody>
+ ${[["Loan instalments (EMI)","Floor","₹1"],["Interest amounts","Nearest","₹1"],["Settlement amounts","Nearest","₹1"],["Application fees (%)","Nearest","₹1"],["Marriage hall charges","Nearest","₹1"],["Payroll net salary","Nearest","₹1"],["Depreciation","None","₹0.01"],["Assistance amounts","None","₹0.01"]].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td class="mono">${r[2]}</td></tr>`).join("")}</tbody></table></div></div>`,
+ after(o){FEATURES.forEach(([k,n,,legal])=>{$("#of_"+k).addEventListener("change",e=>{const on=e.target.checked;e.target.checked=!on;
+  modal(`<div class="mh"><h2>${on?"Enable":"Disable"} ${n}</h2><p class="sub">${on?"Fields, accounts, screens and reports for this feature appear from the effective date. The Accountant completes its configuration.":"Its screens and calculations are hidden from the effective date. Existing posted transactions are not changed."}</p></div><div class="mb">
+  ${legal&&on?`<div class="note n-warn"><span class="n-ico">!</span><div><b>Legal warning.</b> ${k==="deposits"?"Accepting deposits from members may be regulated.":"Chit funds generally need registration under the Chit Funds Act."} Legal advice is the organisation's responsibility.</div></div><label class="chk"><input type="checkbox" id="ack"> The organisation has been warned. Record this acknowledgement in the audit log.</label><div class="fld"><label for="adv">Legal advice document (optional)</label><input type="text" id="adv" placeholder="Upload or attach file"></div>`:""}
+  <div class="grid2"><div class="fld"><label for="fe">Effective from</label><input type="date" id="fe" value="2026-12-01"></div><div class="fld"><label for="fr">Organisation's request</label><input type="text" id="fr" placeholder="Letter dated 10 Nov 2026"></div></div></div>
+  <div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>${on?"Enable":"Disable"}</button></div>`,L=>{if(legal&&on&&!L.querySelector("#ack").checked)return false;if(!L.querySelector("#fr").value.trim())return false;o.feats[k]=on;
+   const mid=Object.keys(OPTIONAL_MODS).find(m=>OPTIONAL_MODS[m]===k);if(mid)o.modules=on?[...o.modules,mid]:o.modules.filter(x=>x!==mid);
+   AUDIT.unshift(["15 Nov 2026 09:35",o.name,on?"Feature enabled":"Feature disabled",n+" from "+L.querySelector("#fe").value+(legal&&on?", legal warning acknowledged":""),L.querySelector("#fr").value]);render();toast(n+(on?" enabled.":" disabled."));});});});}
+});
+
+orgTabs.audit=(o)=>({html:auditTable(AUDIT.filter(a=>a[1]===o.name),false)+`<p class="muted" style="font-size:12px">The same entries appear in the organisation's own audit log for its Auditor and Leadership.</p>`});
+
+function auditTable(rows,showOrg){return `<div class="panel"><div class="tw"><table><thead><tr><th>When</th>${showOrg?"<th>Organisation</th>":""}<th>Event</th><th>Detail</th><th>Reason recorded</th></tr></thead><tbody>
+ ${rows.length?rows.map(a=>`<tr><td class="mono" style="white-space:nowrap">${a[0]}</td>${showOrg?`<td>${esc(a[1])}</td>`:""}<td><b style="font-weight:500">${esc(a[2])}</b></td><td>${esc(a[3])}</td><td class="muted">${esc(a[4])}</td></tr>`).join(""):`<tr><td colspan="5" class="muted">No changes recorded yet.</td></tr>`}</tbody></table></div></div>`;}
+
+/* platform views */
+views.templates=()=>({crumbs:`<b>Workflow templates</b>`,html:`
+ <div class="head"><div><h1>Workflow and rule templates</h1><p class="sub">Templates are cloned into each organisation at onboarding. Changing a template never changes an organisation's live workflow; you offer the upgrade per organisation.</p></div><button class="btn pri" id="tNew">+ New template</button></div>
+ <div class="panel"><div class="tw"><table><thead><tr><th>Template</th><th>Latest</th><th>Stages</th><th>Organisations using</th><th>On older version</th><th></th></tr></thead><tbody>
+ ${WF_TEMPLATES.map(([n,v,s])=>{const old=n==="Loan Application"?ORGS.filter(o=>o.workflows[0].tpl!==v):[];return `<tr><td><b style="font-weight:500">${n}</b></td><td><span class="tag">${v}</span></td><td class="muted" style="font-size:12.5px">${s.join(" → ")}</td><td class="num">${ORGS.length}</td><td>${old.length?`<span class="pill p-warn">${old.map(o=>o.short).join(", ")}</span>`:'<span class="muted">—</span>'}</td><td>${old.length?`<button class="btn sm" data-up="${n}">Offer upgrade</button>`:""}</td></tr>`;}).join("")}
+ </tbody></table></div></div>`,
+ after(){document.querySelectorAll("[data-up]").forEach(b=>b.addEventListener("click",()=>modal(`<div class="mh"><h2>Upgrade ${b.dataset.up} to v3.1</h2><p class="sub">Creates a new workflow version for Anbu Nagar Residents Fund. Loans already in progress continue on v3.0.</p></div><div class="mb"><div class="diff"><div class="n">+ Stage action: Validate Guarantors (Manager Verification)</div><div class="n">+ Retry count on notifications set to 3</div><div class="o">- Manual journal step on Disbursed</div></div></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Create draft for organisation</button></div>`,()=>{ORGS[1].workflows[0].tpl="v3.1";ORGS[1].workflows[0].ver="v3.1 · org rev 3";ORGS[1].workflows[0].status="Draft";render();toast("Draft created in Anbu Nagar Residents Fund. Publish it from their Workflows tab.");})));
+  $("#tNew").addEventListener("click",()=>toast("Opens the Workflow Designer with an empty template."));}
+});
+
+views.actions=()=>({crumbs:`<b>Action registry</b>`,html:`
+ <div class="head"><div><h1>Action registry</h1><p class="sub">Actions are discovered from each platform release. A new action stays in Pending approval and is hidden from every organisation until you approve it and choose who gets it.</p></div></div>
+ <div class="panel"><div class="tw"><table><thead><tr><th>Action</th><th>Category</th><th>Version</th><th>Status</th><th>Enabled for</th><th></th></tr></thead><tbody>
+ ${ACTIONS.map(a=>`<tr><td>${esc(a.name)}<div class="mono muted" style="font-size:11px">${a.code}${a.found?" · discovered "+a.found:""}</div></td><td>${a.cat}</td><td class="mono">${a.ver}</td><td>${statusPill(a.status)}</td><td class="muted">${a.orgs==="all"?"All organisations":a.orgs}</td><td>${a.status==="pending"?`<div class="row" style="flex-wrap:nowrap"><button class="btn sm pri" data-ap="${a.code}">Review</button><button class="btn sm ghost danger" data-rj="${a.code}">Reject</button></div>`:a.status==="approved"?`<button class="btn sm ghost" data-cfg="${a.code}">Parameters</button>`:""}</td></tr>`).join("")}
+ </tbody></table></div></div>`,
+ after(){
+  document.querySelectorAll("[data-ap]").forEach(b=>b.addEventListener("click",()=>{const a=ACTIONS.find(x=>x.code===b.dataset.ap);
+   modal(`<div class="mh"><h2>Approve ${esc(a.name)}</h2><p class="sub"><span class="mono">${a.code}</span> v${a.ver} · ${a.cat}</p></div><div class="mb">
+   <div class="fld"><span class="lbl">Configuration fields it exposes</span><div class="diff">${a.cat==="Notification"?"<div>Channel · Recipient type · Message template · Delay · Retry count</div>":"<div>Hall · Date range · Session (half / full day)</div>"}</div></div>
+   <div class="fld"><span class="lbl">Make available to</span>${ORGS.map(o=>`<label class="chk"><input type="checkbox" data-o="${o.id}" ${o.status==="Active"?"checked":""}> ${esc(o.name)}</label>`).join("")}</div>
+   <label class="chk"><input type="checkbox" id="tst"> Tested in sandbox tenant</label></div>
+   <div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Approve and enable</button></div>`,L=>{if(!L.querySelector("#tst").checked){toast("Test the action in the sandbox before approving.");return false;}
+    const ids=[...L.querySelectorAll("[data-o]")].filter(c=>c.checked).map(c=>c.dataset.o);a.status="approved";a.orgs=ids.length===ORGS.length?"all":ids.length+" orgs";ORGS.forEach(o=>{if(ids.includes(o.id))o.enabledActions.push(a.code);});
+    AUDIT.unshift(["15 Nov 2026 09:40","Platform","Action approved",`${a.code} v${a.ver} enabled for ${ids.length} organisation(s)`,"Sandbox tested"]);render();toast(a.name+" approved.");});}));
+  document.querySelectorAll("[data-rj]").forEach(b=>b.addEventListener("click",()=>{const a=ACTIONS.find(x=>x.code===b.dataset.rj);a.status="retired";render();toast(a.name+" rejected. It will not appear in any Workflow Designer.");}));
+  document.querySelectorAll("[data-cfg]").forEach(b=>b.addEventListener("click",()=>toast("Parameters are set per stage in each organisation's Workflow Designer.")));
+ }});
+
+views.roles=()=>({crumbs:`<b>Default roles &amp; privileges</b>`,html:`
+ <div class="head"><div><h1>Default roles and privileges</h1><p class="sub">The platform template copied into each new organisation. Edit an organisation's own ceiling from its Roles &amp; privileges tab, and its modules from its Modules tab.</p></div><div class="row"><button class="btn" id="rbReset">Reset to scope v1.7 matrix</button><button class="btn pri" id="rbSave">Save template</button></div></div>
+ <div class="row">${ROLES.map(r=>`<span class="tag" title="${ROLE_NAMES[r]}">${r} · ${ROLE_NAMES[r]}</span>`).join("")}</div>
+ <div class="panel">${matrixTable(DEFAULT_MATRIX,null,true)}</div>
+ <p class="muted" style="font-size:12px">ADM never gets workflow, rule or action configuration; modules 31 and 32 are view-only for every organisation role. Dashboards D1–D6 are granted like any other module.</p>`,
+ after(){bindMatrix($("#view"),DEFAULT_MATRIX);$("#rbSave").addEventListener("click",()=>toast("Template saved. Applies to organisations created from now on."));$("#rbReset").addEventListener("click",()=>{Object.assign(DEFAULT_MATRIX,baseMatrix());render();});}
+});
+
+/* Platform-owned English and Tamil language packs */
+const TRANSLATIONS=[
+ {id:"LOAN.APPLICATION.TITLE",module:"Loan Management",type:"PAGE",en:"Loan application",ta:"கடன் விண்ணப்பம்",status:"APPROVED",updated:"15 Nov 2026"},
+ {id:"LOAN.APPLICATION.MEMBER",module:"Loan Management",type:"LABEL",en:"Member ID",ta:"உறுப்பினர் எண்",status:"APPROVED",updated:"15 Nov 2026"},
+ {id:"LOAN.APPLICATION.SUBMIT",module:"Loan Management",type:"LABEL",en:"Submit for approval",ta:"ஒப்புதலுக்கு சமர்ப்பிக்கவும்",status:"APPROVED",updated:"14 Nov 2026"},
+ {id:"LOAN.FEE.UNPAID",module:"Loan Management",type:"MESSAGE",en:"Pay the application fee before submitting this loan.",ta:"இந்தக் கடனைச் சமர்ப்பிக்கும் முன் விண்ணப்பக் கட்டணத்தைச் செலுத்தவும்.",status:"APPROVED",updated:"14 Nov 2026"},
+ {id:"MEMBER.STATUS.ACTIVE",module:"Member Management",type:"MASTER_DATA",en:"Active",ta:"செயலில்",status:"APPROVED",updated:"12 Nov 2026"},
+ {id:"MEMBER.STATUS.SUSPENDED",module:"Member Management",type:"MASTER_DATA",en:"Suspended",ta:"இடைநிறுத்தப்பட்டது",status:"APPROVED",updated:"12 Nov 2026"},
+ {id:"ACCOUNTING.CASH_POSITION",module:"Accounting",type:"LABEL",en:"Cash position",ta:"",status:"MISSING",updated:"—"},
+ {id:"AUTH.SESSION.EXPIRED",module:"Platform",type:"MESSAGE",en:"Your session has expired. Sign in again to continue.",ta:"",status:"MISSING",updated:"—"},
+ {id:"HALL.BOOKING.CONFIRMED",module:"Marriage Hall",type:"MESSAGE",en:"Your hall booking is confirmed.",ta:"உங்கள் மண்டப முன்பதிவு உறுதி செய்யப்பட்டது.",status:"APPROVED",updated:"10 Nov 2026"},
+ {id:"DASHBOARD.TODAY",module:"Dashboards",type:"PAGE",en:"Today's overview",ta:"இன்றைய மேலோட்டம்",status:"APPROVED",updated:"09 Nov 2026"}
+];
+let publishedTranslationVersion=3, translationDraftVersion=4, showMissingTranslations=false;
+const translationModules=[...new Set(TRANSLATIONS.map(t=>t.module))].sort();
+function translationStatusPill(s){return s==="APPROVED"?'<span class="pill p-ok">Approved</span>':s==="DRAFT"?'<span class="pill p-warn">Draft</span>':'<span class="pill p-bad">Missing Tamil</span>';}
+function downloadCsv(name,rows){const csv=rows.map(r=>r.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",")).join("\r\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+function translationRows(){
+ const q=(document.querySelector("#trQ")?.value||"").trim().toLowerCase(),m=document.querySelector("#trModule")?.value||"",type=document.querySelector("#trType")?.value||"",status=document.querySelector("#trStatus")?.value||"";
+ const rows=TRANSLATIONS.filter(t=>(!q||(t.id+" "+t.en+" "+t.ta).toLowerCase().includes(q))&&(!m||t.module===m)&&(!type||t.type===type)&&(!status||t.status===status)&&(!showMissingTranslations||t.status==="MISSING"));
+ document.querySelector("#trRows").innerHTML=rows.map(t=>`<tr><td><span class="mono">${esc(t.id)}</span><div class="muted" style="font-size:11.5px">${esc(t.module)} · ${esc(t.type.replace("_"," "))}</div></td><td>${esc(t.en)}</td><td>${t.ta?esc(t.ta):'<span class="muted">No Tamil translation</span>'}</td><td>${translationStatusPill(t.status)}</td><td class="muted">${esc(t.updated)}</td><td><button class="btn sm" data-edit-translation="${esc(t.id)}">Edit</button></td></tr>`).join("")||'<tr><td colspan="6" class="muted">No text IDs match these filters.</td></tr>';
+ document.querySelector("#trShown").textContent=`${rows.length} text ID${rows.length===1?"":"s"}`;
+ document.querySelector("#trMissingBtn").classList.toggle("pri",showMissingTranslations);
+ document.querySelectorAll("[data-edit-translation]").forEach(b=>b.addEventListener("click",()=>editTranslation(b.dataset.editTranslation)));
+}
+function editTranslation(id){
+ const t=TRANSLATIONS.find(x=>x.id===id);if(!t)return;
+ modal(`<div class="mh"><h2>Edit Tamil translation</h2><p class="sub mono">${esc(t.id)} · ${esc(t.module)}</p></div><div class="mb">
+  <div class="fld"><label for="trEnglish">English source <span class="tag">${esc(t.type.replace("_"," "))}</span></label><textarea id="trEnglish" rows="2" readonly>${esc(t.en)}</textarea></div>
+  <div class="fld"><label for="trTamil">Tamil translation</label><textarea id="trTamil" rows="3" placeholder="Enter the Tamil translation">${esc(t.ta)}</textarea><span class="hint">Keep placeholders such as {member_name} unchanged.</span></div>
+  <div class="fld"><label for="trApproval">Review status</label><select id="trApproval"><option value="DRAFT" ${t.status!=="APPROVED"?"selected":""}>Draft</option><option value="APPROVED" ${t.status==="APPROVED"?"selected":""}>Approved</option></select></div>
+ </div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Save translation</button></div>`,L=>{
+  const ta=L.querySelector("#trTamil").value.trim(),st=L.querySelector("#trApproval").value;if(!ta&&st==="APPROVED"){toast("Add a Tamil translation before approving it.");return false;}
+  const old=t.ta||"(missing)";t.ta=ta;t.status=ta?st:"MISSING";t.updated="15 Nov 2026";AUDIT.unshift(["15 Nov 2026 10:05","Platform","Translation updated",`${t.id}: ${old} → ${ta||"(missing)"} · ${t.status}`,"Language pack draft v"+translationDraftVersion]);
+  render();toast(t.status==="APPROVED"?"Translation approved in the draft pack.":"Draft translation saved.");
+ });
+}
+views.translations=()=>{
+ const approved=TRANSLATIONS.filter(t=>t.status==="APPROVED").length,missing=TRANSLATIONS.filter(t=>t.status==="MISSING").length,draft=TRANSLATIONS.filter(t=>t.status==="DRAFT").length;
+ return {crumbs:`<b>Language packs</b>`,html:`
+ <div class="head"><div><h1>Language packs</h1><p class="sub">Maintain platform text IDs and approved Tamil translations. Published packs are versioned; organisations receive the current pack when they refresh or sign in.</p></div><div class="row"><button class="btn" id="trExport">Export Excel-compatible CSV</button><button class="btn" id="trImport">Import Excel / CSV</button><button class="btn pri" id="trPublish">Publish v${translationDraftVersion}</button></div></div>
+ <div class="note n-info"><span class="n-ico">i</span><div><b>Platform Super Admin only.</b> Organisations use published language packs and cannot edit translations. If a Tamil translation is missing, the app falls back to English.</div></div>
+ <div class="stats"><div class="stat"><span>Published pack</span><b>v${publishedTranslationVersion}</b><small>English + Tamil · 01 Nov 2026</small></div><div class="stat"><span>Approved Tamil</span><b>${approved}</b><small>In draft pack v${translationDraftVersion}</small></div><div class="stat"><span>Draft review</span><b>${draft}</b><small>Saved, not approved</small></div><div class="stat"><span>Missing Tamil</span><b>${missing}</b><small>English fallback shown</small></div></div>
+ <div class="panel"><div class="ph"><div class="row" style="width:100%"><input type="search" id="trQ" placeholder="Search text ID or English / Tamil text" aria-label="Search translations" style="width:min(300px,100%)"><select id="trModule" aria-label="Filter by module" style="width:auto"><option value="">All modules</option>${translationModules.map(m=>`<option>${esc(m)}</option>`).join("")}</select><select id="trType" aria-label="Filter by text type" style="width:auto"><option value="">All text types</option><option>PAGE</option><option>LABEL</option><option>MESSAGE</option><option>MASTER_DATA</option></select><select id="trStatus" aria-label="Filter by translation status" style="width:auto"><option value="">All statuses</option><option value="APPROVED">Approved</option><option value="DRAFT">Draft</option><option value="MISSING">Missing Tamil</option></select><button class="btn" id="trMissingBtn">Missing translations report</button><span class="muted" id="trShown" style="font-size:12px;margin-left:auto"></span></div></div>
+ <div class="tw"><table><thead><tr><th>Text ID</th><th>English source</th><th>Tamil translation</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody id="trRows"></tbody></table></div></div>
+ <p class="muted" style="font-size:12px">A publish creates a new immutable language-pack version. Changes are recorded in the Platform audit log. Developers add English text IDs with each release.</p>`,
+ after(){
+  ["#trQ","#trModule","#trType","#trStatus"].forEach(s=>$(s).addEventListener(s==="#trQ"?"input":"change",translationRows));
+  $("#trMissingBtn").addEventListener("click",()=>{showMissingTranslations=!showMissingTranslations;translationRows();});
+  $("#trExport").addEventListener("click",()=>{downloadCsv("cfms-language-pack-draft-v"+translationDraftVersion+".csv",[["text_id","module","text_type","english_text","tamil_text","status"],...TRANSLATIONS.map(t=>[t.id,t.module,t.type,t.en,t.ta,t.status])]);toast("Language catalogue exported as an Excel-compatible CSV.");AUDIT.unshift(["15 Nov 2026 10:06","Platform","Translations exported","Language catalogue exported to Excel-compatible CSV",""]);});
+  $("#trImport").addEventListener("click",()=>modal(`<div class="mh"><h2>Import translations</h2><p class="sub">Upload a CSV or Excel file using the platform language template. Imported text is saved as draft for review.</p></div><div class="mb"><div class="fld"><label for="trFile">Import file</label><input id="trFile" type="file" accept=".csv,.xlsx,.xls"></div><button class="lbtn" id="trTemplate" type="button" style="align-self:flex-start">Download the CSV import template</button></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Import as draft</button></div>`,L=>{const f=L.querySelector("#trFile").files[0];if(!f){toast("Choose a file to import.");return false;}AUDIT.unshift(["15 Nov 2026 10:06","Platform","Translations imported",`${f.name} imported to language pack draft v${translationDraftVersion}`,""]);toast("Import queued for validation. Valid rows will be added to the draft pack.");}));
+  $("#trPublish").addEventListener("click",()=>{const missingNow=TRANSLATIONS.filter(t=>t.status==="MISSING").length;modal(`<div class="mh"><h2>Publish Tamil language pack v${translationDraftVersion}</h2><p class="sub">This makes the approved translations available to every organisation on the next refresh or sign in.</p></div><div class="mb"><div class="diff"><div>${approved} approved translation${approved===1?"":"s"} will be published</div><div>${missingNow} missing Tamil item${missingNow===1?"":"s"} will use English fallback</div></div><div class="fld"><label for="trReason">Reason for publishing (required)</label><textarea id="trReason" rows="2" placeholder="For example: Tamil review completed for release 2026.11"></textarea></div></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Publish pack</button></div>`,L=>{const reason=L.querySelector("#trReason").value.trim();if(reason.length<5){toast("Enter a reason for the language-pack change.");return false;}AUDIT.unshift(["15 Nov 2026 10:10","Platform","Language pack published",`Tamil language pack v${translationDraftVersion} published; ${missingNow} missing item(s) use English fallback`,reason]);publishedTranslationVersion=translationDraftVersion;translationDraftVersion++;render();toast("Language pack published. Organisations receive it on refresh or sign in.");});});
+  translationRows();
+ }};
+};
+
+views.audit=()=>({crumbs:`<b>Platform audit log</b>`,html:`
+ <div class="head"><div><h1>Platform audit log</h1><p class="sub">Every configuration change you make, with who, when, why and the effective date. Organisation entries are mirrored into that organisation's own log.</p></div><select id="aOrg" style="width:auto"><option value="">All organisations</option>${ORGS.map(o=>`<option>${esc(o.name)}</option>`).join("")}<option>Platform</option></select></div>
+ <div id="aBox">${auditTable(AUDIT,true)}</div>`,
+ after(){$("#aOrg").addEventListener("change",e=>{$("#aBox").innerHTML=auditTable(e.target.value?AUDIT.filter(a=>a[1]===e.target.value):AUDIT,true);enhance();});}
+});
+
+/* search + refresh enhancer: runs after every render */
+function nowStr(){const d=new Date();return d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"});}
+function refreshBtn(label){const b=document.createElement("button");b.type="button";b.className="btn sm rbtn";b.title="Refresh";b.setAttribute("aria-label","Refresh");b.innerHTML='<span class="ri" aria-hidden="true">↻</span>'+(label?'<span>'+label+'</span>':"");return b;}
+function spin(b,done){b.classList.add("spin");b.disabled=true;setTimeout(()=>{b.classList.remove("spin");b.disabled=false;done&&done();},600);}
+function paginationConfig(){const m=(location.hash||"").match(/^#org-([a-z0-9]+)-/),o=m&&ORGS.find(x=>x.id===m[1]),s=o?o.settings:DEFAULTS,n=parseInt(s.listPageSize,10);return {mode:s.listMode||"Load more",size:[25,50,100].includes(n)?n:25};}
+function enhance(){
+ const view=document.getElementById("view");
+ view.querySelectorAll(".panel").forEach(panel=>{
+  if(panel.dataset.enh)return;panel.dataset.enh=1;
+  const table=panel.querySelector(".tw table");const list=panel.querySelector(".list");
+  if(!table&&!list)return;
+  if(table&&table.querySelector("tbody input:not([type=checkbox]), tbody select, tbody textarea"))return; /* forms: no search/refresh */
+  if(table&&table.closest(".preview,.alloc,.denom"))return;
+  let ph=panel.querySelector(":scope > .ph");
+  if(!ph){ph=document.createElement("div");ph.className="ph";ph.innerHTML="<span></span>";panel.insertBefore(ph,panel.firstChild);}
+  const tools=document.createElement("div");tools.className="tools";
+  const rows=table?[...table.querySelectorAll("tbody tr")]:[...list.querySelectorAll(":scope > .li")];
+  const cfg=paginationConfig(),pageSize=cfg.size;let shown=pageSize;
+  const searches=[...panel.querySelectorAll('input[type="search"],input.psearch')];
+  const visibleRows=()=>{const q=searches.map(x=>x.value.trim().toLowerCase()).filter(Boolean).join(" ");const matched=rows.filter(r=>!q||r.textContent.toLowerCase().includes(q));if(cfg.mode==="Show all")shown=matched.length;rows.forEach(r=>r.hidden=!matched.includes(r)||matched.indexOf(r)>=shown);return matched;};
+  const hasSearch=panel.querySelector('input[placeholder^="Search"]');
+  if(!hasSearch&&rows.length>=4&&(!table||table.querySelector("thead th"))){
+   const s=document.createElement("input");s.type="search";s.className="tsearch";s.placeholder="Search";s.setAttribute("aria-label","Search this list");
+   let empty=null;
+   searches.push(s);s.addEventListener("input",()=>{shown=pageSize;const matches=visibleRows(),n=matches.length;
+    if(empty){empty.remove();empty=null;}
+    if(!n){if(table){empty=document.createElement("tr");empty.innerHTML=`<td colspan="${table.querySelectorAll("thead th").length||1}" class="muted">No matches for “${esc(s.value)}”.</td>`;table.querySelector("tbody").appendChild(empty);}else{empty=document.createElement("div");empty.className="li muted";empty.textContent="No matches for “"+s.value+"”.";list.appendChild(empty);}}
+    cnt.textContent=s.value?Math.min(shown,n)+" of "+n:"";if(loadBtn)loadBtn.hidden=cfg.mode!=="Load more"||n<=shown;});
+   const cnt=document.createElement("span");cnt.className="tcount";
+   tools.appendChild(s);tools.appendChild(cnt);
+  }
+  const loadArea=document.createElement("div");loadArea.className="load-more-row";const loadBtn=document.createElement("button");loadBtn.type="button";loadBtn.className="btn sm";loadBtn.hidden=cfg.mode!=="Load more"||rows.length<=pageSize;const updateLoad=matches=>{loadBtn.hidden=cfg.mode!=="Load more"||matches.length<=shown;loadBtn.textContent=(uiLanguage==="ta"?"மேலும் ஏற்று":"Load more")+" ("+Math.min(shown,matches.length)+" / "+matches.length+")";};loadBtn.addEventListener("click",()=>{shown+=pageSize;updateLoad(visibleRows());});loadArea.appendChild(loadBtn);if(rows.length>pageSize&&cfg.mode==="Load more")panel.appendChild(loadArea);
+  searches.forEach(s=>s.addEventListener("input",()=>{shown=pageSize;updateLoad(visibleRows());}));updateLoad(visibleRows());
+  const upd=document.createElement("span");upd.className="tupd";upd.textContent="Updated "+nowStr();
+  const rb=refreshBtn("");rb.addEventListener("click",()=>spin(rb,()=>{upd.textContent="Updated "+nowStr();toast("Refreshed.");}));
+  if(table&&table.querySelector("thead th")||list){
+   const title=(ph.querySelector("h2")||{}).textContent||(document.querySelector(".view h1")||{}).textContent||"list";
+   const sens=/user|member|payroll|audit|platform access/i.test(title);
+   [["Excel","xlsx"],["PDF","pdf"]].forEach(([lbl,ext])=>{const b=document.createElement("button");b.type="button";b.className="btn sm xbtn";b.title="Export "+title+" to "+lbl;b.innerHTML='<span aria-hidden="true">'+(ext==="pdf"?"⤓":"⊞")+'</span> '+lbl;
+    b.addEventListener("click",()=>{const q=(tools.querySelector(".tsearch")||{}).value;toast("Exporting “"+title.trim()+"” to "+lbl+" (."+ext+")"+(q?", filtered by “"+q+"”":"")+"."+(sens?" Export recorded in the audit log.":""));});tools.appendChild(b);});
+  }
+  tools.appendChild(upd);tools.appendChild(rb);
+  ph.appendChild(tools);
+ });
+}
+
+/* ---------- router ---------- */
+function render(){
+ const h=(location.hash||"#orgs").slice(1);route=h;let v,navKey=h;
+ const m=h.match(/^org-([a-z0-9]+)-([a-z]+)$/);
+ if(m){const o=ORGS.find(x=>x.id===m[1]);if(o&&ORG_TABS.some(t=>t[0]===m[2])){v=orgView(o,m[2]);navKey="orgs";}}
+ if(!v)v=(views[h]||views.orgs)();
+ if(!views[h]&&!m)navKey="orgs";
+ $("#crumbs").innerHTML=v.crumbs;$("#view").innerHTML=v.html;
+ document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("on",a.dataset.k===navKey));
+ const pc=ACTIONS.filter(a=>a.status==="pending").length;$("#pendCnt").textContent=pc;$("#pendCnt").hidden=!pc;
+ if(v.after)v.after();
+ enhance();
+ applyLanguage();
+}
+let lastOrgTab="";
+window.addEventListener("hashchange",()=>{const k=location.hash.replace(/-(overview|users|modules|roles|settings|rules|workflows|approvals|actions|features|audit)$/,"");if(k!==lastOrgTab){sel.wf=0;sel.stage=2;sel.loan=0;lastOrgTab=k;}render();window.scrollTo(0,0);});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#layer").innerHTML="";});
+$("#pgRefresh").addEventListener("click",e=>{const b=e.currentTarget;spin(b,()=>{render();toast("Page refreshed.");});});
+render();
+})();
+</script>

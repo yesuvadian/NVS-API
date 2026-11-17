@@ -1,0 +1,245 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
+from psycopg import AsyncConnection
+
+from app.core.permissions import require_tenant_permission
+from app.core.tenant_security import TenantPrincipal
+from app.db.dependencies import get_tenant_db
+from app.schemas.loans import (
+    LoanApplicationCreate,
+    LoanApplicationUpdate,
+    LoanEligibilityOut,
+    LoanEligibilityRequest,
+    LoanOut,
+    LoanTypeOut,
+    LoanFeePayment,
+    LoanDecision,
+    LoanDisbursementCreate,
+    LoanDisbursementRelease,
+    LoanRepaymentCreate,
+    SettlementApproval,
+    SettlementQuoteRequest,
+    SettlementCollection,
+)
+from app.services.loans import LoanService
+
+router = APIRouter(tags=["loans"])
+
+
+def _service(conn: AsyncConnection) -> LoanService:
+    return LoanService(conn)
+
+
+@router.get("/loan-types", response_model=list[LoanTypeOut])
+async def list_loan_types(
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.view")),
+):
+    return await _service(conn).list_types()
+
+
+@router.post("/loans/eligibility", response_model=LoanEligibilityOut)
+async def check_loan_eligibility(
+    payload: LoanEligibilityRequest,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.view")),
+):
+    return await _service(conn).eligibility(**payload.model_dump())
+
+
+@router.get("/loans")
+async def list_loan_applications(
+    q: str | None = Query(default=None, max_length=120),
+    status_filter: str | None = Query(default=None, alias="status", min_length=1, max_length=40),
+    member_id: UUID | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.view")),
+):
+    rows = await _service(conn).list_applications(
+        query=q,
+        status=status_filter,
+        member_id=member_id,
+        limit=limit + 1,
+        offset=offset,
+    )
+    has_more = len(rows) > limit
+    return {
+        "items": rows[:limit],
+        "limit": limit,
+        "offset": offset,
+        "has_more": has_more,
+        "next_offset": offset + limit if has_more else None,
+    }
+
+
+@router.post("/loans", response_model=LoanOut, status_code=201)
+async def create_loan_application(
+    payload: LoanApplicationCreate,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.create")),
+):
+    return await _service(conn).create_application(payload.model_dump())
+
+
+@router.get("/loans/{loan_id}", response_model=LoanOut)
+async def get_loan_application(
+    loan_id: UUID,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.view")),
+):
+    return await _service(conn).get_application(loan_id)
+
+
+@router.post("/loans/{loan_id}/submit", response_model=LoanOut)
+async def submit_loan_application(
+    loan_id: UUID,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.create")),
+):
+    return await _service(conn).submit_application(loan_id)
+
+
+@router.get("/loan-approvals/inbox")
+async def loan_approval_inbox(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.approve")),
+):
+    return await _service(conn).approval_inbox(limit=limit, offset=offset)
+
+
+@router.post("/loans/{loan_id}/application-fee")
+async def collect_application_fee(
+    loan_id: UUID, payload: LoanFeePayment,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan_fee.create")),
+):
+    return await _service(conn).collect_application_fee(loan_id, **payload.model_dump())
+
+
+@router.post("/loan-approvals/{approval_request_id}/decision")
+async def decide_loan_approval(
+    approval_request_id: UUID, payload: LoanDecision,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.approve")),
+):
+    return await _service(conn).decide(approval_request_id, payload.model_dump())
+
+
+@router.post("/loans/{loan_id}/disbursements", status_code=201)
+async def prepare_loan_disbursement(
+    loan_id: UUID, payload: LoanDisbursementCreate,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.edit")),
+):
+    return await _service(conn).prepare_disbursement(loan_id, payload.gross_amount, payload.payment_mode,
+                                                      payload.payment_reference)
+
+
+@router.post("/loans/{loan_id}/disbursements/{disbursement_id}/release")
+async def release_loan_disbursement(
+    loan_id: UUID, disbursement_id: UUID, payload: LoanDisbursementRelease,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.approve")),
+):
+    return await _service(conn).release_disbursement(loan_id, disbursement_id, payload.payee_ack_type)
+
+
+@router.post("/loans/{loan_id}/repayments", status_code=201)
+async def collect_loan_repayment(
+    loan_id: UUID, payload: LoanRepaymentCreate,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan_repay.create")),
+):
+    return await _service(conn).collect_repayment(loan_id, **payload.model_dump())
+
+
+@router.get("/loans/{loan_id}/schedule")
+async def get_loan_schedule(
+    loan_id: UUID,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.view")),
+):
+    return await _service(conn).schedule(loan_id)
+
+
+@router.get("/loans/{loan_id}/repayments")
+async def list_loan_repayments(
+    loan_id: UUID,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan_repay.view")),
+):
+    return await _service(conn).repayments(loan_id)
+
+
+@router.get("/members/{member_id}/loan-statement")
+async def get_member_loan_statement(
+    member_id: UUID,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.view")),
+):
+    return await _service(conn).member_statement(member_id)
+
+
+@router.patch("/loan-applications/{loan_id}")
+async def update_loan_application(
+    loan_id: UUID, payload: LoanApplicationUpdate,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.edit")),
+):
+    """Change the amount, tenure, purpose or nominees of a draft or returned application."""
+    values = payload.model_dump(exclude={"expected_version"}, exclude_none=True)
+    return await _service(conn).update_application(loan_id, values, payload.expected_version)
+
+
+@router.post("/loans/{loan_id}/settlement-quote", status_code=201)
+async def quote_early_settlement(
+    loan_id: UUID,
+    payload: SettlementQuoteRequest | None = None,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan_settle.create")),
+):
+    """Quote early or default settlement. An optional interest waiver (with a reason)
+    reduces the amount payable and always needs Manager approval."""
+    payload = payload or SettlementQuoteRequest()
+    return await _service(conn).quote_settlement(loan_id, payload.interest_waiver, payload.waiver_reason)
+
+
+@router.get("/loans/{loan_id}/settlements")
+async def list_loan_settlements(
+    loan_id: UUID,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan_settle.view")),
+):
+    return await _service(conn).settlements(loan_id)
+
+
+@router.get("/loan-settlements/{settlement_id}")
+async def get_loan_settlement(
+    settlement_id: UUID,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan_settle.view")),
+):
+    return await _service(conn).settlement(settlement_id)
+
+
+@router.post("/loan-settlements/{settlement_id}/approve")
+async def approve_loan_settlement(
+    settlement_id: UUID, payload: SettlementApproval,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan_settle.approve")),
+):
+    return await _service(conn).approve_settlement(settlement_id, payload.remarks)
+
+
+@router.post("/loan-settlements/{settlement_id}/collect", status_code=201)
+async def collect_loan_settlement(
+    settlement_id: UUID, payload: SettlementCollection,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan_settle.create")),
+):
+    return await _service(conn).collect_settlement(settlement_id, **payload.model_dump())

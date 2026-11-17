@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+reports/
+*.log
+
+# contains a hardcoded role password
+db/00a_bootstrap_role_and_database.sql

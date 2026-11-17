@@ -1,0 +1,626 @@
+<title>CFMS Organisation Portal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Sora:wght@500;600&display=swap">
+<style>
+/* Layout: top bar (org, working date, cash position, role) + side menu built from the role's privileges + working pane. */
+:root{
+  --bg:#f4f6f5; --surface:#ffffff; --sunk:#eaeeec; --line:#d7dedb; --fg:#17221e; --muted:#5c6a64;
+  --bar:#1d6b52; --bar-fg:#ffffff; --bar-mute:#bfe0d3; --bar-hi:#175a45;
+  --accent:#1d6b52; --accent-fg:#ffffff; --accent-soft:#dcefe7;
+  --warn:#9a5b00; --warn-soft:#fbefd9; --bad:#a3302a; --bad-soft:#f8e1df; --ok:#1d6b52; --ok-soft:#dcefe7; --info:#2f5d8a; --info-soft:#e0eaf5;
+  --f-display:"Sora","IBM Plex Sans",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1714; --surface:#16211d; --sunk:#1c2924; --line:#2b3b35; --fg:#e3ebe7; --muted:#93a59d;
+  --bar:#123f31; --bar-fg:#eaf5f0; --bar-mute:#94c3b1; --bar-hi:#0d3327;
+  --accent:#4cbf96; --accent-fg:#06140e; --accent-soft:#173a2d;
+  --warn:#e6a94a; --warn-soft:#3a2a12; --bad:#ef8a83; --bad-soft:#3d1c1a; --ok:#4cbf96; --ok-soft:#173a2d; --info:#8ab6e3; --info-soft:#18283a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1714; --surface:#16211d; --sunk:#1c2924; --line:#2b3b35; --fg:#e3ebe7; --muted:#93a59d;
+  --bar:#123f31; --bar-fg:#eaf5f0; --bar-mute:#94c3b1; --bar-hi:#0d3327;
+  --accent:#4cbf96; --accent-fg:#06140e; --accent-soft:#173a2d;
+  --warn:#e6a94a; --warn-soft:#3a2a12; --bad:#ef8a83; --bad-soft:#3d1c1a; --ok:#4cbf96; --ok-soft:#173a2d; --info:#8ab6e3; --info-soft:#18283a; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bar)}
+a{color:var(--accent)}
+.bar{background:var(--bar);color:var(--bar-fg);display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:10px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));position:sticky;top:env(safe-area-inset-top,0px);z-index:6}
+.org{display:flex;align-items:center;gap:10px;min-width:0}
+.org .lg{width:32px;height:32px;border-radius:7px;background:var(--bar-fg);color:var(--bar);display:grid;place-items:center;font-family:var(--f-display);font-weight:600;font-size:12px;flex-shrink:0}
+.org b{font-family:var(--f-display);font-weight:600;font-size:14.5px;display:block;line-height:1.2;white-space:nowrap}
+.org small{color:var(--bar-mute);font-size:11.5px}
+.wd{display:flex;align-items:center;gap:8px;background:var(--bar-hi);border-radius:var(--r);padding:5px 10px}
+.wd label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--bar-mute)}
+.wd input[type=date]{font:inherit;font-size:13px;background:var(--bar-hi);border:0;color:var(--bar-fg);color-scheme:dark;width:132px;padding:2px 0}
+.wd .bk{font-size:11px;background:var(--warn);color:#1b1200;border-radius:9px;padding:0 7px;font-weight:600}
+.cash{display:flex;gap:14px;align-items:center;font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.cash div{display:flex;flex-direction:column;line-height:1.2}
+.cash span{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--bar-mute)}
+.cash b{font-weight:500;font-size:13.5px}
+.cash .bal b{font-family:var(--f-display);font-size:15px;font-weight:600}
+.barr{margin-left:auto;display:flex;align-items:center;gap:10px}
+.load-more-row{display:flex;justify-content:center;padding:12px;border-top:1px solid var(--line)}
+.pend{font-size:12px;background:var(--bar-fg);color:var(--bar);border-radius:12px;padding:3px 10px;font-weight:600;white-space:nowrap;text-decoration:none}
+.who{display:flex;align-items:center;gap:8px}
+.who select,.lang-sel{font:inherit;font-size:13px;background:var(--bar-hi);color:var(--bar-fg);border:1px solid rgba(255,255,255,.2);border-radius:var(--r);padding:5px 8px;color-scheme:dark}.lang-sel{width:auto}
+.av{width:30px;height:30px;border-radius:50%;background:var(--bar-fg);color:var(--bar);display:grid;place-items:center;font-size:12px;font-weight:600;flex-shrink:0}
+.demo{background:var(--warn-soft);color:var(--fg);font-size:12.5px;padding-block:7px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.demo .rs{display:flex;gap:4px;flex-wrap:wrap}
+.demo button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:12px;padding:2px 10px;cursor:pointer}
+.demo button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:calc(100% - 100px)}
+aside{border-right:1px solid var(--line);background:var(--surface);padding:14px 10px 30px;padding-left:max(10px,env(safe-area-inset-left,0px));min-width:0}
+.mg{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:12px 10px 4px}
+aside a{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--fg);text-decoration:none;padding:6px 10px;border-radius:var(--r);font-size:13.5px}
+aside a:hover{background:var(--sunk)}
+aside a.on{background:var(--accent-soft);font-weight:500;box-shadow:inset 3px 0 0 var(--accent)}
+aside a .pv{font-family:var(--f-mono);font-size:10px;color:var(--muted)}
+.view{padding-block:22px 48px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px;min-width:0;max-width:1200px}
+h1{font-family:var(--f-display);font-weight:600;font-size:21px;margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-family:var(--f-display);font-weight:600;font-size:15px;margin:0}
+h3{font-size:13px;font-weight:600;margin:0}
+p{margin:0}
+.sub{color:var(--muted);max-width:75ch}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.head>div:first-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{font:inherit;font-size:13px;font-weight:500;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:7px 13px;border-radius:var(--r);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-width:0}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.pb{padding:16px;display:flex;flex-direction:column;gap:12px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;text-decoration:none;color:inherit}
+a.stat:hover{border-color:var(--accent)}
+.stat span{font-size:12px;color:var(--muted)}
+.stat b{font-family:var(--f-display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat small{font-size:12px;color:var(--muted)}
+.stat.hot{border-color:color-mix(in srgb,var(--warn) 55%,var(--line));box-shadow:inset 3px 0 0 var(--warn)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.qa{display:flex;gap:8px;flex-wrap:wrap}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line);background:var(--sunk);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tfoot td{font-weight:600;background:var(--sunk)}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mono{font-family:var(--f-mono);font-size:12px}
+.muted{color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-ok{color:var(--ok);background:var(--ok-soft)}.p-warn{color:var(--warn);background:var(--warn-soft)}.p-bad{color:var(--bad);background:var(--bad-soft)}.p-info{color:var(--info);background:var(--info-soft)}.p-mute{color:var(--muted);background:var(--sunk)}
+.tag{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--muted);white-space:nowrap}
+.privs{display:flex;gap:3px}
+.pv-c{font-family:var(--f-mono);font-size:11px;width:20px;height:20px;border-radius:4px;display:grid;place-items:center;border:1px solid var(--line);color:var(--muted);opacity:.45}
+.pv-c.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);opacity:1}
+.note{display:flex;gap:10px;padding:10px 14px;border-radius:var(--r);font-size:13px;align-items:flex-start}
+.n-info{background:var(--info-soft);border:1px solid color-mix(in srgb,var(--info) 30%,transparent)}
+.n-warn{background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}
+.n-ico{font-family:var(--f-mono);font-weight:600;flex-shrink:0;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;margin-top:1px;color:var(--surface)}
+.n-info .n-ico{background:var(--info)}.n-warn .n-ico{background:var(--warn)}
+.fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fld label,.lbl{font-size:12px;font-weight:500;color:var(--muted)}
+.hint{font-size:11.5px;color:var(--muted)}
+input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],select,textarea{font:inherit;font-size:13.5px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:7px 10px;width:100%;min-width:0}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.sw{position:relative;display:inline-block;width:34px;height:20px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw i{position:absolute;inset:0;background:var(--line);border-radius:10px;transition:.15s;cursor:pointer}
+.sw i::after{content:"";position:absolute;width:14px;height:14px;left:3px;top:3px;background:var(--surface);border-radius:50%;transition:.15s}
+.sw input:checked+i{background:var(--accent)}.sw input:checked+i::after{transform:translateX(14px)}
+.sw input:disabled+i{opacity:.5;cursor:not-allowed}
+.kv{display:grid;grid-template-columns:minmax(110px,170px) 1fr;gap:6px 16px;font-size:13px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;min-width:0}
+.list{display:flex;flex-direction:column}
+.li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.li:last-child{border-bottom:0}
+.li>div{min-width:0}
+.li small{color:var(--muted);font-size:12px;display:block}
+.chip{font:inherit;font-family:var(--f-mono);font-size:11px;width:21px;height:21px;border-radius:4px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;padding:0;opacity:.6}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);opacity:1}
+.chip:disabled{cursor:not-allowed;opacity:.18}
+.chips{display:flex;gap:3px}
+.alloc td{padding:6px 10px}
+.denom input{width:90px;text-align:right}
+.ro{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);background:var(--sunk);border-radius:var(--r);padding:8px 12px}
+.scrim{position:fixed;inset:0;background:rgba(8,14,12,.5);display:grid;place-items:center;z-index:50;padding:16px}
+.modal{background:var(--surface);border:1px solid var(--line);border-radius:10px;width:min(540px,100%);max-height:90vh;overflow:auto;display:flex;flex-direction:column}
+.mh{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+.mb{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.mf{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.toast{position:fixed;right:max(20px,env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:var(--r);font-size:13px;z-index:60;max-width:calc(100% - 40px)}
+.receipt{font-family:var(--f-mono);font-size:12px;border:1px dashed var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:3px}
+.receipt .rr{display:flex;justify-content:space-between;gap:10px}
+@media (min-width:981px){.stats.s5{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.tools{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.tsearch{font:inherit;font-size:13px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:5px 10px;width:190px;max-width:100%}
+.tsearch:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.xbtn span{font-size:12px;line-height:1}
+.tcount,.tupd{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.rbtn .ri{display:inline-block;font-size:14px;line-height:1}
+.rbtn.spin .ri{animation:rspin .6s linear infinite}
+@keyframes rspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.rbtn.spin .ri{animation:none}}
+
+.bar .rb2{background:var(--bar-hi);color:var(--bar-fg);border-color:rgba(255,255,255,.2)}
+@media (max-width:1100px){.cash .sm-hide{display:none}}
+@media (max-width:980px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  aside{border-right:0;border-bottom:1px solid var(--line);display:flex;overflow-x:auto;gap:4px;padding:8px 16px;padding-left:max(16px,env(safe-area-inset-left,0px))}
+  aside .mg{display:none}
+  aside a{white-space:nowrap}
+  aside a .pv{display:none}
+  .bar{position:static;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .barr{margin-left:0}
+  .view{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .kv{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="bar">
+  <div class="org"><div class="lg">KC</div><div><b>Kaveri Community Welfare Trust</b><small>kaveri.cfms-domain.com</small></div></div>
+  <div class="wd"><label for="wdate">Working date</label><input type="date" id="wdate" value="2026-11-15" max="2026-11-15"><span class="bk" id="bk" hidden>Backdated</span></div>
+  <div class="cash" id="cash"></div>
+  <div class="barr"><select id="languageSel" class="lang-sel" aria-label="Language"><option value="en">English</option><option value="ta">தமிழ்</option></select><button class="btn sm rb2" id="pgRefresh" title="Refresh"><span class="ri" aria-hidden="true">↻</span></button><a class="pend" id="pend" href="#"></a>
+    <div class="who"><div class="av" id="av"></div><select id="roleSel" aria-label="Role context"></select></div></div>
+</header>
+<div class="demo"><b>Mockup:</b> view the portal as <div class="rs" id="rs"></div><span class="muted">Each button opens that role's home dashboard. Menus and buttons follow the role's privileges.</span></div>
+<div class="app"><aside id="menu"></aside><main class="view" id="view"></main></div>
+<div id="layer"></div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const inr=n=>"₹"+Math.round(Number(n)).toLocaleString("en-IN");
+const uiLanguageKey="cfms-ui-language",taText={"Home":"முகப்பு","Dashboards":"டாஷ்போர்டுகள்","Core platform":"முக்கிய தளம்","Members":"உறுப்பினர்கள்","Loans":"கடன்கள்","Welfare and assistance":"நலத்திட்டங்கள் மற்றும் உதவி","Expenses, payroll and hall":"செலவுகள், ஊதியம் மற்றும் மண்டபம்","Assets":"சொத்துகள்","Accounting and reports":"கணக்கியல் மற்றும் அறிக்கைகள்","Savings, schemes and donations":"சேமிப்பு, திட்டங்கள் மற்றும் நன்கொடைகள்","Search":"தேடு","Search this list":"இந்தப் பட்டியலில் தேடு","No matches":"பொருத்தங்கள் இல்லை","Updated":"புதுப்பிக்கப்பட்டது","Export":"ஏற்றுமதி","Save":"சேமி","Cancel":"ரத்து செய்","Create":"உருவாக்கு","Edit":"திருத்து","Delete":"நீக்கு","View":"பார்","Close":"மூடு","Status":"நிலை","Active":"செயலில்","Inactive":"செயலற்றது","Pending":"நிலுவையில்","Approved":"அங்கீகரிக்கப்பட்டது","Rejected":"நிராகரிக்கப்பட்டது","Name":"பெயர்","Description":"விளக்கம்","Type":"வகை","Actions":"செயல்கள்","Settings":"அமைப்புகள்","Users":"பயனர்கள்","Roles":"பாத்திரங்கள்","Permissions":"அனுமதிகள்","Organisation":"நிறுவனம்","Organisations":"நிறுவனங்கள்","Overview":"மேலோட்டம்","Modules":"தொகுதிகள்","Features":"அம்சங்கள்","Rules":"விதிகள்","Approvals":"ஒப்புதல்கள்","Audit":"தணிக்கை","English":"ஆங்கிலம்","Tamil":"தமிழ்","Language":"மொழி","Add":"சேர்","Update":"புதுப்பி","Reset":"மீட்டமை","Enabled":"இயக்கப்பட்டது","Disabled":"முடக்கப்பட்டது","Yes":"ஆம்","No":"இல்லை","All":"அனைத்தும்","Filter":"வடிகட்டு","Clear":"அழி","Select":"தேர்ந்தெடு","Details":"விவரங்கள்","General":"பொது","Required":"தேவை","Optional":"விருப்பத்தேர்வு","Always on":"எப்போதும் இயக்கத்தில்","No default role access":"இயல்புநிலைப் பாத்திர அணுகல் இல்லை","Default roles":"இயல்புநிலைப் பாத்திரங்கள்","Turn all on":"அனைத்தையும் இயக்கு","Turn all off":"அனைத்தையும் முடக்கு","Good morning":"காலை வணக்கம்","Open":"திற","Collect":"வசூலிக்க","Refresh":"புதுப்பி","Cash balance":"பண இருப்பு","Opening":"தொடக்க இருப்பு","Receipts":"வரவுகள்","Payments":"செலுத்தல்கள்","Working date":"பணித் தேதி","Find member":"உறுப்பினரைத் தேடு","New loan application":"புதிய கடன் விண்ணப்பம்","New expense":"புதிய செலவு","New hall booking":"புதிய மண்டப முன்பதிவு","Repayments due today":"இன்று செலுத்த வேண்டிய தவணைகள்","Pending tasks":"நிலுவைப் பணிகள்","Returned applications":"திருப்பியனுப்பிய விண்ணப்பங்கள்","Due today":"இன்று செலுத்த வேண்டியது","Open collections":"வசூல்களைத் திற","Task":"பணி","Upcoming":"வரவிருப்பவை","Awaiting your verification":"உங்கள் சரிபார்ப்புக்காகக் காத்திருக்கிறது","Day-end":"நாள் முடிவு","No records found":"பதிவுகள் எதுவும் இல்லை"};
+Object.assign(taText,{"Loan application":"கடன் விண்ணப்பம்","Member ID":"உறுப்பினர் எண்","Submit for approval":"ஒப்புதலுக்கு சமர்ப்பிக்கவும்","Pay the application fee before submitting this loan.":"இந்தக் கடனைச் சமர்ப்பிக்கும் முன் விண்ணப்பக் கட்டணத்தைச் செலுத்தவும்.","Active":"செயலில்","Suspended":"இடைநிறுத்தப்பட்டது","Your hall booking is confirmed.":"உங்கள் மண்டப முன்பதிவு உறுதி செய்யப்பட்டது.","Today's overview":"இன்றைய மேலோட்டம்","Community Employee":"சமூகப் பணியாளர்","Manager":"மேலாளர்","Accountant":"கணக்காளர்","Leadership Team":"தலைமைக்குழு","Auditor":"தணிக்கையாளர்","System Administrator":"கணினி நிர்வாகி","Organisation Management":"நிறுவன மேலாண்மை","User & Role Management":"பயனர் மற்றும் பாத்திர மேலாண்மை","Member Management":"உறுப்பினர் மேலாண்மை","Loan Management":"கடன் மேலாண்மை","Nominee Management":"நியமனதாரர் மேலாண்மை","Education Assistance":"கல்வி உதவி","Cremation Assistance":"இறுதிச்சடங்கு உதவி","Daily Expense Management":"தினசரி செலவு மேலாண்மை","Employee Payroll":"பணியாளர் ஊதியம்","Marriage Hall Management":"திருமண மண்டப மேலாண்மை","Community Asset Management":"சமூகச் சொத்து மேலாண்மை","General Ledger":"பொது பேரேடு","Chart of Accounts":"கணக்குப் பட்டியல்","Trial Balance":"இருப்பு சோதனை","Financial Statements":"நிதி அறிக்கைகள்","Cash Reconciliation":"பண ஒப்புமை","Financial Reports":"நிதி அறிக்கைகள்","Workflows":"பணிப்பாய்வுகள்","Business Rules":"வணிக விதிகள்","Notifications":"அறிவிப்புகள்","Audit Log":"தணிக்கைப் பதிவு","Employee Dashboard":"பணியாளர் டாஷ்போர்டு","Manager Dashboard":"மேலாளர் டாஷ்போர்டு","Accountant Dashboard":"கணக்காளர் டாஷ்போர்டு","Leadership Dashboard":"தலைமை டாஷ்போர்டு","Administration Dashboard":"நிர்வாக டாஷ்போர்டு","Backdated":"பின்தேதியிட்டது","Mockup:":"மாதிரி:","view the portal as":"இந்தப் பாத்திரத்தில் தளத்தைப் பார்க்கவும்","Each button opens that role's home dashboard. Menus and buttons follow the role's privileges.":"ஒவ்வொரு பொத்தானும் அந்தப் பாத்திரத்தின் முகப்புப் பலகையைத் திறக்கும். மெனுக்கள் மற்றும் பொத்தான்கள் அந்தப் பாத்திரத்தின் அனுமதிகளைப் பின்பற்றும்."});
+let uiLanguage=localStorage.getItem(uiLanguageKey)==="ta"?"ta":"en";const originalText=new WeakMap();
+function paginationConfig(){let c={mode:"Load more",size:25};try{const x=JSON.parse(localStorage.getItem("cfms-org-pagination")||"null");if(x&&(!x.orgId||x.orgId==="kaveri")){c.mode=x.mode||c.mode;c.size=[25,50,100].includes(Number(x.size))?Number(x.size):c.size;}}catch{}return c;}
+function applyLanguage(){document.documentElement.lang=uiLanguage;const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode())){if(!n.parentElement||n.parentElement.closest("script,style")||n.parentElement.closest("#languageSel"))continue;if(!originalText.has(n))originalText.set(n,n.nodeValue);const en=originalText.get(n),key=en.trim();if(!key)continue;const start=en.indexOf(key),ta=uiLanguage==="ta"?taText[key]:null;n.nodeValue=start<0?en:en.slice(0,start)+(ta||key)+en.slice(start+key.length);}document.querySelectorAll("[placeholder],[title],[aria-label]").forEach(el=>["placeholder","title","aria-label"].forEach(a=>{const k="i18n"+a;if(el.dataset[k]===undefined)el.dataset[k]=el.getAttribute(a)||"";const v=el.dataset[k];if(v)el.setAttribute(a,uiLanguage==="ta"?(taText[v]||v):v);}));const s=$("#languageSel");if(s)s.value=uiLanguage;}
+$("#languageSel").value=uiLanguage;$("#languageSel").addEventListener("change",e=>{uiLanguage=e.target.value;localStorage.setItem(uiLanguageKey,uiLanguage);render();});
+
+const ROLES={
+ EMP:{name:"Community Employee",person:"Kavitha Selvam",ini:"KS",home:"D1"},
+ MGR:{name:"Manager",person:"Ramesh Kumar",ini:"RK",home:"D2"},
+ ACC:{name:"Accountant",person:"Lakshmi Narayanan",ini:"LN",home:"D3"},
+ LDR:{name:"Leadership Team",person:"Abdul Rahim",ini:"AR",home:"D4"},
+ AUD:{name:"Auditor",person:"Priya Venkat",ini:"PV",home:"D5"},
+ ADM:{name:"System Administrator",person:"Meena Rajagopal",ini:"MR",home:"D6"}
+};
+const RK=Object.keys(ROLES);
+const MODS=[
+["1","Organisation Management","—|V|V|VA|V|VCED"],["2","User & Role Management","—|V|—|VA|V|VCED"],["3","Member Management","VCE|VEAD|V|V|V|—"],
+["4","Loan Management","VCE|VA|V|V|V|—"],["5","Loan Application Fees","VC|VAD|V|V|V|—"],["6","Loan Repayments","VC|VAD|V|V|V|—"],
+["7","Early Full Settlement","VC|VA|V|V|V|—"],["8","Default & Recovery","VC|VEA|V|V|V|—"],["9","Nominee Management","VCE|VA|—|V|V|—"],
+["10","Deceased Members","VC|VA|V|V|V|—"],["11","Education Assistance","VCE|VA|V|V|V|—"],["12","Cremation Assistance","VCE|VA|V|V|V|—"],
+["13","Birthday Grants","—|VCE|V|VA|V|—"],["14","Daily Expenses","VCE|VA|V|VA|V|—"],["15","Employee Payroll","—|VA|VCE|VA|V|—"],
+["16","Marriage Hall","VCE|VAD|V|V|V|—"],["17","Asset Register","V|VCE|V|V|V|—"],["18","Asset Purchase","VCE|VA|V|VA|V|—"],
+["19","Asset Maintenance & Depreciation","VC|VA|VCE|V|V|—"],["20","Asset Transfer & Disposal","VC|VA|V|VA|V|—"],["21","General Community Fund","—|V|V|V|V|—"],
+["22","General Ledger","—|V|V|V|V|—"],["23","Chart of Accounts","—|V|VCED|VA|V|—"],["24","Journals & Vouchers","—|V|VCED|VA|V|—"],
+["25","Trial Balance","—|V|V|V|V|—"],["26","Financial Statements","—|V|V|V|V|—"],["27","Cash & Day-end","—|VA|VCE|V|V|—"],
+["28","Financial Periods","—|V|VCE|VA|V|—"],["29","Financial Reports","—|V|V|V|V|—"],["30","Management Reports","—|V|V|V|V|—"],
+["31","Workflows","—|V|—|V|V|V"],["32","Business Rules","—|V|V|V|V|V"],["33","Approvals","VC|VCA|—|VA|V|VE"],
+["34","Notifications","VC|V|—|—|V|VCED"],["35","Audit Log","—|V|V|V|V|V"],
+["D1","Employee Dashboard","V|V|—|—|—|—"],["D2","Manager Dashboard","—|V|—|V|—|—"],["D3","Accountant Dashboard","—|—|V|V|V|—"],
+["D4","Leadership Dashboard","—|—|—|V|—|—"],["D5","Auditor Dashboard","—|—|—|—|V|—"],["D6","Administration Dashboard","—|—|—|—|—|V"],["D7","Users & Roles Dashboard","—|—|—|V|V|V"]
+];
+const P={};MODS.forEach(([id,,s])=>{P[id]={};s.split("|").forEach((v,i)=>P[id][RK[i]]=v==="—"?"":v);});
+const CEIL=JSON.parse(JSON.stringify(P));
+const modName=id=>MODS.find(m=>m[0]===id)[1];
+const can=(r,id,p)=>(P[id]&&P[id][r]||"").includes(p);
+const GROUPS=[["Members",["3","9","10"]],["Loans",["4","5","6","7","8"]],["Welfare",["11","12","13"]],["Operations",["14","16","15"]],["Assets",["17","18","19","20"]],["Accounts",["27","24","23","22","21","28"]],["Reports",["25","26","29","30"]],["Administration",["33","2","1","31","32","34","35"]]];
+
+/* state */
+let role="EMP";
+let wdate="2026-11-15";
+let cash={open:184350,rec:42600,pay:25000};
+let rcptNo=4512;
+let APPROVALS=[
+ {id:"AP-1182",type:"Loan application",ref:"LN-IB-0244",who:"Selvi Murugan (M-0231)",amt:80000,by:"Kavitha Selvam",byRole:"EMP",stage:"Manager Verification",to:"MGR",days:1},
+ {id:"AP-1183",type:"Application fee waiver",ref:"FW-0031",who:"Anand Raj (M-0877)",amt:200,by:"Kavitha Selvam",byRole:"EMP",stage:"Manager Approval",to:"MGR",days:0},
+ {id:"AP-1179",type:"Early settlement",ref:"ES-0057",who:"Fathima Nasreen (M-0412)",amt:31450,by:"Kavitha Selvam",byRole:"EMP",stage:"Manager Verification",to:"MGR",days:2},
+ {id:"AP-1184",type:"Daily expense",ref:"EX-0921",who:"Electricity bill, Nov",amt:6840,by:"Ramesh Kumar",byRole:"MGR",stage:"Manager Approval",to:"MGR",days:0,self:true},
+ {id:"AP-1176",type:"Payroll run",ref:"PR-2026-11",who:"November 2026, 6 employees",amt:118400,by:"Lakshmi Narayanan",byRole:"ACC",stage:"Leadership Approval",to:"LDR",days:1},
+ {id:"AP-1177",type:"Manual journal",ref:"JV-0208",who:"Opening balance correction",amt:2500,by:"Lakshmi Narayanan",byRole:"ACC",stage:"Leadership Approval",to:"LDR",days:3},
+ {id:"AP-1185",type:"Custom role",ref:"ROLE-HCO",who:"Hall Coordinator: Marriage Hall VCE, Members V, Assets V",amt:0,by:"Meena Rajagopal",byRole:"ADM",stage:"Leadership Approval",to:"LDR",days:0,custom:"HCO"},
+ {id:"AP-1180",type:"Asset purchase",ref:"AS-0019",who:"Chairs for Main Hall (150)",amt:67500,by:"Ramesh Kumar",byRole:"MGR",stage:"Leadership Approval",to:"LDR",days:2}
+];
+/* platform access per user: web and/or mobile (only for app users) */
+const ACCESS={"Meena Rajagopal":{web:1,mob:0},"Ramesh Kumar":{web:1,mob:1},"Kavitha Selvam":{web:1,mob:1},"Murali Dharan":{web:0,mob:1},"Lakshmi Narayanan":{web:1,mob:0},"Abdul Rahim":{web:0,mob:1},"S. Gnanasekaran":{web:0,mob:0},"Priya Venkat":{web:1,mob:0},"Saranya M.":{web:0,mob:1},"Vijay Anand":{web:1,mob:0},"Joseph Arulraj":{web:1,mob:1}};
+const acc=u=>ACCESS[u[0]]||(ACCESS[u[0]]={web:1,mob:0});
+const accLabel=u=>{if(!u[3])return "No login";const a=acc(u);return a.web&&a.mob?"Web + Mobile":a.web?"Web only":a.mob?"Mobile only":"No login";};
+let USERS=[
+ ["Meena Rajagopal","ADM","+91 98430 11872",true,"Active"],["Ramesh Kumar","MGR","+91 94435 22018",true,"Active"],["Kavitha Selvam","EMP","+91 99941 30776",true,"Active"],
+ ["Murali Dharan","EMP","+91 90251 64410",true,"Active","Cashier"],["Lakshmi Narayanan","ACC","+91 98942 77105",true,"Active"],["Abdul Rahim","LDR","+91 94430 18842",true,"Active"],
+ ["S. Gnanasekaran","LDR","+91 97877 55021",false,"Active"],["Priya Venkat","AUD","+91 90031 88264",true,"Active"],["Saranya M.","EMP","+91 93600 41827",true,"Activation pending"],["Vijay Anand","ACC","+91 98403 66120",true,"Activation pending"],["Joseph Arulraj","EMP","+91 98650 12099",true,"Inactive"]
+];
+const DUE=[["M-0231","Selvi Murugan","LN-IB-0198",4 ,15285,0],["M-0412","Fathima Nasreen","LN-NL-0102",2,9450,100],["M-0518","Ganesan P.","LN-IF-0077",6,2500,0],["M-0640","Revathi K.","LN-IB-0221",3,7642,50],["M-0703","John Peter","LN-IB-0230",1,5095,0]];
+
+/* custom roles created by the org admin */
+const CUSTOM_LIMIT=10;
+const NO_CUSTOM=["1","2","31","32"]; /* configuration modules stay with the default roles */
+function customCeil(id){if(NO_CUSTOM.includes(id))return "";return "VCEAD".split("").filter(p=>["EMP","MGR","ACC","LDR","AUD"].some(r=>CEIL[id][r].includes(p))).join("");}
+let CUSTOM=[
+ {code:"CSH",name:"Cashier",desc:"Collects repayments and fees at the counter, no loan approvals",base:"EMP",status:"Active",holders:["Murali Dharan"],home:"D1",priv:{"3":"V","5":"VC","6":"VC","14":"V","16":"VC","27":"V","33":"V","D1":"V"}},
+ {code:"HCO",name:"Hall Coordinator",desc:"Manages marriage hall bookings and settlement",base:"EMP",status:"Awaiting Leadership approval",holders:[],home:"D1",priv:{"3":"V","16":"VCE","17":"V","D1":"V"}}
+];
+let editCustom=null;
+/* helpers */
+function toast(m){const t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);}
+function modal(html,onOk){const L=$("#layer");L.innerHTML=`<div class="scrim"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+ L.querySelector(".scrim").addEventListener("click",e=>{if(e.target.classList.contains("scrim")||e.target.dataset.close!==undefined)L.innerHTML="";});
+ const ok=L.querySelector("[data-ok]");if(ok)ok.addEventListener("click",()=>{if(onOk(L)!==false)L.innerHTML="";});
+ const f=L.querySelector("input,select,textarea");if(f)f.focus();return L;}
+const privChips=(id)=>`<div class="privs" title="Your privileges on this module">${"VCEAD".split("").map(p=>`<span class="pv-c ${can(role,id,p)?"on":""}">${p}</span>`).join("")}</div>`;
+const myPending=()=>role==="MGR"||role==="LDR"?APPROVALS.filter(a=>a.to===role).length:{EMP:3,ACC:4,AUD:3,ADM:2}[role];
+const btn=(label,id,p,attrs="",cls="")=>can(role,id,p)?`<button class="btn ${cls}" ${attrs}>${label}</button>`:"";
+const isBack=()=>wdate<"2026-11-15";
+
+/* top bar */
+function drawBar(){
+ const bal=cash.open+cash.rec-cash.pay;
+ $("#cash").innerHTML=`<div class="sm-hide"><span>Opening</span><b>${inr(cash.open)}</b></div><div class="sm-hide"><span>Receipts</span><b>+${inr(cash.rec)}</b></div><div class="sm-hide"><span>Payments</span><b>−${inr(cash.pay)}</b></div><div class="bal"><span>Cash balance</span><b>${inr(bal)}</b></div>`;
+ $("#bk").hidden=!isBack();
+ const n=myPending();$("#pend").textContent=n+" pending";$("#pend").href=(role==="MGR"||role==="LDR")?"#"+role.toLowerCase()+"-m33":"#"+role.toLowerCase()+"-home";
+ $("#av").textContent=ROLES[role].ini;
+ $("#roleSel").innerHTML=RK.map(r=>`<option value="${r}" ${r===role?"selected":""}>${ROLES[r].person} · ${ROLES[r].name}</option>`).join("");
+ $("#rs").innerHTML=RK.map(r=>`<button data-r="${r}" class="${r===role?"on":""}">${ROLES[r].name}</button>`).join("");
+}
+function drawMenu(page){
+ const dashes=MODS.filter(m=>m[0][0]==="D"&&can(role,m[0],"V"));
+ let h=`<a href="#${role.toLowerCase()}-home" class="${page==="home"?"on":""}">Home <span class="pv">${ROLES[role].home}</span></a>`;
+h+=`<div class="mg">Dashboards</div>`+dashes.map(d=>`<a href="#${role.toLowerCase()}-m${d[0]}" class="${page==="m"+d[0]?"on":""}">${d[1]}</a>`).join("");
+ GROUPS.forEach(([g,ids])=>{const vis=ids.filter(id=>can(role,id,"V"));if(!vis.length)return;
+  h+=`<div class="mg">${g}</div>`+vis.map(id=>`<a href="#${role.toLowerCase()}-m${id}" class="${page==="m"+id?"on":""}">${modName(id)}<span class="pv">${P[id][role]}</span></a>`).join("");});
+ $("#menu").innerHTML=h;
+}
+
+/* dashboards */
+const DASH={};
+DASH.D1=()=>`
+ <div class="stats"><a class="stat hot" href="#emp-m6"><span>Repayments due today</span><b>${DUE.length}</b><small>${inr(DUE.reduce((s,d)=>s+d[4]+d[5],0))} to collect</small></a>
+ <div class="stat"><span>Pending tasks</span><b>3</b><small>2 documents to upload, 1 nominee</small></div>
+ <a class="stat hot" href="#emp-m4"><span>Returned applications</span><b>1</b><small>Manager asked for changes</small></a>
+ <div class="stat"><span>My collections today</span><b>${inr(cash.rec)}</b><small>14 receipts</small></div></div>
+ <div class="qa"><a class="btn" href="#emp-m3">Find member</a><a class="btn pri" href="#emp-m6">Collect repayment</a><a class="btn" href="#emp-m4" data-new="1">New loan application</a><a class="btn" href="#emp-m16">New hall booking</a><a class="btn" href="#emp-m14">New expense</a></div>
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Due today</h2><a href="#emp-m6" class="muted" style="font-size:12px">Open collections</a></div><div class="list">${DUE.map(d=>`<div class="li"><div><b style="font-weight:500">${d[1]}</b> <span class="mono muted">${d[0]}</span><small>${d[2]} · instalment ${d[3]}${d[5]?" · late fee "+inr(d[5]):""}</small></div><div class="row"><span class="num">${inr(d[4]+d[5])}</span><a class="btn sm" href="#emp-m6" data-m="${d[0]}">Collect</a></div></div>`).join("")}</div></div>
+ <div class="panel"><div class="ph"><h2>Returned and pending</h2></div><div class="list">
+  <div class="li"><div><b style="font-weight:500">LN-IB-0239 · Murugesan T.</b><small>Returned by Ramesh Kumar: "Nominee ID proof unclear, upload again"</small></div><span class="pill p-warn">Returned</span></div>
+  <div class="li"><div><b style="font-weight:500">Upload income proof</b><small>LN-NL-0110 · Anitha R.</small></div><span class="pill p-mute">Task</span></div>
+  <div class="li"><div><b style="font-weight:500">Add nominee for first loan</b><small>M-0952 · Dinesh Babu</small></div><span class="pill p-mute">Task</span></div>
+  <div class="li"><div><b style="font-weight:500">Hall booking HB-0088</b><small>Wedding, 22 Nov, Main Hall · balance due ₹10,000</small></div><span class="pill p-info">Upcoming</span></div></div></div></div>`;
+DASH.D2=()=>{const q=APPROVALS.filter(a=>a.to==="MGR");return `
+ <div class="stats"><a class="stat hot" href="#mgr-m33"><span>Awaiting your verification</span><b>${q.length}</b><small>Oldest ${Math.max(...q.map(a=>a.days),0)} days</small></a>
+ <a class="stat" href="#mgr-m33"><span>Offline decisions to record</span><b>1</b><small>Verbal approval on 14 Nov</small></a>
+ <div class="stat"><span>Provisional approvals to confirm</span><b>2</b><small>Recorded by employees</small></div>
+ <a class="stat" href="#mgr-m27"><span>Day-end</span><b style="font-size:16px;padding-block:5px">Open</b><small>Cash count not done yet</small></a></div>
+ <div class="qa"><a class="btn pri" href="#mgr-m33">Open approval queue</a><a class="btn" href="#mgr-m8">Overdue and defaulted loans</a><a class="btn" href="#mgr-m27">Count cash and close day</a></div>
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Approval queue</h2><a href="#mgr-m33" class="muted" style="font-size:12px">See all</a></div><div class="list">${q.map(a=>`<div class="li"><div><b style="font-weight:500">${a.type}</b> <span class="mono muted">${a.ref}</span><small>${esc(a.who)} · by ${a.by}${a.self?" · you raised this":""}</small></div><span class="num">${inr(a.amt)}</span></div>`).join("")}</div></div>
+ <div class="panel"><div class="ph"><h2>Loan portfolio</h2></div><div class="tw"><table><tbody>
+  <tr><td>Active loans</td><td class="num">412</td><td class="num">${inr(9824500)}</td></tr><tr><td><span class="pill p-warn">Overdue</span></td><td class="num">27</td><td class="num">${inr(184300)}</td></tr>
+  <tr><td><span class="pill p-bad">Defaulted</span></td><td class="num">6</td><td class="num">${inr(212800)}</td></tr><tr><td>In cooling-off</td><td class="num">4</td><td class="num muted">—</td></tr></tbody></table></div></div></div>`;};
+DASH.D3=()=>`
+ <div class="stats"><a class="stat hot" href="#acc-m24"><span>Unposted vouchers</span><b>4</b><small>2 payment, 2 journal</small></a>
+ <a class="stat" href="#acc-m27"><span>Cash position</span><b>${inr(cash.open+cash.rec-cash.pay)}</b><small>Day-end not closed</small></a>
+ <a class="stat" href="#acc-m28"><span>Current period</span><b style="font-size:16px;padding-block:5px">Nov 2026</b><small>Open · Oct 2026 closed</small></a>
+ <div class="stat"><span>Backdated entries this week</span><b>3</b><small>Shown to Auditor</small></div></div>
+ <div class="qa"><a class="btn pri" href="#acc-m24">New journal or voucher</a><a class="btn" href="#acc-m27">Cash reconciliation</a><a class="btn" href="#acc-m25">Trial Balance</a></div>
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Today's cash by user</h2></div><div class="tw"><table><thead><tr><th>User</th><th class="num">Receipts</th><th class="num">Payments</th></tr></thead><tbody>
+  <tr><td>Kavitha Selvam</td><td class="num">${inr(cash.rec-11200)}</td><td class="num">₹0</td></tr><tr><td>Murali Dharan</td><td class="num">₹11,200</td><td class="num">₹0</td></tr><tr><td>Ramesh Kumar</td><td class="num">₹0</td><td class="num">₹25,000</td></tr></tbody></table></div></div>
+ <div class="panel"><div class="ph"><h2>Payroll November</h2><span class="pill p-info">Awaiting Leadership</span></div><div class="pb"><dl class="kv"><dt>Employees</dt><dd>6</dd><dt>Net pay</dt><dd>${inr(118400)}</dd><dt>Prepared by</dt><dd>Lakshmi Narayanan</dd><dt>Verified by</dt><dd>Ramesh Kumar</dd></dl></div></div></div>`;
+DASH.D4=()=>{const q=APPROVALS.filter(a=>a.to==="LDR");return `
+ <div class="stats"><a class="stat hot" href="#ldr-m33"><span>Awaiting your approval</span><b>${q.length}</b><small>Payroll, journal, asset purchase</small></a>
+ <div class="stat"><span>General Fund balance</span><b>${inr(1240600)}</b><small>Restricted funds ${inr(310000)}</small></div>
+ <div class="stat"><span>Loans outstanding</span><b>${inr(9824500)}</b><small>412 active · 6 defaulted</small></div>
+ <div class="stat"><span>Surplus, FY to date</span><b>${inr(286900)}</b><small>Apr–Nov 2026</small></div></div>
+ <div class="qa"><a class="btn pri" href="#ldr-m33">Open approval queue</a><a class="btn" href="#ldr-m30">Management reports</a></div>
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Pending high-value and policy approvals</h2></div><div class="list">${q.map(a=>`<div class="li"><div><b style="font-weight:500">${a.type}</b> <span class="mono muted">${a.ref}</span><small>${esc(a.who)} · by ${a.by}</small></div><span class="num">${inr(a.amt)}</span></div>`).join("")}</div></div>
+ <div class="panel"><div class="ph"><h2>This month</h2></div><div class="tw"><table><tbody><tr><td>Loans disbursed</td><td class="num">18</td><td class="num">${inr(1120000)}</td></tr><tr><td>Repayments collected</td><td class="num">604</td><td class="num">${inr(1386200)}</td></tr><tr><td>Assistance paid</td><td class="num">9</td><td class="num">${inr(62500)}</td></tr><tr><td>Hall bookings</td><td class="num">7</td><td class="num">${inr(118000)}</td></tr></tbody></table></div></div></div>`;};
+DASH.D5=()=>`
+ <div class="ro"><b>Read-only.</b> The Auditor role can view and export where permitted, but cannot create, edit or approve anything.</div>
+ <div class="stats"><div class="stat hot"><span>Audit exceptions</span><b>3</b><small>Needs review</small></div><div class="stat"><span>Backdated entries</span><b>3</b><small>This week</small></div><div class="stat"><span>Receipt cancellations</span><b>1</b><small>This month</small></div><div class="stat"><span>Cash variances</span><b>₹-120</b><small>12 Nov, approved</small></div></div>
+ <div class="qa"><a class="btn" href="#aud-m25">Trial Balance</a><a class="btn" href="#aud-m29">Financial reports</a><a class="btn pri" href="#aud-m35">Search audit log</a></div>
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Exceptions</h2></div><div class="list">
+  <div class="li"><div><b style="font-weight:500">Backdated receipt R/004488</b><small>Working date 08 Nov, entered 13 Nov 10:42 by Murali Dharan</small></div><span class="pill p-warn">Backdated</span></div>
+  <div class="li"><div><b style="font-weight:500">Receipt R/004470 cancelled</b><small>Same day, Manager approved · reason: wrong member</small></div><span class="pill p-info">Reversal</span></div>
+  <div class="li"><div><b style="font-weight:500">Cash shortage ₹120 on 12 Nov</b><small>Counted by Ramesh Kumar, posted to Cash Shortage / Excess</small></div><span class="pill p-warn">Variance</span></div></div></div>
+ <div class="panel"><div class="ph"><h2>Recent approval records</h2></div><div class="list">
+  <div class="li"><div><b style="font-weight:500">LN-IB-0240 approved</b><small>Offline · Phone call · requested by Kavitha, approved by Ramesh, recorded by Murali</small></div><span class="muted" style="font-size:12px">14 Nov</span></div>
+  <div class="li"><div><b style="font-weight:500">Birthday grant BG-0012 approved</b><small>Approved by S. Gnanasekaran (non-app user), recorded by Abdul Rahim</small></div><span class="muted" style="font-size:12px">11 Nov</span></div></div></div></div>`;
+DASH.D6=()=>`
+ <div class="stats"><a class="stat hot" href="#adm-m2"><span>Pending user requests</span><b>1</b><small>New employee to add</small></a><div class="stat hot"><span>Failed actions and notifications</span><b>2</b><small>SMS delivery failed</small></div>
+ <a class="stat" href="#adm-m2"><span>Users</span><b>${USERS.length}</b><small>${USERS.filter(u=>u[3]&&acc(u).web).length} web · ${USERS.filter(u=>u[3]&&acc(u).mob).length} mobile · ${USERS.filter(u=>!u[3]).length} record only</small></a><div class="stat"><span>Configuration changes awaiting Leadership</span><b>0</b><small>Admin changes need LDR approval</small></div></div>
+ <div class="qa"><a class="btn pri" href="#adm-mD7">Users &amp; Roles dashboard</a><a class="btn" href="#adm-m2" data-tab="users">User management</a><a class="btn" href="#adm-m2" data-tab="roles">Role management</a><a class="btn" href="#adm-m1">Organisation settings</a></div>
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Needs attention</h2></div><div class="list">
+  <div class="li"><div><b style="font-weight:500">Add user: Saranya M. (new employee)</b><small>Requested by Ramesh Kumar, 14 Nov</small></div><a class="btn sm" href="#adm-m2">Add user</a></div>
+  <div class="li"><div><b style="font-weight:500">SMS failed: repayment reminder to M-0518</b><small>3 retries used · number unreachable</small></div><button class="btn sm" data-t="Notification queued for retry.">Retry</button></div>
+  <div class="li"><div><b style="font-weight:500">SMS failed: activation link to Murali Dharan</b><small>Link resent by email instead</small></div><span class="pill p-ok">Resolved</span></div></div></div>
+ <div class="panel"><div class="ph"><h2>What you can and cannot change</h2></div><div class="pb" style="font-size:13px"><p>You manage users, role holders, privileges within the platform's ceiling, branding, notification templates and organisation settings marked for the organisation.</p><p class="muted">Workflows, business rules, actions, enabled modules and English/Tamil language-pack translations are managed by the platform's Super Administrator. You can choose your own display language where available, and view platform-managed configuration under Administration.</p></div></div></div>`;
+
+const modSummary=r=>{const c={V:0,C:0,E:0,A:0,D:0};MODS.forEach(([id])=>{if(id[0]==="D")return;"VCEAD".split("").forEach(p=>{if(P[id][r].includes(p))c[p]++;});});return c;};
+DASH.D7=()=>{const act=USERS.filter(u=>u[4]==="Active"),app=USERS.filter(u=>u[3]),rec=USERS.filter(u=>!u[3]),pend=USERS.filter(u=>u[4]==="Activation pending"),inact=USERS.filter(u=>u[4]==="Inactive");
+ const by=RK.map(r=>[r,USERS.filter(u=>u[1]===r&&!u[5]&&u[4]!=="Inactive")]);CUSTOM.filter(c=>c.status==="Active").forEach(c=>by.push([c.code,USERS.filter(u=>u[5]===c.name&&u[4]!=="Inactive")]));const max=Math.max(...by.map(b=>b[1].length),1);const canEdit=can(role,"2","C");
+ return `<div class="stats s5">
+ <div class="stat"><span>Users</span><b>${USERS.length}</b><small>${act.length} active</small></div>
+ <div class="stat"><span>App users</span><b>${app.length}</b><small>${app.filter(u=>acc(u).web&&acc(u).mob).length} both · ${app.filter(u=>acc(u).web&&!acc(u).mob).length} web · ${app.filter(u=>!acc(u).web&&acc(u).mob).length} mobile</small></div>
+ <div class="stat"><span>Record only</span><b>${rec.length}</b><small>No login, can approve offline</small></div>
+ <div class="stat ${pend.length?"hot":""}"><span>Activation pending</span><b>${pend.length}</b><small>Link sent, not used yet</small></div>
+ <div class="stat"><span>Inactive</span><b>${inact.length}</b><small>History kept</small></div></div>
+ ${canEdit?`<div class="qa"><a class="btn pri" href="#adm-m2" data-tab="users">Manage users</a><a class="btn" href="#adm-m2" data-tab="roles">Role privileges</a><a class="btn" href="#adm-m2" data-tab="custom">Custom roles</a><a class="btn" href="#adm-m2" data-tab="home">Home page per role</a></div>`:""}
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Users by role</h2><span class="muted" style="font-size:12px">Active and pending</span></div><div class="pb" style="gap:10px">
+  ${by.map(([r,us])=>`<div style="display:grid;grid-template-columns:150px 1fr 28px;gap:10px;align-items:center;font-size:13px"><span>${ROLES[r]?ROLES[r].name:esc(CUSTOM.find(c=>c.code===r).name)+" <span class=\"muted\" style=\"font-size:11px\">custom</span>"}</span><div style="background:var(--sunk);border-radius:4px;height:14px;overflow:hidden"><div style="width:${us.length/max*100}%;height:100%;background:var(--accent);border-radius:4px"></div></div><b class="num" style="font-weight:600">${us.length}</b></div>`).join("")}
+  ${by.find(b=>b[0]==="MGR")[1].length<1?'<div class="note n-warn"><span class="n-ico">!</span><div>No Manager appointed. Approvals have nobody to go to.</div></div>':""}</div></div>
+ <div class="panel"><div class="ph"><h2>Activation pending</h2></div><div class="list">${pend.length?pend.map(u=>`<div class="li"><div><b style="font-weight:500">${u[0]}</b><small>${ROLES[u[1]].name} · ${u[2]} · link sent 14 Nov, expires in 48 hours</small></div>${canEdit?`<button class="btn sm" data-t="Activation link resent to ${u[0]}.">Resend link</button>`:'<span class="pill p-warn">Pending</span>'}</div>`).join(""):'<div class="li muted">Everyone has activated their account.</div>'}</div></div></div>
+ <div class="panel"><div class="ph"><h2>Roles</h2><span class="muted" style="font-size:12px">${RK.length} default and ${CUSTOM.filter(c=>c.status!=="Rejected").length} custom roles · privilege counts across ${MODS.filter(m=>m[0][0]!=="D").length} modules</span></div><div class="tw"><table><thead><tr><th>Role</th><th>Holders</th><th class="num">View</th><th class="num">Create</th><th class="num">Edit</th><th class="num">Approve</th><th class="num">Delete</th><th>Home page</th><th>MFA</th></tr></thead><tbody>
+ ${RK.map(r=>{const c=modSummary(r);const h=USERS.filter(u=>u[1]===r&&!u[5]&&u[4]!=="Inactive");return `<tr><td><span class="tag">${r}</span> ${ROLES[r].name}</td><td>${h.map(u=>u[0]+" <span class=\"muted\" style=\"font-size:11.5px\">("+accLabel(u).toLowerCase()+")</span>").join(", ")||'<span class="pill p-bad">None</span>'}</td><td class="num">${c.V}</td><td class="num">${c.C}</td><td class="num">${c.E}</td><td class="num">${c.A}</td><td class="num">${c.D}</td><td>${modName(ROLES[r].home)}</td><td>${["ADM","ACC","MGR","LDR"].includes(r)?"Mandatory":"Optional"}</td></tr>`;}).join("")}
+ ${CUSTOM.filter(c=>c.status!=="Rejected").map(c=>{const k=customCount(c);return `<tr><td><span class="tag">${c.code}</span> ${esc(c.name)} <span class="pill ${c.status==="Active"?"p-info":"p-warn"}">${c.status==="Active"?"Custom":c.status}</span></td><td>${c.holders.join(", ")||'<span class="muted">None yet</span>'}</td><td class="num">${k.V}</td><td class="num">${k.C}</td><td class="num">${k.E}</td><td class="num">${k.A}</td><td class="num">${k.D}</td><td>${modName(c.home)}</td><td>Optional</td></tr>`;}).join("")}</tbody></table></div></div>
+ <div class="panel"><div class="ph"><h2>Platform access</h2><span class="muted" style="font-size:12px">Who can use the web portal and who can use the mobile app</span></div><div class="tw"><table><thead><tr><th>User</th><th>Role</th><th>Web</th><th>Mobile app</th><th>Status</th></tr></thead><tbody>
+ ${USERS.filter(u=>u[4]!=="Inactive").map(u=>`<tr><td>${u[0]}</td><td>${u[5]?esc(u[5]):ROLES[u[1]].name}</td><td>${u[3]&&acc(u).web?'<span class="pill p-ok">Yes</span>':'<span class="pill p-mute">No</span>'}</td><td>${u[3]&&acc(u).mob?'<span class="pill p-ok">Yes</span>':'<span class="pill p-mute">No</span>'}</td><td class="muted" style="font-size:12.5px">${u[3]?u[4]:"Record only, no login"}</td></tr>`).join("")}</tbody></table></div></div>
+ <div class="grid2"><div class="panel"><div class="ph"><h2>Recent role changes</h2></div><div class="list">
+  <div class="li"><div><b style="font-weight:500">Murali Dharan appointed Community Employee</b><small>By Meena Rajagopal · 13 Nov</small></div><span class="muted" style="font-size:12px">13 Nov</span></div>
+  <div class="li"><div><b style="font-weight:500">Joseph Arulraj deactivated</b><small>Pending tasks reassigned to Kavitha Selvam · 02 Nov</small></div><span class="muted" style="font-size:12px">02 Nov</span></div>
+  <div class="li"><div><b style="font-weight:500">Accountant: removed Delete on Chart of Accounts</b><small>Approved by Abdul Rahim (Leadership) · 28 Oct</small></div><span class="muted" style="font-size:12px">28 Oct</span></div></div></div>
+ <div class="panel"><div class="ph"><h2>Segregation of duties checks</h2></div><div class="list">
+  <div class="li"><div><b style="font-weight:500">Auditor holds no other role</b><small>Priya Venkat</small></div><span class="pill p-ok">OK</span></div>
+  <div class="li"><div><b style="font-weight:500">Payroll preparer is not the approver</b><small>Lakshmi Narayanan prepares, Abdul Rahim approves</small></div><span class="pill p-ok">OK</span></div>
+  <div class="li"><div><b style="font-weight:500">Only one Manager</b><small>When Ramesh Kumar is away, approvals wait. Consider a second Manager.</small></div><span class="pill p-warn">Review</span></div></div></div></div>`;};
+const customCount=c=>{const k={V:0,C:0,E:0,A:0,D:0};Object.entries(c.priv).forEach(([id,v])=>{if(id[0]==="D")return;v.split("").forEach(p=>k[p]++);});return k;};
+function customRolesView(edit){
+ if(editCustom){const c=editCustom;const warn=Object.entries(c.priv).filter(([id,v])=>v.includes("C")&&v.includes("A")).map(([id])=>modName(id));
+  return `<div class="panel"><div class="ph"><div><h2>${c.isNew?"New custom role":"Edit "+esc(c.name)}</h2><span class="muted" style="font-size:12px">Only privileges inside the platform's ceiling can be granted. Configuration modules stay with the default roles.</span></div><div class="row"><button class="btn sm" id="ccCancel">Cancel</button><button class="btn sm pri" id="ccSubmit">Submit for Leadership approval</button></div></div>
+  <div class="pb"><div class="grid3"><div class="fld"><label for="ccName">Role name</label><input type="text" id="ccName" value="${esc(c.name)}"></div><div class="fld"><label for="ccCode">Code</label><input type="text" id="ccCode" value="${esc(c.code)}" maxlength="4"></div><div class="fld"><label for="ccHome">Home page</label><select id="ccHome">${MODS.filter(m=>m[0][0]==="D"&&customCeil(m[0])).map(m=>`<option value="${m[0]}" ${m[0]===c.home?"selected":""}>${m[1]}</option>`).join("")}</select></div></div>
+  <div class="fld"><label for="ccDesc">Description</label><input type="text" id="ccDesc" value="${esc(c.desc)}"></div>
+  ${warn.length?`<div class="note n-warn"><span class="n-ico">!</span><div>This role can both create and approve in: ${warn.join(", ")}. The system still stops anyone approving their own request, so another holder or the Manager must approve.</div></div>`:""}</div>
+  <div class="tw"><table><thead><tr><th>Module</th><th>Privileges</th><th>Platform allows</th></tr></thead><tbody>
+  ${MODS.map(([id,n])=>{const ce=customCeil(id);const cur=c.priv[id]||"";return `<tr><td style="white-space:nowrap"><span class="mono muted">${id}</span> ${n}${NO_CUSTOM.includes(id)?' <span class="muted" style="font-size:11.5px">(default roles only)</span>':""}</td><td><div class="chips">${"VCEAD".split("").map(p=>`<button class="chip ${cur.includes(p)?"on":""}" data-cp="${id}|${p}" ${ce.includes(p)?"":"disabled"}>${p}</button>`).join("")}</div></td><td class="mono muted">${ce||"—"}</td></tr>`;}).join("")}</tbody></table></div></div>`;}
+ const used=CUSTOM.filter(c=>c.status!=="Rejected").length;
+ return `<div class="note n-info"><span class="n-ico">i</span><div>Create roles that fit how your organisation works, such as a Cashier or Hall Coordinator. A custom role can only use privileges the platform allows, and every new role or change needs Leadership approval before anyone can be assigned to it. <b>${used} of ${CUSTOM_LIMIT}</b> custom roles used.</div></div>
+ <div class="panel"><div class="ph"><h2>Custom roles</h2>${edit?`<div class="row"><select id="ccBase" style="width:auto"><option value="">Start blank</option>${RK.filter(r=>r!=="ADM").map(r=>`<option value="${r}">Copy of ${ROLES[r].name}</option>`).join("")}</select><button class="btn sm pri" id="ccNew" ${used>=CUSTOM_LIMIT?"disabled":""}>+ New custom role</button></div>`:""}</div>
+ <div class="tw"><table><thead><tr><th>Role</th><th>Description</th><th>Based on</th><th>Holders</th><th class="num">Modules</th><th>Status</th><th></th></tr></thead><tbody>
+ ${CUSTOM.map((c,i)=>`<tr><td><span class="tag">${c.code}</span> ${esc(c.name)}</td><td class="muted" style="font-size:12.5px">${esc(c.desc)}</td><td>${c.base?ROLES[c.base].name:"Blank"}</td><td>${c.holders.join(", ")||'<span class="muted">None</span>'}</td><td class="num">${Object.keys(c.priv).filter(k=>k[0]!=="D").length}</td><td><span class="pill ${c.status==="Active"?"p-ok":c.status==="Rejected"?"p-mute":"p-warn"}">${c.status}</span></td><td>${edit?`<div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-ce="${i}">Edit</button>${c.holders.length?"":`<button class="btn sm ghost danger" data-cd="${i}">Retire</button>`}</div>`:""}</td></tr>`).join("")||'<tr><td colspan="7" class="muted">No custom roles yet.</td></tr>'}</tbody></table></div></div>
+ <p class="muted" style="font-size:12px">A custom role with holders cannot be retired until they are moved to another role. Retired roles stay in history.</p>`;
+}
+function bindCustom(){
+ const v=document.getElementById("view");
+ const nb=$("#ccNew");if(nb)nb.addEventListener("click",()=>{const b=$("#ccBase").value;const priv={};if(b)MODS.forEach(([id])=>{const ce=customCeil(id);const own=P[id][b].split("").filter(p=>ce.includes(p)).join("");if(own)priv[id]=own;});editCustom={isNew:true,code:"",name:"",desc:"",base:b,home:b&&b!=="ADM"?ROLES[b].home:"D1",priv,status:"Draft",holders:[]};render();});
+ v.querySelectorAll("[data-ce]").forEach(x=>x.addEventListener("click",()=>{const c=CUSTOM[+x.dataset.ce];editCustom=JSON.parse(JSON.stringify(c));editCustom.idx=+x.dataset.ce;render();}));
+ v.querySelectorAll("[data-cd]").forEach(x=>x.addEventListener("click",()=>{const c=CUSTOM[+x.dataset.cd];c.status="Rejected";c.desc+=" (retired)";render();toast(c.name+" retired.");}));
+ v.querySelectorAll("[data-cp]").forEach(x=>x.addEventListener("click",()=>{const [id,p]=x.dataset.cp.split("|");const cur=editCustom.priv[id]||"";let nv=cur.includes(p)?cur.replace(p,""):"VCEAD".split("").filter(q=>q===p||cur.includes(q)).join("");if(nv&&!nv.includes("V")&&customCeil(id).includes("V"))nv="V"+nv;if(nv)editCustom.priv[id]=nv;else delete editCustom.priv[id];
+  ["ccName","ccCode","ccDesc","ccHome"].forEach(f=>{const e=$("#"+f);if(e)editCustom[{ccName:"name",ccCode:"code",ccDesc:"desc",ccHome:"home"}[f]]=e.value;});render();}));
+ const cc=$("#ccCancel");if(cc)cc.addEventListener("click",()=>{editCustom=null;render();});
+ const cs=$("#ccSubmit");if(cs)cs.addEventListener("click",()=>{const c=editCustom;c.name=$("#ccName").value.trim();c.code=$("#ccCode").value.trim().toUpperCase();c.desc=$("#ccDesc").value.trim();c.home=$("#ccHome").value;
+  if(!c.name||!c.code){toast("Enter a role name and a short code.");return;}
+  if(RK.includes(c.code)||CUSTOM.some((x,i)=>x.code===c.code&&i!==c.idx)){toast("That code is already used by another role.");return;}
+  if(!Object.keys(c.priv).length){toast("Give the role at least one privilege.");return;}
+  c.status="Awaiting Leadership approval";const isNew=c.isNew;delete c.isNew;const idx=c.idx;delete c.idx;
+  if(isNew)CUSTOM.push(c);else CUSTOM[idx]=Object.assign(CUSTOM[idx],c);
+  APPROVALS.push({id:"AP-"+(1190+CUSTOM.length),type:"Custom role",ref:"ROLE-"+c.code,who:c.name+": "+Object.keys(c.priv).filter(k=>k[0]!=="D").length+" modules",amt:0,by:ROLES[role].person,byRole:role,stage:"Leadership Approval",to:"LDR",days:0,custom:c.code});
+  editCustom=null;render();toast(c.name+" sent to Leadership for approval. It can be assigned once approved.");});
+}
+/* module pages */
+const PAGES={};
+PAGES["6"]=()=>{const d=DUE[0];return {html:`
+ <div class="grid2" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
+ <div class="panel"><div class="ph"><h2>Collect repayment</h2><span class="tag">Cash</span></div><div class="pb">
+  <div class="fld"><label for="cm">Member</label><select id="cm">${DUE.map((x,i)=>`<option value="${i}">${x[0]} · ${x[1]} · ${x[2]}</option>`).join("")}</select></div>
+  <div id="due"></div>
+  <div class="fld"><label for="camt">Cash received</label><input type="number" id="camt"><span class="hint" id="chint"></span></div>
+  <div id="alloc"></div>
+  <div class="row" style="justify-content:flex-end">${btn("Record receipt","6","C",'id="crec"',"pri")}</div></div></div>
+ <div class="panel"><div class="ph"><h2>Today's receipts</h2><span class="muted" style="font-size:12px">Working date ${wdate}</span></div><div class="list" id="todayR">
+  <div class="li"><div><span class="mono">R/004511</span><small>M-0388 · Velu S. · LN-IB-0187</small></div><span class="num">₹6,120</span></div>
+  <div class="li"><div><span class="mono">R/004510</span><small>M-0215 · Sumathi R. · LN-IF-0063</small></div><span class="num">₹2,000</span></div></div></div></div>`,
+ after(){const draw=()=>{const x=DUE[+$("#cm").value];const due=x[4]+x[5];if(!$("#camt").dataset.t)$("#camt").value=due;
+  $("#due").innerHTML=`<dl class="kv"><dt>Instalment</dt><dd>${x[3]} of 7 · due ${x[5]?"08 Nov (overdue)":"15 Nov"}</dd><dt>Amount due</dt><dd><b>${inr(due)}</b>${x[5]?` incl. late fee ${inr(x[5])}`:""}</dd><dt>Outstanding principal</dt><dd>${inr(x[4]*(7-x[3]+1)*0.93)}</dd></dl>`;
+  const amt=+$("#camt").value||0;const parts=[["Late fee",x[5]],["Overdue interest",0],["Overdue principal",0],["Current interest",Math.round(x[4]*0.065)],["Current principal",x[4]-Math.round(x[4]*0.065)]];let left=amt;
+  const rows=parts.map(([n,v])=>{const a=Math.min(v,left);left-=a;return [n,v,a];});
+  $("#alloc").innerHTML=`<span class="lbl">Allocation (order set by the organisation's rules)</span><table class="alloc"><tbody>${rows.filter(r=>r[1]).map(r=>`<tr><td>${r[0]}</td><td class="num muted">${inr(r[1])}</td><td class="num">${inr(r[2])}</td></tr>`).join("")}${left>0?`<tr><td>Excess reduces principal</td><td></td><td class="num">${inr(left)}</td></tr>`:""}</tbody></table>`;
+  $("#chint").textContent=amt<due?"Partly paid: the instalment stays unpaid until paid in full.":amt>due?"Excess reduces principal; the schedule is regenerated by the loan type's rule.":"";};
+  $("#cm").addEventListener("change",()=>{delete $("#camt").dataset.t;draw();});$("#camt").addEventListener("input",e=>{e.target.dataset.t=1;draw();});draw();
+  const r=$("#crec");if(r)r.addEventListener("click",()=>{const x=DUE[+$("#cm").value];const amt=+$("#camt").value||0;if(amt<=0){toast("Enter the cash received.");return;}rcptNo++;cash.rec+=amt;drawBar();
+   const no="KCWT/R/2026-27/00"+rcptNo;$("#todayR").insertAdjacentHTML("afterbegin",`<div class="li"><div><span class="mono">${no.slice(-8)}</span><small>${x[0]} · ${x[1]} · ${x[2]}</small></div><span class="num">${inr(amt)}</span></div>`);
+   modal(`<div class="mh"><h2>Receipt recorded</h2><p class="sub">Journal posted: Dr Cash / Cr Loan Principal Receivable, Interest Income${x[5]?", Late Fee Income":""}.</p></div><div class="mb"><div class="receipt"><b>Kaveri Community Welfare Trust</b><div class="rr"><span>Receipt</span><span>${no}</span></div><div class="rr"><span>Value date</span><span>${wdate}${isBack()?" (backdated)":""}</span></div><div class="rr"><span>Member</span><span>${x[0]} ${x[1]}</span></div><div class="rr"><span>Loan</span><span>${x[2]}</span></div><div class="rr"><span>Mode</span><span>Cash</span></div><div class="rr"><b>Amount</b><b>${inr(amt)}</b></div><div class="rr"><span>Collected by</span><span>${ROLES[role].person}</span></div></div></div><div class="mf"><button class="btn" data-close>Close</button><button class="btn pri" data-close>Print receipt</button></div>`);});}};
+};
+PAGES["33"]=()=>{const mine=APPROVALS.filter(a=>a.to===role);const others=role==="EMP"||role==="ADM"||role==="AUD";
+ const list=others?APPROVALS.filter(a=>role!=="EMP"||a.byRole==="EMP"):mine;
+ return {html:`${role==="EMP"?`<div class="note n-info"><span class="n-ico">i</span><div>You can see requests you raised, and record an offline decision where you are authorised (default: Employee and Manager).</div></div>`:""}
+ ${role==="ADM"?`<div class="note n-info"><span class="n-ico">i</span><div>You can view all approvals and edit offline-approval records (for example fix the evidence type), but you cannot approve anything.</div></div>`:""}
+ <div class="panel"><div class="ph"><h2>${others?"Approvals":"Waiting for you"}</h2><div class="row">${can(role,"33","C")?`<button class="btn sm" id="offRec">Record offline decision</button>`:""}</div></div>
+ <div class="tw"><table><thead><tr><th>Request</th><th>For</th><th class="num">Amount</th><th>Raised by</th><th>Stage</th><th></th></tr></thead><tbody>
+ ${list.map(a=>{const self=a.by===ROLES[role].person;return `<tr><td>${a.type}<div class="mono muted" style="font-size:11px">${a.ref} · ${a.days?a.days+" day"+(a.days>1?"s":"")+" waiting":"today"}</div></td><td>${esc(a.who)}</td><td class="num">${a.amt?inr(a.amt):"—"}</td><td>${a.by}</td><td><span class="pill p-info">${a.stage}</span></td>
+ <td>${can(role,"33","A")&&a.to===role?(self?`<span class="muted" style="font-size:12px" title="Segregation of duties">You raised this; another approver must decide</span>`:`<div class="row" style="flex-wrap:nowrap"><button class="btn sm pri" data-ap="${a.id}">Approve</button><button class="btn sm" data-rt="${a.id}">Return</button><button class="btn sm ghost danger" data-rj="${a.id}">Reject</button></div>`):""}</td></tr>`;}).join("")||`<tr><td colspan="6" class="muted">Nothing waiting. Approvals you decide will appear here.</td></tr>`}
+ </tbody></table></div></div>
+ <p class="muted" style="font-size:12px">Every approval is given by one authorised approver, irrespective of amount. No committee voting.</p>`,
+ after(){const decide=(id,verb)=>{const a=APPROVALS.find(x=>x.id===id);modal(`<div class="mh"><h2>${verb} ${a.type.toLowerCase()}</h2><p class="sub">${a.ref} · ${esc(a.who)} · ${inr(a.amt)}</p></div><div class="mb">${a.type==="Loan application"?`<div class="note n-info"><span class="n-ico">i</span><div>Stage validations passed: member status, application fee paid, nominee present, eligibility within limits.</div></div>`:""}<div class="fld"><label for="dc">Comment${verb==="Approve"?" (optional)":" (required)"}</label><textarea id="dc" rows="3"></textarea></div></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>${verb}</button></div>`,L=>{if(verb!=="Approve"&&!L.querySelector("#dc").value.trim())return false;APPROVALS=APPROVALS.filter(x=>x.id!==id);if(a.custom){const c=CUSTOM.find(x=>x.code===a.custom);if(c)c.status=verb==="Approve"?"Active":verb==="Return"?"Draft":"Rejected";}render();toast(a.ref+(verb==="Approve"?" approved.":verb==="Return"?" returned to "+a.by+".":" rejected."));});};
+  document.querySelectorAll("[data-ap]").forEach(b=>b.addEventListener("click",()=>decide(b.dataset.ap,"Approve")));
+  document.querySelectorAll("[data-rt]").forEach(b=>b.addEventListener("click",()=>decide(b.dataset.rt,"Return")));
+  document.querySelectorAll("[data-rj]").forEach(b=>b.addEventListener("click",()=>decide(b.dataset.rj,"Reject")));
+  const o=$("#offRec");if(o)o.addEventListener("click",()=>modal(`<div class="mh"><h2>Record offline decision</h2><p class="sub">For a decision given verbally, by phone, at a meeting or on paper. The approver does not need to log in.</p></div><div class="mb">
+   <div class="fld"><label for="or">Request</label><select id="or">${APPROVALS.map(a=>`<option>${a.ref} · ${a.type}</option>`).join("")}</select></div>
+   <div class="grid2"><div class="fld"><label for="oby">Approved by</label><select id="oby"><option>Ramesh Kumar (Manager)</option><option>Abdul Rahim (Leadership)</option><option>S. Gnanasekaran (Leadership, no login)</option></select></div>
+   <div class="fld"><label for="oev">Evidence type</label><select id="oev"><option>Verbal instruction</option><option>Meeting</option><option>Phone call</option><option>Signed paper</option></select></div>
+   <div class="fld"><label for="od">Decision date</label><input type="date" id="od" value="${wdate}" max="2026-11-15"></div><div class="fld"><label for="oup">Document (optional)</label><input type="text" id="oup" placeholder="Attach photo or scan"></div></div>
+   <div class="fld"><label for="on">Note</label><textarea id="on" rows="2"></textarea></div><p class="hint">Requested by, approved by and recorded by (${ROLES[role].person}) must be different people.</p></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Record decision</button></div>`,()=>toast("Offline decision recorded with evidence: "+$("#oev").value+".")));}};
+};
+PAGES["27"]=()=>{const bal=cash.open+cash.rec-cash.pay;const D=[500,200,100,50,20,10,5,2,1];return {html:`
+ <div class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+ <div class="panel"><div class="ph"><h2>Cash count by denomination</h2><span class="muted" style="font-size:12px">${wdate}</span></div><div class="tw"><table class="denom"><thead><tr><th>Note / coin</th><th>Count</th><th class="num">Amount</th></tr></thead><tbody>
+ ${D.map((d,i)=>`<tr><td>₹${d}</td><td><input type="number" min="0" data-d="${d}" value="${[300,150,120,60,40,30,20,15,10][i]}" ${can(role,"27","C")||can(role,"27","A")?"":"disabled"}></td><td class="num" id="dn${d}"></td></tr>`).join("")}</tbody><tfoot><tr><td>Counted</td><td></td><td class="num" id="dTot"></td></tr></tfoot></table></div></div>
+ <div style="display:flex;flex-direction:column;gap:16px"><div class="panel"><div class="ph"><h2>Day-end summary</h2><span class="pill p-warn" id="dayS">Open</span></div><div class="pb">
+  <dl class="kv"><dt>Opening balance</dt><dd>${inr(cash.open)}</dd><dt>Receipts</dt><dd>${inr(cash.rec)}</dd><dt>Payments</dt><dd>${inr(cash.pay)}</dd><dt>Book balance</dt><dd><b>${inr(bal)}</b></dd><dt>Counted</dt><dd id="dCnt"></dd><dt>Variance</dt><dd id="dVar"></dd></dl>
+  <div class="fld" id="vr" hidden><label for="vrs">Reason for variance</label><input type="text" id="vrs" placeholder="For example: change given short at counter"></div>
+  <div class="row" style="justify-content:flex-end">${can(role,"27","C")?`<button class="btn" id="dSave">Save count</button>`:""}${can(role,"27","A")?`<button class="btn pri" id="dClose">Approve and close day</button>`:""}</div>
+  <p class="hint">Once the day is closed, transactions for this date can no longer be added or changed. The user who collected cash cannot reconcile the same day.</p></div></div></div></div>`,
+ after(){const calc=()=>{let t=0;document.querySelectorAll("[data-d]").forEach(i=>{const a=i.dataset.d*(+i.value||0);t+=a;$("#dn"+i.dataset.d).textContent=inr(a);});const v=t-bal;$("#dTot").textContent=inr(t);$("#dCnt").textContent=inr(t);$("#dVar").innerHTML=v===0?'<span class="pill p-ok">Matches</span>':`<span class="pill ${v<0?"p-bad":"p-warn"}">${v<0?"Shortage":"Excess"} ${inr(Math.abs(v))}</span>`;$("#vr").hidden=v===0;};
+  document.querySelectorAll("[data-d]").forEach(i=>i.addEventListener("input",calc));
+  // set counts to match book balance by default
+  const set=(()=>{let rem=bal;document.querySelectorAll("[data-d]").forEach(i=>{const d=+i.dataset.d;i.value=Math.floor(rem/d);rem-=i.value*d;});})();calc();
+  const s=$("#dSave");if(s)s.addEventListener("click",()=>toast("Count saved. Waiting for Manager to approve and close the day."));
+  const c=$("#dClose");if(c)c.addEventListener("click",()=>{if(!$("#vr").hidden&&!$("#vrs").value.trim()){toast("Enter the reason for the variance.");return;}$("#dayS").className="pill p-ok";$("#dayS").textContent="Closed";c.disabled=true;toast("Day closed for "+wdate+".");});}};
+};
+PAGES["24"]=()=>({html:`
+ <div class="panel"><div class="ph"><h2>Vouchers</h2><div class="row">${btn("+ New voucher","24","C",'id="nv"',"pri sm")}</div></div><div class="tw"><table><thead><tr><th>No.</th><th>Type</th><th>Narration</th><th class="num">Amount</th><th>Created by</th><th>Status</th><th></th></tr></thead><tbody>
+ ${[["JV-0208","Journal","Opening balance correction",2500,"Lakshmi Narayanan","Awaiting Leadership"],["PV-1132","Payment","Electricity bill, Nov",6840,"Ramesh Kumar","Unposted"],["PV-1131","Payment","Loan disbursement LN-IB-0243",50000,"System","Posted"],["RV-4511","Receipt","Repayment LN-IB-0187",6120,"System","Posted"],["CV-0014","Contra","Petty cash top-up",5000,"Lakshmi Narayanan","Unposted"]].map(v=>`<tr><td class="mono">${v[0]}</td><td>${v[1]}</td><td>${v[2]}</td><td class="num">${inr(v[3])}</td><td>${v[4]}</td><td><span class="pill ${v[5]==="Posted"?"p-ok":v[5]==="Unposted"?"p-warn":"p-info"}">${v[5]}</span></td><td>${v[5]==="Awaiting Leadership"&&can(role,"24","A")?'<button class="btn sm pri" data-t="Journal approved and posted.">Approve</button>':v[5]==="Unposted"&&can(role,"24","E")?'<button class="btn sm" data-t="Voucher posted.">Post</button>':""}</td></tr>`).join("")}</tbody></table></div></div>
+ <p class="muted" style="font-size:12px">Posted vouchers are never edited or deleted. Corrections use a reversal entry. The creator of a manual journal cannot approve it.</p>`,
+ after(){const n=$("#nv");if(n)n.addEventListener("click",()=>{const L=modal(`<div class="mh"><h2>New journal voucher</h2><p class="sub">Value date ${wdate}. Manual journals need Leadership approval before posting.</p></div><div class="mb">
+  <div class="tw"><table><thead><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
+  <tr><td><select><option>5110 Office Expenses</option><option>1110 Cash in Hand</option><option>4110 Loan Interest Income</option></select></td><td><input type="number" class="jd" value="1500"></td><td><input type="number" class="jc" value="0"></td></tr>
+  <tr><td><select><option>1110 Cash in Hand</option><option>5110 Office Expenses</option></select></td><td><input type="number" class="jd" value="0"></td><td><input type="number" class="jc" value="1500"></td></tr></tbody></table></div>
+  <p id="jb" class="hint"></p><div class="fld"><label for="jn">Narration</label><input type="text" id="jn" value="Stationery purchased"></div></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Submit for approval</button></div>`,L=>{const d=[...L.querySelectorAll(".jd")].reduce((s,i)=>s+(+i.value||0),0),c=[...L.querySelectorAll(".jc")].reduce((s,i)=>s+(+i.value||0),0);if(d!==c){toast("The journal does not balance.");return false;}toast("Journal JV-0209 sent to Leadership for approval.");});
+  const chk=()=>{const d=[...L.querySelectorAll(".jd")].reduce((s,i)=>s+(+i.value||0),0),c=[...L.querySelectorAll(".jc")].reduce((s,i)=>s+(+i.value||0),0);L.querySelector("#jb").innerHTML=d===c?`<span class="pill p-ok">Balanced ${inr(d)}</span>`:`<span class="pill p-bad">Difference ${inr(d-c)}</span>`;};L.querySelectorAll(".jd,.jc").forEach(i=>i.addEventListener("input",chk));chk();});}
+});
+PAGES["25"]=()=>{const A=[["1110","Cash in Hand",cash.open+cash.rec-cash.pay,0],["1210","Loan Principal Receivable – Interest-Bearing",6420500,0],["1211","Loan Principal Receivable – Interest-Free",1184000,0],["1212","Loan Principal Receivable – Normal",2220000,0],["1510","Furniture and Fixtures",385000,0],["2310","Hall Security Deposits Held",0,45000],["3110","General Community Fund",0,9216250],["3210","Education Fund (restricted)",0,310000],["4110","Loan Interest Income",0,612400],["4120","Late Fee Income",0,18350],["4130","Loan Application Fee Income",0,24600],["4310","Hall Rental Income",0,286000],["5110","Office Expenses",84200,0],["5210","Salaries",236800,0],["5310","Education Assistance",0,0]];
+ const dr=A.reduce((s,a)=>s+a[2],0),cr=A.reduce((s,a)=>s+a[3],0);A[6][3]+=dr-cr;const cr2=A.reduce((s,a)=>s+a[3],0);
+ return {html:`<div class="panel"><div class="ph"><h2>Trial Balance as on ${wdate}</h2></div><div class="tw"><table><thead><tr><th>Code</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
+ ${A.filter(a=>a[2]||a[3]).map(a=>`<tr><td class="mono">${a[0]}</td><td>${a[1]}</td><td class="num">${a[2]?inr(a[2]):""}</td><td class="num">${a[3]?inr(a[3]):""}</td></tr>`).join("")}</tbody><tfoot><tr><td></td><td>Total</td><td class="num">${inr(dr)}</td><td class="num">${inr(cr2)}</td></tr></tfoot></table></div></div><p class="muted" style="font-size:12px">Cash basis: interest due but unpaid is not shown as income here; see loan reports.</p>`};
+};
+PAGES["35"]=()=>({html:`<div class="panel"><div class="ph"><div class="row"><input type="text" id="aq" placeholder="Search by user, record or event" style="width:260px"><select style="width:auto"><option>All areas</option><option>Financial</option><option>Operational</option><option>Security</option><option>Platform access</option></select></div></div>
+ <div class="tw"><table><thead><tr><th>When</th><th>User</th><th>Role</th><th>Event</th><th>Record</th></tr></thead><tbody id="aRows"></tbody></table></div></div>
+ <p class="muted" style="font-size:12px">${role==="MGR"?"You see operational records.":role==="ACC"?"You see financial records.":role==="ADM"?"You see system and security records.":"You see all audit records, including changes made by the platform's Super Administrator."}</p>`,
+ after(){const R=[["15 Nov 09:20","R. Senthil","Platform Super Admin","Loan rule published: late fee cap ₹400 → ₹500","Interest-Bearing Loan"],["15 Nov 08:55","Kavitha Selvam","EMP","Receipt created","R/004511"],["14 Nov 18:02","Ramesh Kumar","MGR","Day closed, shortage ₹0","Cash 14 Nov"],["14 Nov 16:40","Murali Dharan","EMP","Offline approval recorded (Phone call)","LN-IB-0240"],["13 Nov 10:42","Murali Dharan","EMP","Backdated receipt (working date 08 Nov)","R/004488"],["13 Nov 09:15","Meena Rajagopal","ADM","User created, activation link sent","Murali Dharan"],["12 Nov 17:50","Ramesh Kumar","MGR","Receipt cancelled by reversal","R/004470"]];
+  const draw=()=>{const q=$("#aq").value.toLowerCase();$("#aRows").innerHTML=R.filter(r=>r.join(" ").toLowerCase().includes(q)).map(r=>`<tr><td class="mono" style="white-space:nowrap">${r[0]}</td><td>${r[1]}</td><td><span class="tag">${r[2]}</span></td><td>${r[3]}</td><td class="mono">${r[4]}</td></tr>`).join("");};$("#aq").addEventListener("input",draw);draw();}
+});
+let admTab="overview";
+PAGES["2"]=()=>{const edit=can(role,"2","C");return {html:`
+ <div class="row" style="gap:4px">${[["overview","Overview"],["users","Users"],["roles","Role privileges"],["custom","Custom roles"],["home","Home page per role"]].map(([k,l])=>`<button class="btn sm ${admTab===k?"pri":""}" data-at="${k}">${l}</button>`).join("")}</div>
+ ${admTab==="overview"?DASH.D7():""}
+ ${admTab==="users"?`<div class="panel"><div class="ph"><h2>Users</h2>${edit?'<button class="btn sm pri" id="nu">+ Add user</button>':""}</div><div class="tw"><table><thead><tr><th>Name</th><th>Role</th><th>Mobile</th><th>App user</th><th>Web</th><th>Mobile app</th><th>Status</th><th></th></tr></thead><tbody>
+ ${USERS.map((u,i)=>`<tr><td>${u[0]}</td><td>${u[5]?`<span class="tag">${CUSTOM.find(c=>c.name===u[5]).code}</span> ${esc(u[5])} <span class="pill p-info">Custom</span>`:`<span class="tag">${u[1]}</span> ${ROLES[u[1]].name}`}</td><td class="mono">${u[2]}</td><td><label class="sw"><input type="checkbox" data-app="${i}" ${u[3]?"checked":""} ${edit?"":"disabled"}><i></i></label></td><td><label class="sw" title="Web browser access"><input type="checkbox" data-pw="${i}" ${u[3]&&acc(u).web?"checked":""} ${edit&&u[3]?"":"disabled"}><i></i></label></td><td><label class="sw" title="Mobile app access"><input type="checkbox" data-pm="${i}" ${u[3]&&acc(u).mob?"checked":""} ${edit&&u[3]?"":"disabled"}><i></i></label></td><td><span class="pill ${u[4]==="Active"?"p-ok":u[4]==="Inactive"?"p-mute":"p-warn"}">${u[4]}</span></td><td>${edit?`<button class="btn sm ghost" data-t="Pending tasks of ${u[0]} can be reassigned before replacing.">Replace</button>`:""}</td></tr>`).join("")}</tbody></table></div></div>
+ <p class="muted" style="font-size:12px">App user off: the person is a record only, with no login. They can still hold a role and be named as an approver in offline approvals. App users get web access, mobile app access or both; each is switched separately.</p>`:""}
+ ${admTab==="roles"?`<div class="note n-info"><span class="n-ico">i</span><div>You can remove privileges, and add them back up to the ceiling set by the platform. Faded boxes are outside the ceiling and cannot be granted. Changes need Leadership approval before they take effect.</div></div>
+ <div class="panel"><div class="tw"><table><thead><tr><th>Module</th>${RK.map(r=>`<th>${r}</th>`).join("")}</tr></thead><tbody>
+ ${MODS.map(([id,n])=>`<tr><td style="white-space:nowrap"><span class="mono muted">${id}</span> ${n}</td>${RK.map(r=>`<td><div class="chips">${"VCEAD".split("").map(p=>`<button class="chip ${P[id][r].includes(p)?"on":""}" data-m="${id}" data-r="${r}" data-p="${p}" ${CEIL[id][r].includes(p)&&edit?"":"disabled"}>${p}</button>`).join("")}</div></td>`).join("")}</tr>`).join("")}</tbody></table></div></div>
+ ${edit?'<div class="row" style="justify-content:flex-end"><button class="btn pri" data-t="Sent to Leadership for approval. Takes effect once approved.">Submit for Leadership approval</button></div>':""}`:""}
+ ${admTab==="custom"?customRolesView(edit):""}
+ ${admTab==="home"?`<div class="panel"><div class="tw"><table><thead><tr><th>Role</th><th>Default home page</th></tr></thead><tbody>${RK.map(r=>`<tr><td>${ROLES[r].name}</td><td><select style="width:auto" ${edit?"":"disabled"}>${MODS.filter(m=>can(r,m[0],"V")).map(m=>`<option ${m[0]===ROLES[r].home?"selected":""}>${m[1]}</option>`).join("")}</select></td></tr>`).join("")}${CUSTOM.filter(c=>c.status==="Active").map(c=>`<tr><td>${esc(c.name)} <span class="pill p-info">Custom</span></td><td><select style="width:auto" ${edit?"":"disabled"}>${MODS.filter(m=>(c.priv[m[0]]||"").includes("V")).map(m=>`<option ${m[0]===c.home?"selected":""}>${m[1]}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></div><p class="muted" style="font-size:12px">Only modules the role can view are offered. Takes effect at the user's next login.</p>`:""}`,
+ after(){document.querySelectorAll("[data-at]").forEach(b=>b.addEventListener("click",()=>{admTab=b.dataset.at;editCustom=null;render();}));bindCustom();
+  document.querySelectorAll("[data-app]").forEach(c=>c.addEventListener("change",()=>{const u=USERS[+c.dataset.app];u[3]=c.checked;if(c.checked){const a=acc(u);if(!a.web&&!a.mob)a.web=1;}render();toast(c.checked?"Activation link sent to "+u[0]+" ("+accLabel(u)+").":"Login access removed for "+u[0]+". Active sessions on web and mobile ended.");}));
+  document.querySelectorAll("[data-pw],[data-pm]").forEach(c=>c.addEventListener("change",()=>{const i=+(c.dataset.pw??c.dataset.pm);const u=USERS[i];const a=acc(u);const k=c.dataset.pw!==undefined?"web":"mob";a[k]=c.checked?1:0;
+   if(!a.web&&!a.mob){a[k]=1;c.checked=true;toast("An app user needs web or mobile access. Turn off App user instead to remove login.");return;}
+   render();toast(u[0]+": "+(k==="web"?"web":"mobile app")+" access "+(c.checked?"granted":"removed, active "+(k==="web"?"web":"mobile")+" sessions ended")+".");}));
+  document.querySelectorAll(".chip[data-m]:not([disabled])").forEach(c=>c.addEventListener("click",()=>{const {m,r,p}=c.dataset;const cur=P[m][r];P[m][r]=cur.includes(p)?cur.replace(p,""):"VCEAD".split("").filter(x=>x===p||cur.includes(x)).join("");c.classList.toggle("on");}));
+  const nu=$("#nu");if(nu)nu.addEventListener("click",()=>modal(`<div class="mh"><h2>Add user</h2><p class="sub">The user sets their own password from the activation link. You never see or set passwords.</p></div><div class="mb"><div class="grid2"><div class="fld"><label for="un">Full name</label><input type="text" id="un" value="Saranya M."></div><div class="fld"><label for="ur">Role</label><select id="ur">${RK.filter(r=>r!=="ADM").map(r=>`<option value="${r}">${ROLES[r].name}</option>`).join("")}${CUSTOM.filter(c=>c.status==="Active").map(c=>`<option value="C:${c.code}">${esc(c.name)} (custom)</option>`).join("")}</select></div>
+  <div class="fld"><label for="um">Mobile</label><input type="tel" id="um" value="+91 93600 41827"></div><div class="fld"><label for="ue">Email</label><input type="email" id="ue" placeholder="Optional"></div></div>
+  <div class="row" style="justify-content:space-between"><div><h3>App user</h3><p class="hint">Gets a login. Turn off for a record-only person, such as a leader who approves offline.</p></div><label class="sw"><input type="checkbox" id="ua" checked><i></i></label></div>
+  <div class="fld" id="uplat"><span class="lbl">Platform access</span><div class="row" style="gap:16px"><label class="chk" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="upw" checked> Web (browser)</label><label class="chk" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="upm"> Mobile app</label></div><span class="hint">Choose at least one. Field staff often need only the mobile app; accounts staff only the web.</span></div></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Create user</button></div>`,L=>{const n=L.querySelector("#un").value.trim();if(!n)return false;const app=L.querySelector("#ua").checked;const pw=L.querySelector("#upw").checked,pm=L.querySelector("#upm").checked;if(app&&!pw&&!pm){toast("Choose web, mobile app or both, or turn off App user.");return false;}ACCESS[n]={web:pw?1:0,mob:pm?1:0};const rv=L.querySelector("#ur").value;if(rv.startsWith("C:")){const c=CUSTOM.find(x=>x.code===rv.slice(2));c.holders.push(n);USERS.push([n,"EMP",L.querySelector("#um").value,app,"Active",c.name]);}else USERS.push([n,rv,L.querySelector("#um").value,app,"Active"]);render();toast(app?"User created with "+(pw&&pm?"web and mobile":pw?"web":"mobile app")+" access. Activation link sent by SMS.":"Record-only user created.");}));}};
+};
+PAGES["31"]=()=>({html:`<div class="ro">Set by the platform's Super Administrator. Read-only for everyone in the organisation.</div>
+ <div class="panel"><div class="tw"><table><thead><tr><th>Workflow</th><th>Version</th><th>Stages</th></tr></thead><tbody>
+ ${[["Loan Application","v3.1 rev 4","Draft → Fee Collected → Manager Verification → Approved → Disbursed → Closed"],["Early Settlement","v2.0 rev 1","Requested → Statement Generated → Manager Verification → Collected → Settled"],["Default and Recovery","v2.2 rev 1","Overdue → Defaulted → Recovery Notice → Settlement → Closed"],["Daily Expense","v1.3 rev 1","Submitted → Manager Approval → Paid"],["Payroll","v1.2 rev 1","Prepared → Manager Verification → Leadership Approval → Paid"],["Hall Booking","v1.5 rev 1","Enquiry → Booked → Event Completed → Settled"]].map(w=>`<tr><td>${w[0]}</td><td class="mono">${w[1]}</td><td class="muted" style="font-size:12.5px">${w[2]}</td></tr>`).join("")}</tbody></table></div></div>`});
+PAGES["32"]=()=>({html:`<div class="ro">Set by the platform's Super Administrator. Read-only for everyone in the organisation.</div>
+ <div class="panel"><div class="tw"><table><thead><tr><th>Loan type</th><th class="num">Interest</th><th class="num">Amount</th><th class="num">Tenure</th><th class="num">App. fee</th><th>Late fee</th><th>Early settlement</th><th>Default</th></tr></thead><tbody>
+ <tr><td>Interest-Bearing</td><td class="num">12% flat</td><td class="num">₹5,000–2,00,000</td><td class="num">3–24 m</td><td class="num">₹200</td><td>₹100 after 5 days, cap ₹500</td><td>Option B</td><td>2 months, +2%</td></tr>
+ <tr><td>Interest-Free</td><td class="num">0%</td><td class="num">₹1,000–50,000</td><td class="num">3–12 m</td><td class="num">None</td><td>₹50 after 7 days, cap ₹250</td><td>Option B</td><td>2 months, +₹500</td></tr>
+ <tr><td>Normal</td><td class="num">10% flat</td><td class="num">₹10,000–3,00,000</td><td class="num">6–36 m</td><td class="num">0.5%</td><td>1% monthly, cap ₹1,000</td><td>Option A, 1% charge</td><td>3 months, +2%</td></tr></tbody></table></div></div>`});
+PAGES["4"]=()=>({html:`
+ <div class="panel"><div class="ph"><div class="row"><input type="text" class="psearch" placeholder="Search loan or member" style="width:240px"><select style="width:auto"><option>All statuses</option><option>Active</option><option>Overdue</option><option>Defaulted</option><option>Settled</option></select></div>${btn("+ New loan application","4","C",'id="nl"',"pri sm")}</div>
+ <div class="tw"><table><thead><tr><th>Loan</th><th>Member</th><th>Type</th><th class="num">Principal</th><th class="num">Outstanding</th><th>Status</th></tr></thead><tbody>
+ ${[["LN-IB-0244","Selvi Murugan","Interest-Bearing",80000,80000,"Pending approval","p-info"],["LN-IB-0239","Murugesan T.","Interest-Bearing",60000,60000,"Returned","p-warn"],["LN-IB-0198","Selvi Murugan","Interest-Bearing",100000,61140,"Active","p-ok"],["LN-NL-0102","Fathima Nasreen","Normal",120000,37800,"Overdue","p-warn"],["LN-IF-0077","Ganesan P.","Interest-Free",15000,7500,"Active","p-ok"],["LN-IB-0151","Kumaresan V.","Interest-Bearing",50000,32400,"Defaulted","p-bad"],["LN-IB-0120","Anitha R.","Interest-Bearing",40000,0,"Settled","p-mute"]].map(l=>`<tr><td class="mono">${l[0]}</td><td>${l[1]}</td><td>${l[2]}</td><td class="num">${inr(l[3])}</td><td class="num">${inr(l[4])}</td><td><span class="pill ${l[6]}">${l[5]}</span></td></tr>`).join("")}</tbody></table></div></div>`,
+ after(){const n=$("#nl");if(n)n.addEventListener("click",newLoan);}
+});
+function newLoan(){modal(`<div class="mh"><h2>New loan application</h2><p class="sub">Created on behalf of the member. Goes to Manager Verification.</p></div><div class="mb"><div class="grid2">
+ <div class="fld"><label for="lm">Member</label><select id="lm"><option>M-0952 · Dinesh Babu (first loan)</option><option>M-0231 · Selvi Murugan</option></select></div><div class="fld"><label for="lt">Loan type</label><select id="lt"><option>Interest-Bearing Loan</option><option>Interest-Free Loan</option><option>Normal Loan</option></select></div>
+ <div class="fld"><label for="la">Amount</label><input type="number" id="la" value="60000"></div><div class="fld"><label for="ln">Months</label><input type="number" id="ln" value="12"></div>
+ <div class="fld"><label for="lnom">Nominee</label><select id="lnom"><option value="">Not added</option><option>Vasanthi Babu (spouse)</option></select><span class="hint">Mandatory for a member's first loan</span></div>
+ <div class="fld"><label for="lf">Application fee ₹200</label><select id="lf"><option value="">Not paid</option><option value="paid">Paid, receipt R/004513</option></select></div></div>
+ <p id="lerr" style="color:var(--bad);font-size:13px"></p></div><div class="mf"><button class="btn" data-close>Cancel</button><button class="btn pri" data-ok>Submit application</button></div>`,L=>{const e=[];if(!L.querySelector("#lnom").value&&L.querySelector("#lm").value.includes("first"))e.push("Add a nominee, as this is the member's first loan.");if(!L.querySelector("#lf").value)e.push("Collect the application fee before submitting.");if(e.length){L.querySelector("#lerr").innerHTML=e.join("<br>");return false;}toast("Application LN-IB-0245 submitted for Manager Verification.");});}
+PAGES["3"]=()=>({html:`<div class="panel"><div class="ph"><input type="text" class="psearch" placeholder="Search by name, member ID or mobile" style="width:280px">${btn("+ Add member","3","C",'data-t="Opens the member registration form."',"pri sm")}</div>
+ <div class="tw"><table><thead><tr><th>Member ID</th><th>Name</th><th>Mobile</th><th>ID number</th><th class="num">Active loans</th><th>Status</th></tr></thead><tbody>
+ ${[["M-0231","Selvi Murugan","+91 98421 •••• 10","XXXX XXXX 4417",2,"Active"],["M-0412","Fathima Nasreen","+91 99430 •••• 62","XXXX XXXX 9021",1,"Active"],["M-0518","Ganesan P.","+91 90037 •••• 88","XXXX XXXX 3302",1,"Active"],["M-0952","Dinesh Babu","+91 93611 •••• 05","XXXX XXXX 7756",0,"Active"],["M-0101","Late K. Ramasamy","—","XXXX XXXX 1189",0,"Deceased"]].map(m=>`<tr><td class="mono">${m[0]}</td><td>${m[1]}</td><td class="mono">${m[2]}</td><td class="mono">${m[3]}</td><td class="num">${m[4]}</td><td><span class="pill ${m[5]==="Active"?"p-ok":"p-mute"}">${m[5]}</span></td></tr>`).join("")}</tbody></table></div></div>
+ <p class="muted" style="font-size:12px">Identity numbers are masked unless your role has the privilege to see them in full.</p>`});
+function generic(id){const n=modName(id);const acts=[["C","+ New"],["E","Edit selected"],["A","Approve selected"],["D","Cancel with reason"]].filter(([p])=>can(role,id,p));
+ return {html:`<div class="panel"><div class="ph"><h2>${n}</h2><div class="row">${acts.map(([p,l],i)=>`<button class="btn sm ${i===0&&p==="C"?"pri":""}" data-t="${l} (${n}).">${l}</button>`).join("")}</div></div>
+ <div class="tw"><table><thead><tr><th>Reference</th><th>Description</th><th>Date</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>
+ ${[1,2,3].map(i=>`<tr><td class="mono">${n.split(" ")[0].slice(0,3).toUpperCase()}-00${40-i}</td><td class="muted">Sample ${n.toLowerCase()} record ${i}</td><td>${15-i*2} Nov 2026</td><td class="num">${inr(4500*i+1200)}</td><td><span class="pill ${i===1?"p-info":"p-ok"}">${i===1?"In progress":"Completed"}</span></td></tr>`).join("")}</tbody></table></div></div>
+ <p class="muted" style="font-size:12px">Placeholder screen. The buttons shown follow your privileges on this module: ${P[id][role].split("").join(", ")}.</p>`};}
+
+/* search + refresh enhancer: runs after every render */
+function nowStr(){const d=new Date();return d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"});}
+function refreshBtn(label){const b=document.createElement("button");b.type="button";b.className="btn sm rbtn";b.title="Refresh";b.setAttribute("aria-label","Refresh");b.innerHTML='<span class="ri" aria-hidden="true">↻</span>'+(label?'<span>'+label+'</span>':"");return b;}
+function spin(b,done){b.classList.add("spin");b.disabled=true;setTimeout(()=>{b.classList.remove("spin");b.disabled=false;done&&done();},600);}
+function enhance(){
+ const view=document.getElementById("view");
+ view.querySelectorAll(".panel").forEach(panel=>{
+  if(panel.dataset.enh)return;panel.dataset.enh=1;
+  const table=panel.querySelector(".tw table");const list=panel.querySelector(".list");
+  if(!table&&!list)return;
+  if(table&&table.querySelector("tbody input:not([type=checkbox]), tbody select, tbody textarea"))return; /* forms: no search/refresh */
+  if(table&&table.closest(".preview,.alloc,.denom"))return;
+  let ph=panel.querySelector(":scope > .ph");
+  if(!ph){ph=document.createElement("div");ph.className="ph";ph.innerHTML="<span></span>";panel.insertBefore(ph,panel.firstChild);}
+  const tools=document.createElement("div");tools.className="tools";
+  const rows=table?[...table.querySelectorAll("tbody tr")]:[...list.querySelectorAll(":scope > .li")];
+  const cfg=paginationConfig(),pageSize=cfg.size;let shown=pageSize;const searches=[...panel.querySelectorAll('input[type="search"],input.psearch')];
+  const visibleRows=()=>{const q=searches.map(x=>x.value.trim().toLowerCase()).filter(Boolean).join(" ");const matched=rows.filter(r=>!q||r.textContent.toLowerCase().includes(q));if(cfg.mode==="Show all")shown=matched.length;rows.forEach(r=>r.hidden=!matched.includes(r)||matched.indexOf(r)>=shown);return matched;};
+  const hasSearch=panel.querySelector('input[placeholder^="Search"]');
+  if(!hasSearch&&rows.length>=4&&(!table||table.querySelector("thead th"))){
+   const s=document.createElement("input");s.type="search";s.className="tsearch";s.placeholder="Search";s.setAttribute("aria-label","Search this list");
+   let empty=null;searches.push(s);
+   s.addEventListener("input",()=>{shown=pageSize;const matches=visibleRows(),n=matches.length;
+    if(empty){empty.remove();empty=null;}
+    if(!n){if(table){empty=document.createElement("tr");empty.innerHTML=`<td colspan="${table.querySelectorAll("thead th").length||1}" class="muted">No matches for “${esc(s.value)}”.</td>`;table.querySelector("tbody").appendChild(empty);}else{empty=document.createElement("div");empty.className="li muted";empty.textContent="No matches for “"+s.value+"”.";list.appendChild(empty);}}
+    cnt.textContent=s.value?Math.min(shown,n)+" of "+n:"";if(loadBtn)loadBtn.hidden=cfg.mode!=="Load more"||n<=shown;});
+   const cnt=document.createElement("span");cnt.className="tcount";
+   tools.appendChild(s);tools.appendChild(cnt);
+  }
+  const loadArea=document.createElement("div");loadArea.className="load-more-row";const loadBtn=document.createElement("button");loadBtn.type="button";loadBtn.className="btn sm";loadBtn.hidden=cfg.mode!=="Load more"||rows.length<=pageSize;const updateLoad=matches=>{loadBtn.hidden=cfg.mode!=="Load more"||matches.length<=shown;loadBtn.textContent=(uiLanguage==="ta"?"மேலும் ஏற்று":"Load more")+" ("+Math.min(shown,matches.length)+" / "+matches.length+")";};loadBtn.addEventListener("click",()=>{shown+=pageSize;updateLoad(visibleRows());});loadArea.appendChild(loadBtn);if(rows.length>pageSize&&cfg.mode==="Load more")panel.appendChild(loadArea);
+  searches.forEach(s=>s.addEventListener("input",()=>{shown=pageSize;updateLoad(visibleRows());}));updateLoad(visibleRows());
+  const upd=document.createElement("span");upd.className="tupd";upd.textContent="Updated "+nowStr();
+  const rb=refreshBtn("");rb.addEventListener("click",()=>spin(rb,()=>{upd.textContent="Updated "+nowStr();toast("Refreshed.");}));
+  if(table&&table.querySelector("thead th")||list){
+   const title=(ph.querySelector("h2")||{}).textContent||(document.querySelector(".view h1")||{}).textContent||"list";
+   const sens=/user|member|payroll|audit|platform access/i.test(title);
+   [["Excel","xlsx"],["PDF","pdf"]].forEach(([lbl,ext])=>{const b=document.createElement("button");b.type="button";b.className="btn sm xbtn";b.title="Export "+title+" to "+lbl;b.innerHTML='<span aria-hidden="true">'+(ext==="pdf"?"⤓":"⊞")+'</span> '+lbl;
+    b.addEventListener("click",()=>{const q=(tools.querySelector(".tsearch")||{}).value;toast("Exporting “"+title.trim()+"” to "+lbl+" (."+ext+")"+(q?", filtered by “"+q+"”":"")+"."+(sens?" Export recorded in the audit log.":""));});tools.appendChild(b);});
+  }
+  tools.appendChild(upd);tools.appendChild(rb);
+  ph.appendChild(tools);
+ });
+}
+
+/* render */
+function render(){
+ const h=(location.hash||"").slice(1);const m=h.match(/^(emp|mgr|acc|ldr|aud|adm)-(home|m[0-9D]+)$/);
+ if(m){role=m[1].toUpperCase();}
+ let page=m?m[2]:"home";
+ if(page!=="home"&&!can(role,page.slice(1),"V"))page="home";
+ drawBar();drawMenu(page);
+ let title,body,after;const R=ROLES[role];
+ if(page==="home"||page.slice(1)[0]==="D"){const d=page==="home"?R.home:page.slice(1);title=modName(d);body=DASH[d]();
+  body=`<div class="head"><div><h1>${page==="home"?"Good morning, "+R.person.split(" ")[0]:title}</h1><p class="sub">${title} · ${R.name}${isBack()?` · <b style="color:var(--warn)">Working date set to ${wdate}; new entries will be backdated</b>`:""}</p></div>${privChips(d)}</div>`+body;}
+ else{const id=page.slice(1);const pg=(PAGES[id]||(()=>generic(id)))();title=modName(id);after=pg.after;
+  body=`<div class="head"><div><h1>${title}</h1><p class="sub">${R.name} · module ${id}${role==="AUD"?" · read-only":""}</p></div>${privChips(id)}</div>`+pg.html;}
+ $("#view").innerHTML=body;
+ $("#view").querySelectorAll("[data-t]").forEach(b=>b.addEventListener("click",e=>{if(b.tagName==="BUTTON"){toast(b.dataset.t);}}));
+ $("#view").querySelectorAll("a[data-new]").forEach(a=>a.addEventListener("click",()=>setTimeout(newLoan,50)));
+ $("#view").querySelectorAll("a[data-tab]").forEach(a=>a.addEventListener("click",()=>{admTab=a.dataset.tab;if(location.hash==="#"+role.toLowerCase()+"-m2")setTimeout(render,0);}));
+ if(after)after();
+ enhance();
+ applyLanguage();
+ $("#view").querySelectorAll(".psearch").forEach(i=>i.addEventListener("input",()=>{const q=i.value.toLowerCase();i.closest(".panel").querySelectorAll("tbody tr").forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(q));}));
+}
+$("#roleSel").addEventListener("change",e=>location.hash=e.target.value.toLowerCase()+"-home");
+$("#rs").addEventListener("click",e=>{const b=e.target.closest("button");if(b)location.hash=b.dataset.r.toLowerCase()+"-home";});
+$("#wdate").addEventListener("change",e=>{const v=e.target.value;if(!v||v>"2026-11-15"){e.target.value=wdate;toast("Future working dates are not allowed.");return;}if(v<"2026-11-01"){e.target.value=wdate;toast("October 2026 is a closed period. Choose a date in November.");return;}wdate=v;const k=(+v.slice(8))%7;cash={open:150000+k*4200,rec:v===("2026-11-15")?42600:30000+k*1900,pay:v==="2026-11-15"?25000:12000+k*800};render();if(isBack())toast("Working date changed. Entries you make now use "+v+" as the value date.");});
+window.addEventListener("hashchange",()=>{render();window.scrollTo(0,0);});
+$("#pgRefresh").addEventListener("click",e=>{const b=e.currentTarget;spin(b,()=>{render();toast("Refreshed: cash position, pending work and lists are up to date.");});});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#layer").innerHTML="";});
+document.addEventListener("change",e=>{if(e.target.id==="ua"){const pl=document.getElementById("uplat");if(pl)pl.hidden=!e.target.checked;}});
+render();
+})();
+</script>

@@ -1,0 +1,1144 @@
+psql:01_schemas_and_context.sql:29: NOTICE:  schema "app" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:30: NOTICE:  schema "platform" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:31: NOTICE:  schema "core" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:32: NOTICE:  schema "iam" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:33: NOTICE:  schema "cfg" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:34: NOTICE:  schema "wf" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:35: NOTICE:  schema "audit" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:36: NOTICE:  schema "mbr" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:37: NOTICE:  schema "acct" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:38: NOTICE:  schema "loan" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:39: NOTICE:  schema "ops" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:40: NOTICE:  schema "dep" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:41: NOTICE:  schema "chit" already exists, skipping
+CREATE SCHEMA
+psql:01_schemas_and_context.sql:42: NOTICE:  schema "notif" already exists, skipping
+CREATE SCHEMA
+ALTER DATABASE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:02_platform.sql:41: NOTICE:  relation "tenant" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:42: NOTICE:  relation "tenant_code_uq" already exists, skipping
+CREATE INDEX
+psql:02_platform.sql:64: NOTICE:  relation "platform_user" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:65: NOTICE:  relation "platform_user_email_uq" already exists, skipping
+CREATE INDEX
+psql:02_platform.sql:77: NOTICE:  relation "platform_sign_in" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:78: NOTICE:  relation "platform_sign_in_user_idx" already exists, skipping
+CREATE INDEX
+psql:02_platform.sql:100: NOTICE:  relation "module" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:02_platform.sql:110: NOTICE:  relation "privilege_type" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:119: NOTICE:  relation "privilege" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:130: NOTICE:  relation "role_template" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:136: NOTICE:  relation "role_template_privilege" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:144: NOTICE:  relation "sod_rule" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:159: NOTICE:  relation "setting_definition" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:170: NOTICE:  relation "settings_template" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:172: NOTICE:  relation "settings_template_one_published" already exists, skipping
+CREATE INDEX
+psql:02_platform.sql:179: NOTICE:  relation "settings_template_item" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:189: NOTICE:  relation "compliance_feature" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:197: NOTICE:  relation "payment_mode" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:210: NOTICE:  relation "json_schema" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:232: NOTICE:  relation "action_definition" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:247: NOTICE:  relation "config_template" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:263: NOTICE:  relation "config_template_version" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:280: NOTICE:  relation "coa_template" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:289: NOTICE:  relation "loan_type_template" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:300: NOTICE:  relation "lookup_template" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:312: NOTICE:  relation "notification_template_default" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:322: NOTICE:  relation "data_category" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:347: NOTICE:  relation "tenant_module" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:364: NOTICE:  relation "tenant_privilege_ceiling" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:383: NOTICE:  relation "tenant_compliance_setting" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:401: NOTICE:  relation "purge_policy" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:424: NOTICE:  relation "purge_run" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:442: NOTICE:  relation "purge_certificate" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:465: NOTICE:  relation "platform_access_request" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:477: NOTICE:  relation "platform_access_log" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:493: NOTICE:  relation "usage_record" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:502: NOTICE:  relation "subscription_plan" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:518: NOTICE:  relation "tenant_subscription" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:537: NOTICE:  relation "platform_audit_event" already exists, skipping
+CREATE TABLE
+psql:02_platform.sql:538: NOTICE:  relation "platform_audit_event_tenant_idx" already exists, skipping
+CREATE INDEX
+psql:02_platform.sql:539: NOTICE:  relation "platform_audit_event_entity_idx" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:26: NOTICE:  relation "branch" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:27: NOTICE:  relation "branch_one_default" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:50: NOTICE:  relation "document" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:51: NOTICE:  relation "document_entity_idx" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:66: NOTICE:  relation "public_holiday" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:84: NOTICE:  relation "legal_hold" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:85: NOTICE:  relation "legal_hold_entity_idx" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:104: NOTICE:  relation "lookup_value" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:127: NOTICE:  relation "import_batch" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:153: NOTICE:  relation "role" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:168: NOTICE:  relation "role_privilege" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:209: NOTICE:  relation "app_user" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:210: NOTICE:  relation "app_user_username_uq" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:211: NOTICE:  relation "app_user_one_default_admin" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:212: NOTICE:  relation "app_user_access_idx" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:231: NOTICE:  relation "user_role" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:232: NOTICE:  relation "user_role_user_idx" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:233: NOTICE:  relation "user_role_open_uq" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:253: NOTICE:  relation "sod_exception" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:275: NOTICE:  relation "user_activation" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:290: NOTICE:  relation "password_history" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:305: NOTICE:  relation "sign_in_history" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:306: NOTICE:  relation "sign_in_history_user_idx" already exists, skipping
+CREATE INDEX
+psql:03_core_and_iam.sql:326: NOTICE:  relation "user_device" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:348: NOTICE:  relation "user_session" already exists, skipping
+CREATE TABLE
+psql:03_core_and_iam.sql:349: NOTICE:  relation "user_session_open_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+psql:04_settings_workflows_rules.sql:40: NOTICE:  relation "tenant_setting" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:42: NOTICE:  relation "tenant_setting_active_uq" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+psql:04_settings_workflows_rules.sql:74: NOTICE:  relation "tenant_action" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:95: NOTICE:  relation "action_configuration" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:119: NOTICE:  relation "workflow_definition" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:163: NOTICE:  relation "workflow_version" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:165: NOTICE:  relation "workflow_version_published_uq" already exists, skipping
+CREATE INDEX
+psql:04_settings_workflows_rules.sql:187: NOTICE:  relation "workflow_stage" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:204: NOTICE:  relation "workflow_transition" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:218: NOTICE:  relation "workflow_condition" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:241: NOTICE:  relation "workflow_stage_action" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:265: NOTICE:  relation "rule_set" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:306: NOTICE:  relation "rule_set_version" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:308: NOTICE:  relation "rule_set_version_published_uq" already exists, skipping
+CREATE INDEX
+psql:04_settings_workflows_rules.sql:325: NOTICE:  relation "config_change_log" already exists, skipping
+CREATE TABLE
+psql:04_settings_workflows_rules.sql:326: NOTICE:  relation "config_change_log_obj_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+psql:05_workflow_runtime_approvals.sql:35: NOTICE:  relation "workflow_instance" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:36: NOTICE:  relation "workflow_instance_entity_idx" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:37: NOTICE:  relation "workflow_instance_stage_idx" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:52: NOTICE:  relation "workflow_context" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:76: NOTICE:  relation "workflow_history" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:77: NOTICE:  relation "workflow_history_instance_idx" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:108: NOTICE:  relation "action_execution" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:109: NOTICE:  relation "action_execution_instance_idx" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:110: NOTICE:  relation "action_execution_pending_idx" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:121: NOTICE:  relation "action_execution_log" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:147: NOTICE:  relation "action_failure_log" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:148: NOTICE:  relation "action_failure_open_idx" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:170: NOTICE:  relation "offline_evidence_type" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:195: NOTICE:  relation "approval_policy" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:211: NOTICE:  relation "offline_recorder_role" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:213: NOTICE:  relation "offline_recorder_role_uq" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:231: NOTICE:  relation "approval_meeting" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:255: NOTICE:  relation "approval_delegation" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:288: NOTICE:  relation "approval_request" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:289: NOTICE:  relation "approval_request_pending_idx" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:290: NOTICE:  relation "approval_request_entity_idx" already exists, skipping
+CREATE INDEX
+psql:05_workflow_runtime_approvals.sql:330: NOTICE:  relation "approval_decision" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:348: NOTICE:  relation "approval_participant" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:364: NOTICE:  relation "approval_evidence" already exists, skipping
+CREATE TABLE
+psql:05_workflow_runtime_approvals.sql:382: NOTICE:  relation "approval_verification" already exists, skipping
+CREATE TABLE
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+psql:06_audit.sql:42: NOTICE:  relation "audit_event" already exists, skipping
+CREATE TABLE
+psql:06_audit.sql:43: NOTICE:  relation "audit_event_record_idx" already exists, skipping
+CREATE INDEX
+psql:06_audit.sql:44: NOTICE:  relation "audit_event_time_idx" already exists, skipping
+CREATE INDEX
+psql:06_audit.sql:45: NOTICE:  relation "audit_event_user_idx" already exists, skipping
+CREATE INDEX
+psql:06_audit.sql:46: NOTICE:  relation "audit_event_backdated_idx" already exists, skipping
+CREATE INDEX
+psql:06_audit.sql:55: NOTICE:  relation "audit_field_change" already exists, skipping
+CREATE TABLE
+psql:06_audit.sql:56: NOTICE:  relation "audit_field_change_event_idx" already exists, skipping
+CREATE INDEX
+psql:06_audit.sql:57: NOTICE:  relation "audit_field_change_field_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:06_audit.sql:187: NOTICE:  trigger "append_only_row" for relation "audit.audit_event" does not exist, skipping
+psql:06_audit.sql:187: NOTICE:  trigger "append_only_row" for relation "audit.audit_field_change" does not exist, skipping
+psql:06_audit.sql:187: NOTICE:  trigger "append_only_row" for relation "cfg.config_change_log" does not exist, skipping
+psql:06_audit.sql:187: NOTICE:  trigger "append_only_row" for relation "platform.platform_audit_event" does not exist, skipping
+psql:06_audit.sql:187: NOTICE:  trigger "append_only_row" for relation "platform.platform_access_log" does not exist, skipping
+psql:06_audit.sql:187: NOTICE:  trigger "append_only_row" for relation "iam.sign_in_history" does not exist, skipping
+psql:06_audit.sql:187: NOTICE:  trigger "append_only_row" for relation "platform.platform_sign_in" does not exist, skipping
+psql:06_audit.sql:187: NOTICE:  trigger "append_only_row" for relation "wf.action_execution_log" does not exist, skipping
+DO
+CREATE VIEW
+psql:07_members.sql:53: NOTICE:  relation "member" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:54: NOTICE:  relation "member_mobile_idx" already exists, skipping
+CREATE INDEX
+psql:07_members.sql:55: NOTICE:  relation "member_name_dob_idx" already exists, skipping
+CREATE INDEX
+psql:07_members.sql:56: NOTICE:  relation "member_status_idx" already exists, skipping
+CREATE INDEX
+psql:07_members.sql:77: NOTICE:  relation "member_identity" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:79: NOTICE:  relation "member_identity_hash_uq" already exists, skipping
+CREATE INDEX
+psql:07_members.sql:103: NOTICE:  relation "member_family" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:125: NOTICE:  relation "member_status_history" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:144: NOTICE:  relation "member_consent" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:164: NOTICE:  relation "member_duplicate_check" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:184: NOTICE:  relation "member_merge" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:210: NOTICE:  relation "nominee" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:211: NOTICE:  relation "nominee_member_idx" already exists, skipping
+CREATE INDEX
+psql:07_members.sql:239: NOTICE:  relation "death_record" already exists, skipping
+CREATE TABLE
+psql:07_members.sql:263: NOTICE:  relation "legal_successor" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:42: NOTICE:  relation "account" already exists, skipping
+CREATE TABLE
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+psql:08_accounting.sql:85: NOTICE:  relation "financial_year" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:111: NOTICE:  relation "financial_period" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:134: NOTICE:  relation "cash_account" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:135: NOTICE:  relation "cash_account_one_default" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:154: NOTICE:  relation "bank_account" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:176: NOTICE:  relation "fund" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:177: NOTICE:  relation "fund_one_default" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:195: NOTICE:  relation "account_mapping" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:197: NOTICE:  relation "account_mapping_uq" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:215: NOTICE:  relation "voucher_series" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:217: NOTICE:  relation "voucher_series_uq" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+psql:08_accounting.sql:290: NOTICE:  relation "cash_day" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:307: NOTICE:  relation "cash_denomination_count" already exists, skipping
+CREATE TABLE
+CREATE FUNCTION
+psql:08_accounting.sql:381: NOTICE:  relation "journal" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:382: NOTICE:  relation "journal_no_uq" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:383: NOTICE:  relation "journal_idempotency_uq" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:384: NOTICE:  relation "journal_one_reversal_uq" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:385: NOTICE:  relation "journal_date_idx" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:386: NOTICE:  relation "journal_source_idx" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:413: NOTICE:  relation "journal_line" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:414: NOTICE:  relation "journal_line_account_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+DROP TRIGGER
+CREATE TRIGGER
+psql:08_accounting.sql:572: NOTICE:  relation "cash_receipt" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:573: NOTICE:  relation "cash_receipt_idem_uq" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:574: NOTICE:  relation "cash_receipt_date_idx" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:575: NOTICE:  relation "cash_receipt_member_idx" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:594: NOTICE:  relation "cash_receipt_line" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:650: NOTICE:  relation "payment_voucher" already exists, skipping
+CREATE TABLE
+psql:08_accounting.sql:651: NOTICE:  relation "payment_voucher_idem_uq" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:652: NOTICE:  relation "payment_voucher_date_idx" already exists, skipping
+CREATE INDEX
+psql:08_accounting.sql:671: NOTICE:  relation "payment_voucher_line" already exists, skipping
+CREATE TABLE
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+DROP TRIGGER
+CREATE TRIGGER
+psql:08_accounting.sql:734: NOTICE:  relation "fund_transfer" already exists, skipping
+CREATE TABLE
+CREATE VIEW
+CREATE FUNCTION
+CREATE VIEW
+CREATE VIEW
+psql:09_loans.sql:37: NOTICE:  relation "loan_type" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:109: NOTICE:  relation "loan" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:110: NOTICE:  relation "loan_member_idx" already exists, skipping
+CREATE INDEX
+psql:09_loans.sql:111: NOTICE:  relation "loan_status_idx" already exists, skipping
+CREATE INDEX
+psql:09_loans.sql:130: NOTICE:  relation "loan_status_history" already exists, skipping
+CREATE TABLE
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+psql:09_loans.sql:174: NOTICE:  relation "loan_application_fee" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:191: NOTICE:  relation "loan_nominee" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:220: NOTICE:  relation "loan_guarantor" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:221: NOTICE:  relation "loan_guarantor_member_idx" already exists, skipping
+CREATE INDEX
+psql:09_loans.sql:249: NOTICE:  relation "loan_disbursement" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:277: NOTICE:  relation "loan_schedule" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:278: NOTICE:  relation "loan_schedule_current_uq" already exists, skipping
+CREATE INDEX
+psql:09_loans.sql:307: NOTICE:  relation "loan_instalment" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:308: NOTICE:  relation "loan_instalment_due_idx" already exists, skipping
+CREATE INDEX
+psql:09_loans.sql:333: NOTICE:  relation "loan_charge" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:364: NOTICE:  relation "loan_repayment" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:365: NOTICE:  relation "loan_repayment_loan_idx" already exists, skipping
+CREATE INDEX
+psql:09_loans.sql:386: NOTICE:  relation "loan_repayment_allocation" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:408: NOTICE:  relation "loan_waiver" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:445: NOTICE:  relation "loan_settlement" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:472: NOTICE:  relation "loan_default" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:473: NOTICE:  relation "loan_default_open_uq" already exists, skipping
+CREATE INDEX
+psql:09_loans.sql:493: NOTICE:  relation "cooling_off_override" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:523: NOTICE:  relation "recovery_case" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:546: NOTICE:  relation "recovery_contact" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:576: NOTICE:  relation "loan_restructure" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:598: NOTICE:  relation "loan_write_off" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:621: NOTICE:  relation "deceased_loan_decision" already exists, skipping
+CREATE TABLE
+psql:09_loans.sql:649: NOTICE:  relation "loan_transfer" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:32: NOTICE:  relation "vendor" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:53: NOTICE:  relation "expense_category" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:82: NOTICE:  relation "vendor_bill" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:104: NOTICE:  relation "vendor_payment" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:121: NOTICE:  relation "vendor_advance_adjustment" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:148: NOTICE:  relation "employee" already exists, skipping
+CREATE TABLE
+DO
+psql:10_operations.sql:175: NOTICE:  relation "salary_component" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:196: NOTICE:  relation "employee_salary_structure" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:220: NOTICE:  relation "salary_advance" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:254: NOTICE:  relation "payroll_run" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:255: NOTICE:  relation "payroll_run_month_uq" already exists, skipping
+CREATE INDEX
+psql:10_operations.sql:281: NOTICE:  relation "payslip" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:303: NOTICE:  relation "payslip_line" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:331: NOTICE:  relation "petty_cash_advance" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:373: NOTICE:  relation "expense" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:395: NOTICE:  relation "petty_cash_movement" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:422: NOTICE:  relation "assistance_scheme" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:446: NOTICE:  relation "assistance_cycle" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:492: NOTICE:  relation "assistance_application" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:510: NOTICE:  relation "birthday_grant_leader" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:535: NOTICE:  relation "birthday_grant" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:556: NOTICE:  relation "hall" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:574: NOTICE:  relation "hall_rate" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:593: NOTICE:  relation "hall_charge_type" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:611: NOTICE:  relation "hall_customer" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:612: NOTICE:  relation "hall_customer_mobile_uq" already exists, skipping
+CREATE INDEX
+psql:10_operations.sql:657: NOTICE:  relation "hall_booking" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:678: NOTICE:  relation "hall_booking_day" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:680: NOTICE:  relation "hall_booking_day_block_uq" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+DROP TRIGGER
+CREATE TRIGGER
+psql:10_operations.sql:721: NOTICE:  relation "hall_booking_charge" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:741: NOTICE:  relation "hall_booking_payment" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:771: NOTICE:  relation "hall_settlement" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:794: NOTICE:  relation "asset_category" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:831: NOTICE:  relation "asset_purchase_request" already exists, skipping
+CREATE TABLE
+DO
+psql:10_operations.sql:856: NOTICE:  relation "asset_quotation" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:900: NOTICE:  relation "asset" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:925: NOTICE:  relation "asset_assignment" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:953: NOTICE:  relation "asset_maintenance" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:977: NOTICE:  relation "asset_depreciation" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:1006: NOTICE:  relation "asset_disposal" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:1032: NOTICE:  relation "contribution_scheme" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:1055: NOTICE:  relation "contribution_due" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:1056: NOTICE:  relation "contribution_due_open_idx" already exists, skipping
+CREATE INDEX
+psql:10_operations.sql:1073: NOTICE:  relation "contribution_payment" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:1092: NOTICE:  relation "donor" already exists, skipping
+CREATE TABLE
+psql:10_operations.sql:1118: NOTICE:  relation "donation" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:51: NOTICE:  relation "deposit_product" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:71: NOTICE:  relation "deposit_rate_slab" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:108: NOTICE:  relation "deposit_account" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:128: NOTICE:  relation "deposit_rd_instalment" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:155: NOTICE:  relation "deposit_transaction" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:172: NOTICE:  relation "deposit_nominee" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:194: NOTICE:  relation "deposit_lien" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:224: NOTICE:  relation "chit_scheme" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:256: NOTICE:  relation "chit_group" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:281: NOTICE:  relation "chit_ticket" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:303: NOTICE:  relation "chit_instalment" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:321: NOTICE:  relation "chit_instalment_payment" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:347: NOTICE:  relation "chit_auction" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:364: NOTICE:  relation "chit_bid" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:381: NOTICE:  relation "chit_dividend" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:414: NOTICE:  relation "chit_prize" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:438: NOTICE:  relation "notification_template" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:472: NOTICE:  relation "notification_message" already exists, skipping
+CREATE TABLE
+psql:11_deposits_chit_notifications.sql:473: NOTICE:  relation "notification_message_queue_idx" already exists, skipping
+CREATE INDEX
+psql:11_deposits_chit_notifications.sql:474: NOTICE:  relation "notification_message_entity_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "account" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "account" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "account_mapping" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "account_mapping" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "bank_account" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "bank_account" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "cash_account" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "cash_account" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "cash_day" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "cash_day" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "cash_denomination_count" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "cash_denomination_count" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "cash_receipt" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "cash_receipt" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "cash_receipt_line" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "cash_receipt_line" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "financial_period" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "financial_period" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "financial_year" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "financial_year" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "fund" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "fund" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "fund_transfer" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "fund_transfer" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "journal" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "journal" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "journal_line" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "journal_line" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "payment_voucher" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "payment_voucher" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "payment_voucher_line" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "payment_voucher_line" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "voucher_series" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "voucher_series" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_isolation" for relation "audit_event" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "audit_event" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "audit_event" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_isolation" for relation "audit_field_change" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "audit_field_change" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "audit_field_change" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "action_configuration" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "action_configuration" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_isolation" for relation "config_change_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "config_change_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "config_change_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "rule_set" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "rule_set" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "rule_set_version" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "rule_set_version" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "tenant_action" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "tenant_action" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "tenant_setting" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "tenant_setting" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_condition" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_condition" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_definition" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_definition" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_stage" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_stage" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_stage_action" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_stage_action" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_transition" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_transition" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_version" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_version" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_auction" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_auction" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_bid" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_bid" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_dividend" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_dividend" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_group" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_group" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_instalment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_instalment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_instalment_payment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_instalment_payment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_prize" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_prize" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_scheme" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_scheme" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "chit_ticket" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "chit_ticket" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "branch" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "branch" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "document" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "document" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "import_batch" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "import_batch" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "legal_hold" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "legal_hold" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "lookup_value" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "lookup_value" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "public_holiday" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "public_holiday" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "deposit_account" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "deposit_account" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "deposit_lien" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "deposit_lien" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "deposit_nominee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "deposit_nominee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "deposit_product" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "deposit_product" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "deposit_rate_slab" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "deposit_rate_slab" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "deposit_rd_instalment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "deposit_rd_instalment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "deposit_transaction" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "deposit_transaction" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "app_user" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "app_user" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "password_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "password_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "role" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "role" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "role_privilege" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "role_privilege" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_isolation" for relation "sign_in_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "sign_in_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "sign_in_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "sod_exception" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "sod_exception" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "user_activation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "user_activation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "user_device" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "user_device" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "user_role" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "user_role" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "user_session" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "user_session" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "user_session" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "cooling_off_override" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "cooling_off_override" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "deceased_loan_decision" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "deceased_loan_decision" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_application_fee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_application_fee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_charge" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_charge" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_default" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_default" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_disbursement" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_disbursement" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_guarantor" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_guarantor" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_instalment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_instalment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_nominee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_nominee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_repayment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_repayment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_repayment_allocation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_repayment_allocation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_restructure" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_restructure" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_schedule" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_schedule" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_settlement" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_settlement" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_status_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_status_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_transfer" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_transfer" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_type" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_type" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_waiver" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_waiver" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "loan_write_off" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "loan_write_off" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "recovery_case" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "recovery_case" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "recovery_contact" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "recovery_contact" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "death_record" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "death_record" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "legal_successor" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "legal_successor" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "member" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "member" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "member_consent" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "member_consent" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "member_duplicate_check" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "member_duplicate_check" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "member_family" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "member_family" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "member_identity" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "member_identity" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "member_merge" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "member_merge" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "member_status_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "member_status_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "nominee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "nominee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "notification_message" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "notification_message" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "notification_message" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "notification_template" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "notification_template" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "asset" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "asset" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "asset_assignment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "asset_assignment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "asset_category" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "asset_category" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "asset_depreciation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "asset_depreciation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "asset_disposal" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "asset_disposal" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "asset_maintenance" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "asset_maintenance" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "asset_purchase_request" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "asset_purchase_request" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "asset_quotation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "asset_quotation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "assistance_application" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "assistance_application" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "assistance_cycle" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "assistance_cycle" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "assistance_scheme" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "assistance_scheme" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "birthday_grant" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "birthday_grant" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "birthday_grant_leader" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "birthday_grant_leader" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "contribution_due" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "contribution_due" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "contribution_payment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "contribution_payment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "contribution_scheme" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "contribution_scheme" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "donation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "donation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "donor" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "donor" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "employee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "employee" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "employee_salary_structure" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "employee_salary_structure" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "expense" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "expense" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "expense_category" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "expense_category" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall_booking" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall_booking" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall_booking_charge" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall_booking_charge" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall_booking_day" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall_booking_day" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall_booking_payment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall_booking_payment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall_charge_type" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall_charge_type" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall_customer" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall_customer" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall_rate" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall_rate" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "hall_settlement" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "hall_settlement" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "payroll_run" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "payroll_run" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "payslip" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "payslip" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "payslip_line" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "payslip_line" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "petty_cash_advance" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "petty_cash_advance" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "petty_cash_movement" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "petty_cash_movement" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "salary_advance" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "salary_advance" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "salary_component" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "salary_component" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "vendor" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "vendor" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "vendor_advance_adjustment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "vendor_advance_adjustment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "vendor_bill" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "vendor_bill" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "vendor_payment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "vendor_payment" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_isolation" for relation "platform_access_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "platform_access_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "platform_access_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "platform_access_request" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "platform_access_request" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "purge_certificate" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "purge_certificate" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "purge_policy" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "purge_policy" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "purge_run" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "purge_run" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "tenant_compliance_setting" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "tenant_compliance_setting" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "tenant_module" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "tenant_module" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "tenant_privilege_ceiling" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "tenant_privilege_ceiling" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "tenant_subscription" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "tenant_subscription" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "usage_record" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "usage_record" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "usage_record" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "action_execution" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "action_execution" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "action_execution" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_isolation" for relation "action_execution_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "action_execution_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_audit" for relation "action_execution_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "action_failure_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "action_failure_log" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "approval_decision" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "approval_decision" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "approval_delegation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "approval_delegation" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "approval_evidence" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "approval_evidence" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "approval_meeting" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "approval_meeting" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "approval_participant" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "approval_participant" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "approval_policy" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "approval_policy" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "approval_request" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "approval_request" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "approval_verification" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "approval_verification" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "offline_evidence_type" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "offline_evidence_type" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "offline_recorder_role" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "offline_recorder_role" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_context" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_context" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_history" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_select" for relation "workflow_instance" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  policy "tenant_insert" for relation "workflow_instance" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "action_definition" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "coa_template" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "compliance_feature" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "config_template" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "config_template_version" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "data_category" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "json_schema" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "loan_type_template" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "lookup_template" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "module" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "notification_template_default" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "payment_mode" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "privilege" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "privilege_type" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "role_template" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "role_template_privilege" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "setting_definition" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "settings_template" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "settings_template_item" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "sod_rule" does not exist, skipping
+psql:20_security_rls_audit.sql:123: NOTICE:  trigger "zz_touch" for relation "subscription_plan" does not exist, skipping
+DO
+DO
+REVOKE
+REVOKE
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+SET
+SET
+INSERT 0 65
+UPDATE 1
+INSERT 0 8
+INSERT 0 254
+INSERT 0 6
+INSERT 0 568
+INSERT 0 1
+INSERT 0 7
+INSERT 0 6
+INSERT 0 9
+ settings_defined 
+------------------
+               56
+(1 row)
+
+INSERT 0 56
+INSERT 0 62
+INSERT 0 67
+INSERT 0 15
+INSERT 0 27
+INSERT 0 2
+CREATE FUNCTION
+INSERT 0 3
+INSERT 0 3
+INSERT 0 3
+CREATE FUNCTION
+INSERT 0 16
+INSERT 0 16
+RESET
+RESET
+ schema_name | table_name 
+-------------+------------
+(0 rows)
+
+ schema_name |      table_name      
+-------------+----------------------
+ audit       | audit_event
+ audit       | audit_field_change
+ cfg         | config_change_log
+ iam         | sign_in_history
+ iam         | user_session
+ notif       | notification_message
+ platform    | platform_access_log
+ platform    | usage_record
+ wf          | action_execution
+ wf          | action_execution_log
+(10 rows)
+
+     from_table     |  to_table   |                conname                 
+--------------------+-------------+----------------------------------------
+ audit_field_change | audit_event | audit_field_change_audit_event_id_fkey
+(1 row)
+
+ schema_name | tables | views 
+-------------+--------+-------
+ acct        |     17 |     3
+ audit       |      2 |     1
+ cfg         |     12 |     0
+ chit        |      9 |     0
+ core        |      6 |     0
+ dep         |      7 |     0
+ iam         |     10 |     0
+ loan        |     22 |     0
+ mbr         |     10 |     0
+ notif       |      2 |     0
+ ops         |     42 |     0
+ platform    |     35 |     0
+ wf          |     16 |     0
+(13 rows)
+
+                item                 | count 
+-------------------------------------+-------
+ modules                             |    65
+ privileges                          |   254
+ role templates                      |     6
+ role template privileges            |   568
+ setting definitions                 |    56
+ settings template items (published) |    56
+ chart of accounts template          |    62
+ actions (approved)                  |    27
+ workflow templates                  |    16
+ rule set templates                  |     3
+ tenants                             |     0
+(11 rows)
+
+   module_code   | emp |   mgr   |  acc   | ldr  | aud  |  adm   
+-----------------+-----+---------+--------+------+------+--------
+ GEN_FUND        |     | HVX     | HVX    | HVX  | HVX  | 
+ GL              |     | HVX     | HVX    | HVX  | HVX  | 
+ COA             |     | HVX     | CDEHVX | AHVX | HVX  | 
+ JOURNAL         |     | HVX     | CDEHVX | AHVX | HVX  | 
+ TRIAL_BAL       |     | VX      | VX     | VX   | VX   | 
+ CASH_RECON      |     | AHVX    | CEHVX  | HVX  | HVX  | 
+ FIN_PERIOD      |     | HVX     | CEHVX  | AHVX | HVX  | 
+ ORG             |     | HVX     | HVX    | AHVX | HVX  | CDEHVX
+ USER_ROLE       |     | HVX     |        | AHVX | HVX  | CDEHVX
+ WORKFLOW        |     | HVX     |        | HVX  | HVX  | V
+ RULES           |     | HVX     | HVX    | HVX  | HVX  | V
+ NOTIFICATION    | CV  | HVX     |        |      | HVX  | CDEV
+ AUDIT           |     | HVX     | HVX    | HVX  | HVX  | HVX
+ APPROVAL        | CV  | ACHVX   |        | AHVX | HVX  | EV
+ ASSET           | V   | CEHVX   | HVX    | HVX  | HVX  | 
+ ASSET_PURCHASE  | CEV | AHVX    | HVX    | AHVX | HVX  | 
+ ASSET_MAINT     | CV  | AHVX    | CEHVX  | HVX  | HVX  | 
+ ASSET_DISPOSAL  | CV  | AHVX    | HVX    | AHVX | HVX  | 
+ ASSIST_EDU      | CEV | AHVX    | HVX    | HVX  | HVX  | 
+ ASSIST_CREM     | CEV | AHVX    | HVX    | HVX  | HVX  | 
+ BDAY_GRANT      |     | CEHVX   | HVX    | AHVX | HVX  | 
+ CHIT            | CV  | ADHVX   | HVX    | HVX  | HVX  | 
+ DASH_EMPLOYEE   | V   | V       |        |      |      | 
+ DASH_MANAGER    |     | V       |        | V    |      | 
+ DASH_ACCOUNTANT |     |         | V      | V    | V    | 
+ DASH_LEADERSHIP |     |         |        | V    |      | 
+ DASH_AUDITOR    |     |         |        |      | V    | 
+ DASH_ADMIN      |     |         |        |      |      | V
+ DEPOSIT         | CV  | ADHVX   | HVX    | HVX  | HVX  | 
+ LOAN            | CEV | AHVX    | HVX    | HVX  | HVX  | 
+ LOAN_FEE        | CV  | ADHVX   | HVX    | HVX  | HVX  | 
+ LOAN_REPAY      | CV  | ADHVX   | HVX    | HVX  | HVX  | 
+ LOAN_SETTLE     | CV  | AHVX    | HVX    | HVX  | HVX  | 
+ LOAN_DEFAULT    | CV  | AEHVX   | HVX    | HVX  | HVX  | 
+ MEMBER          | CEV | ADEHUVX | HVX    | HVX  | HUVX | 
+ NOMINEE         | CEV | AHUVX   |        | HVX  | HUVX | 
+ DECEASED        | CV  | AHVX    | HVX    | HVX  | HVX  | 
+ CONTRIB         | CV  | ADHVX   | HVX    | HVX  | HVX  | 
+ EXPENSE         | CEV | AHVX    | HVX    | AHVX | HVX  | 
+ PAYROLL         |     | AHVX    | CEHVX  | AHVX | HVX  | 
+ HALL            | CEV | ADHVX   | HVX    | HVX  | HVX  | 
+ FIN_STMT        |     | VX      | VX     | VX   | VX   | 
+ FIN_REPORT      |     | VX      | VX     | VX   | VX   | 
+ MGMT_REPORT     |     | VX      | VX     | VX   | VX   | 
+(44 rows)
+
