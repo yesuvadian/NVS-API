@@ -13,3 +13,4 @@ reports/
 
 # contains a hardcoded role password
 db/00a_bootstrap_role_and_database.sql
+db/run_log*.txt

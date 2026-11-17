@@ -116,7 +116,8 @@ def test_required_documents_are_checked_on_submit():
         listed = await db.val("SELECT loan.add_loan_document(%s,%s)", (loan["id"], Jsonb(doc)))
         assert listed[0]["document_type"] == "ID_PROOF" and listed[0]["document_type_name"] == "Identity proof"
         extra = await db.val("SELECT loan.add_loan_document(%s,%s)", (loan["id"], Jsonb({**doc, "document_type": "PHOTO"})))
-        assert len(await db.val("SELECT loan.remove_loan_document(%s)", (extra[1]["id"],))) == 1
+        photo = next(d["id"] for d in extra if d["document_type"] == "PHOTO")
+        assert len(await db.val("SELECT loan.remove_loan_document(%s)", (photo,))) == 1
         await db.submit(t, loan["id"])
         assert await db.status(loan["id"]) == "UNDER_APPROVAL"
         await db.act(t, "EMP", t.d0)
