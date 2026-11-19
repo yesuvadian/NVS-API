@@ -214,7 +214,24 @@ class ApiAuthService implements AuthService {
 }
 
 class AuthException implements Exception {
-  const AuthException(this.message, {this.code});
+  const AuthException(
+    this.message, {
+    this.code,
+    this.statusCode,
+    this.details = const {},
+  });
   final String message;
   final String? code;
+  final int? statusCode;
+
+  /// The API's `detail.details` object, e.g. `{"errors": [{"field": ...}]}`.
+  final Map<String, dynamic> details;
+
+  /// Field name -> message, from `details.errors` of a validation failure.
+  Map<String, String> get fieldErrors => {
+    for (final error in details['errors'] as List<dynamic>? ?? const [])
+      if (error is Map && error['field'] is String)
+        (error['field'] as String).split('.').last:
+            '${error['message'] ?? message}',
+  };
 }

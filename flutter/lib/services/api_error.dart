@@ -103,9 +103,12 @@ Never throwApiError(http.Response response, String language) {
     if (body is Map<String, dynamic>) detail = body['detail'];
   } catch (_) {}
   if (detail is Map && detail['message'] is String) {
+    final details = detail['details'];
     throw AuthException(
       detail['message'] as String,
       code: detail['shortCode'] as String?,
+      statusCode: response.statusCode,
+      details: details is Map<String, dynamic> ? details : const {},
     );
   }
   if (detail is List) {
