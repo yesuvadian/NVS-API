@@ -266,25 +266,36 @@ class _AppShellState extends State<AppShell> {
       body: Row(
         children: [
           if (!compact)
-            NavigationRail(
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (index) =>
-                  setState(() => _selectedIndex = index),
-              labelType: NavigationRailLabelType.all,
-              destinations: [
-                for (final item in items)
-                  NavigationRailDestination(
-                    icon: Icon(item.icon),
-                    selectedIcon: Icon(item.icon),
-                    label: Text(strings.text(item.key)),
+            // Scrolls when the menu is taller than the window (many modules
+            // on a laptop screen) instead of overflowing.
+            LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: NavigationRail(
+                      selectedIndex: _selectedIndex,
+                      onDestinationSelected: (index) =>
+                          setState(() => _selectedIndex = index),
+                      labelType: NavigationRailLabelType.all,
+                      destinations: [
+                        for (final item in items)
+                          NavigationRailDestination(
+                            icon: Icon(item.icon),
+                            selectedIcon: Icon(item.icon),
+                            label: Text(strings.text(item.key)),
+                          ),
+                      ],
+                      leading: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: CircleAvatar(
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          foregroundColor: theme.colorScheme.onPrimaryContainer,
+                          child: Text(_isSuperAdmin ? 'CF' : 'AN'),
+                        ),
+                      ),
+                    ),
                   ),
-              ],
-              leading: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                child: CircleAvatar(
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  foregroundColor: theme.colorScheme.onPrimaryContainer,
-                  child: Text(_isSuperAdmin ? 'CF' : 'AN'),
                 ),
               ),
             ),

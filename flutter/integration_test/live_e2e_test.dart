@@ -1,6 +1,10 @@
 // Live end-to-end tests against a running CFMS API and its database.
-// Opt-in: they are skipped unless E2E_LIVE=true. Credentials come from
-// --dart-define values on the command line; nothing secret is committed.
+// Opt-in: they are skipped unless E2E_LIVE=true. Accounts come from the local,
+// git-ignored e2e_config.json (copy e2e_config.example.json and fill it in):
+//
+//   flutter test integration_test/live_e2e_test.dart -d windows --dart-define-from-file=e2e_config.json
+//
+// or from single --dart-define values; nothing secret is committed:
 //
 //   flutter test integration_test/live_e2e_test.dart -d windows \
 //     --dart-define=E2E_LIVE=true \
@@ -10,6 +14,9 @@
 //     --dart-define=E2E_ADMIN_PASSWORD=... \
 //     [--dart-define=E2E_STAFF_USER=emp@demo.example.com --dart-define=E2E_STAFF_PASSWORD=...]
 //     [--dart-define=E2E_API_URL=http://127.0.0.1:8000 --dart-define=E2E_TENANT_CODE=demo]
+//
+// Each test is skipped when its own user or password is empty (Super Admin
+// for the summary and module tests, staff for the member test).
 //
 // Safe to re-run: the module switched off is always switched back on (also
 // when a test fails), and each created member has a unique "E2E Member <time>"
@@ -40,6 +47,12 @@ const adminUser = String.fromEnvironment('E2E_ADMIN_USER');
 const adminPassword = String.fromEnvironment('E2E_ADMIN_PASSWORD');
 const staffUser = String.fromEnvironment('E2E_STAFF_USER');
 const staffPassword = String.fromEnvironment('E2E_STAFF_PASSWORD');
+
+/// A test runs only when its account has both a user and a password; an
+/// empty value (as in e2e_config.example.json) means "skip".
+const hasSuper = superUser != '' && superPassword != '';
+const hasAdmin = adminUser != '' && adminPassword != '';
+const hasStaff = staffUser != '' && staffPassword != '';
 
 /// A non-core module with a tenant menu item (Collections).
 const toggleModule = String.fromEnvironment(
@@ -154,7 +167,7 @@ void main() {
     expect(find.text('Platform overview'), findsOneWidget);
     expect(find.text('$total'), findsWidgets);
     expect(navItem('Organisations'), findsOneWidget);
-  }, skip: skip);
+  }, skip: skip || !hasSuper);
 
   testWidgets('organisation admin sees the overview and menus', (tester) async {
     await pumpLiveApp(tester);
@@ -164,7 +177,7 @@ void main() {
     for (final menu in ['Members', 'Loans', 'Roles & privileges']) {
       expect(navItem(menu), findsOneWidget, reason: menu);
     }
-  }, skip: skip);
+  }, skip: skip || !hasAdmin);
 
   testWidgets('a module switched off disappears from the menu, then returns', (
     tester,
@@ -202,7 +215,7 @@ void main() {
       (capabilities['modules'] as List).map((m) => m['module_code']),
       contains(toggleModule),
     );
-  }, skip: skip);
+  }, skip: skip || !hasSuper || !hasAdmin);
 
   testWidgets('staff creates a uniquely named E2E member', (tester) async {
     final stamp = DateTime.now().millisecondsSinceEpoch;
@@ -232,5 +245,5 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
     expect(find.text(name), findsOneWidget);
-  }, skip: skip || staffUser.isEmpty);
+  }, skip: skip || !hasStaff);
 }

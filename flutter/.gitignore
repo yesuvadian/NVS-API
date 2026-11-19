@@ -46,3 +46,6 @@ app.*.map.json
 
 # Local API configuration
 .env
+
+# Live e2e test accounts (local only)
+e2e_config.json

@@ -63,15 +63,26 @@ Prerequisites:
    member-creation test, which is skipped otherwise). To give a provisioned
    account its first password: `python -m app.auth.initialize_password <email>`.
 
-Run (credentials are passed on the command line and never committed):
+Accounts live in a local config file that is never committed
+(`e2e_config.json` is in `.gitignore`):
+
+1. Copy the example: `copy e2e_config.example.json e2e_config.json`
+2. Fill in the passwords you want to use. A test whose account has an empty
+   user or password is skipped: Super Admin for the summary and module tests,
+   admin for the overview/menu and module tests, staff (a user with
+   `member.create`) for the member test.
+3. Run:
 
 ```
-flutter test integration_test/live_e2e_test.dart -d windows --dart-define=E2E_LIVE=true --dart-define=E2E_SUPERADMIN_USER=superadmin@example.com --dart-define=E2E_SUPERADMIN_PASSWORD=<password> --dart-define=E2E_ADMIN_USER=admin@demo.example.com --dart-define=E2E_ADMIN_PASSWORD=<password> --dart-define=E2E_STAFF_USER=emp@demo.example.com --dart-define=E2E_STAFF_PASSWORD=<password>
+flutter test integration_test/live_e2e_test.dart -d windows --dart-define-from-file=e2e_config.json
 ```
 
-Optional: `E2E_API_URL` (default `http://127.0.0.1:8000`), `E2E_TENANT_CODE`
-(default `demo`), `E2E_TOGGLE_MODULE` / `E2E_TOGGLE_MENU` (default
-`LOAN_REPAY` / `Collections`).
+Keys: `E2E_LIVE`, `E2E_API_URL` (default `http://127.0.0.1:8000`),
+`E2E_TENANT_CODE` (default `demo`), `E2E_SUPERADMIN_USER` /
+`E2E_SUPERADMIN_PASSWORD`, `E2E_ADMIN_USER` / `E2E_ADMIN_PASSWORD`,
+`E2E_STAFF_USER` / `E2E_STAFF_PASSWORD`, and optionally `E2E_TOGGLE_MODULE` /
+`E2E_TOGGLE_MENU` (default `LOAN_REPAY` / `Collections`). The same keys can be
+passed one by one with `--dart-define=KEY=value` instead of the file.
 
 Without `E2E_LIVE=true` every live test is skipped, so the file is safe to run
 anywhere.
