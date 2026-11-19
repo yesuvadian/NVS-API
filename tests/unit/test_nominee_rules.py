@@ -85,4 +85,9 @@ def test_service_passes_values_through():
     member, nominee, nominee_row = uuid4(), uuid4(), uuid4()
     asyncio.run(_service(repository).add(member, nominee, "SPOUSE"))
     asyncio.run(_service(repository).set_status(nominee_row, "INACTIVE", 3, "  Moved away  "))
-    assert repository.calls == [("add", member, nominee, "SPOUSE"), ("status", nominee_row, "INACTIVE", 3, "Moved away")]
+    asyncio.run(_service(repository).add(member, nominee, "SON", "  Only relative  "))
+    assert repository.calls == [
+        ("add", member, nominee, "SPOUSE", None),
+        ("status", nominee_row, "INACTIVE", 3, "Moved away", False),
+        ("add", member, nominee, "SON", "Only relative"),              # override reason trimmed
+    ]

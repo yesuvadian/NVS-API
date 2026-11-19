@@ -12,6 +12,8 @@ class NomineeCreate(BaseModel):
 
     nominee_member_id: UUID
     relationship: Relationship
+    # Holders of loan.nominee_override: reason to exceed NOMINATIONS.maxPerPerson.
+    override_reason: str | None = Field(default=None, max_length=500)
 
 
 class NomineeUpdate(BaseModel):
@@ -21,6 +23,8 @@ class NomineeUpdate(BaseModel):
 class NomineeStatusChange(BaseModel):
     status: Literal["ACTIVE", "INACTIVE", "DECEASED"]
     reason: str = Field(min_length=3, max_length=500)
+    # Reactivate beyond the nomination limit (loan.nominee_override; reason is recorded).
+    limit_override: bool = False
 
 
 class NomineeOut(BaseModel):
@@ -33,6 +37,8 @@ class NomineeOut(BaseModel):
     date_of_birth: date | None = None
     mobile: str | None = None
     status: str
+    limit_override: bool = False
+    limit_override_reason: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
     row_version: int

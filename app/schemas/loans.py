@@ -92,6 +92,7 @@ class LoanEligibilityOut(BaseModel):
     reasons: list[str]
     first_loan: bool
     nominee_required: bool
+    nominee_override_allowed: bool = True
     guarantors_required: int = 0
     application_fee: Decimal
     fee_timing: str | None = None
@@ -101,6 +102,13 @@ class LoanEligibilityOut(BaseModel):
     estimated_instalment_amount: Decimal
     total_repayable: Decimal
     rule_set_version_id: UUID
+
+
+class LoanSubmit(BaseModel):
+    """Optional body of POST /loans/{id}/submit."""
+
+    # Holders of loan.nominee_override: why the loan goes without a nominee.
+    nominee_override_reason: str | None = Field(default=None, max_length=500)
 
 
 class LoanOut(BaseModel):
@@ -129,6 +137,12 @@ class LoanOut(BaseModel):
     instalment_amount: Decimal | None = None
     rule_set_version_id: UUID
     workflow_version_id: UUID
+    # Set when the NOMINEE rule was overridden at submission (loan.nominee_override).
+    nominee_override: bool = False
+    nominee_override_reason: str | None = None
+    nominee_override_by: UUID | None = None
+    nominee_override_by_name: str | None = None
+    nominee_override_at: datetime | None = None
     created_at: datetime
     updated_at: datetime | None = None
     row_version: int

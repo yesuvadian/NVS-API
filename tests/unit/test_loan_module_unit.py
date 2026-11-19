@@ -67,6 +67,16 @@ class FakeRepository:
     async def application_nominee_count(self, _id):
         return self.nominees
 
+    # Nominee override (loan.nominee_override); no privilege unless a test sets it.
+    privileged = False
+    overrides: list = []
+
+    async def has_privilege(self, code):
+        return self.privileged and code == "loan.nominee_override"
+
+    async def record_nominee_override(self, loan_id, reason, allowed):
+        self.overrides = [*self.overrides, (loan_id, reason, allowed)]
+
     async def application_fee(self, _id):
         return self.fee
 
@@ -248,6 +258,48 @@ def test_submit_ineligible_lists_reasons():
     with pytest.raises(AppError) as error:
         submit(submit_repo(member=member(loan_eligibility="RESTRICTED", is_first_loan=False)))
     assert error.value.details == {"reasons": ["MEMBER_RESTRICTED"]}
+
+
+def submit_with_reason(repository: FakeRepository, reason):
+    return run(service_with(repository, FakeLifecycle([])).submit_application(uuid4(), reason))
+
+
+def every_loan_repo(**overrides) -> FakeRepository:
+    return submit_repo(product=product(NOMINEE={"everyLoan": True, **overrides.pop("rule", {})}),
+                       nominees=0, **overrides)
+
+
+def test_nominee_override_needs_the_privilege():
+    repository = every_loan_repo()
+    with pytest.raises(AppError) as error:
+        submit_with_reason(repository, "Member has no family")
+    assert error.value.short_code == "NOMINEE_REQUIRED"
+    assert repository.overrides == []
+
+
+def test_nominee_override_with_privilege_and_reason_is_recorded():
+    repository = every_loan_repo()
+    repository.privileged = True
+    assert submit_with_reason(repository, "  Member has no family  ")["status"] == "UNDER_APPROVAL"
+    assert repository.overrides[0][1:] == ("Member has no family", True)
+
+
+@pytest.mark.parametrize("reason", [None, "", "  ", "ab", "x" * 501])
+def test_nominee_override_without_valid_reason_is_refused(reason):
+    repository = every_loan_repo()
+    repository.privileged = True
+    with pytest.raises(AppError) as error:
+        submit_with_reason(repository, reason)
+    assert error.value.short_code == "NOMINEE_OVERRIDE_REASON_REQUIRED"
+    assert repository.overrides == []
+
+
+def test_nominee_override_switched_off_by_the_rule():
+    repository = every_loan_repo(rule={"allowOverride": False})
+    repository.privileged = True
+    with pytest.raises(AppError) as error:
+        submit_with_reason(repository, "Member has no family")
+    assert error.value.short_code == "NOMINEE_OVERRIDE_NOT_ALLOWED"
 
 
 def test_submit_without_nominee_allowed_when_not_first_loan():

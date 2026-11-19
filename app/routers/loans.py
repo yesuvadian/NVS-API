@@ -14,6 +14,7 @@ from app.schemas.loans import (
     LoanEligibilityOut,
     LoanEligibilityRequest,
     LoanOut,
+    LoanSubmit,
     LoanTypeOut,
     LoanFeePayment,
     LoanDecision,
@@ -109,10 +110,15 @@ async def get_loan_application(
 @router.post("/loans/{loan_id}/submit", response_model=LoanOut)
 async def submit_loan_application(
     loan_id: UUID,
+    payload: LoanSubmit | None = None,
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan.create")),
 ):
-    return await _service(conn).submit_application(loan_id)
+    """Submit for approval. Without an ACTIVE nominee the NOMINEE rule refuses
+    (NOMINEE_REQUIRED) unless the user holds loan.nominee_override and gives
+    nominee_override_reason; the override is stored and shown to the approver."""
+    return await _service(conn).submit_application(
+        loan_id, nominee_override_reason=payload.nominee_override_reason if payload else None)
 
 
 @router.get("/loan-approvals/inbox")

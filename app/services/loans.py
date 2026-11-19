@@ -237,6 +237,8 @@ class LoanService:
             "reasons": reasons,
             "first_loan": first_loan,
             "nominee_required": nominee_required,
+            # loan.nominee_override holders may submit without one, unless off.
+            "nominee_override_allowed": bool(nominee_rule.get("allowOverride", True)),
             "guarantors_required": guarantors_required,
             "application_fee": fee_amount,
             "fee_timing": fee_timing,
@@ -394,7 +396,7 @@ class LoanService:
             raise AppError("NOMINEE_NOT_ACTIVE")
         return await self.lifecycle.update_application(loan_id, changes, expected_version)
 
-    async def submit_application(self, loan_id: UUID):
+    async def submit_application(self, loan_id: UUID, nominee_override_reason: str | None = None):
         loan = await self.repository.get_application(loan_id, lock=True)
         if loan is None:
             raise AppError("LOAN_APPLICATION_NOT_FOUND")
@@ -411,7 +413,7 @@ class LoanService:
         if not eligibility["eligible"]:
             raise AppError("LOAN_INELIGIBLE", details={"reasons": eligibility["reasons"]})
         if eligibility["nominee_required"] and await self.repository.application_nominee_count(loan_id) == 0:
-            raise AppError("NOMINEE_REQUIRED")
+            await self._nominee_override(loan_id, eligibility, nominee_override_reason)
         if eligibility["guarantors_required"]:
             guarantors = [g for g in await self.lifecycle.guarantors(loan_id) or [] if g["status"] == "ACTIVE"]
             if len(guarantors) < eligibility["guarantors_required"]:
@@ -430,6 +432,19 @@ class LoanService:
         if submitted is None:
             raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
         return submitted
+
+    async def _nominee_override(self, loan_id: UUID, eligibility: dict[str, Any], reason: str | None) -> None:
+        """No ACTIVE nominee although the NOMINEE rule needs one. Without
+        loan.nominee_override: NOMINEE_REQUIRED. With it: the rule must allow
+        overrides and a reason (3-500) is required; it is stored and audited."""
+        if not await self.repository.has_privilege("loan.nominee_override"):
+            raise AppError("NOMINEE_REQUIRED")
+        if not eligibility.get("nominee_override_allowed", True):
+            raise AppError("NOMINEE_OVERRIDE_NOT_ALLOWED")
+        reason = (reason or "").strip()
+        if not 3 <= len(reason) <= 500:
+            raise AppError("NOMINEE_OVERRIDE_REASON_REQUIRED")
+        await self.repository.record_nominee_override(loan_id, reason, True)
 
     async def approval_inbox(self, *, limit: int, offset: int):
         rows = await self.repository.approval_inbox(limit=limit, offset=offset)

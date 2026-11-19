@@ -123,7 +123,9 @@ def test_disable_module_passes_expected_version_and_returns_row(api) -> None:
 def test_module_toggle_needs_reason_and_super_admin(api) -> None:
     client, connection = api
     url = f"/api/v1/super-admin/organisations/{uuid4()}/modules/LOAN"
-    assert client.put(url, json={"enabled": False, "reason": ""}, headers=platform_headers()).status_code == 422
+    # Request validation: INVALID_DATA, 400 from the loaded catalogue or the 422 fallback.
+    invalid = client.put(url, json={"enabled": False, "reason": ""}, headers=platform_headers())
+    assert invalid.status_code in (400, 422) and invalid.json()["detail"]["shortCode"] == "INVALID_DATA"
     assert client.put(url, json={"enabled": False, "reason": "Pause"},
                       headers=platform_headers(role="SUPPORT")).status_code == 403
     assert client.put(url, json={"enabled": False, "reason": "Pause"}).status_code == 401
@@ -182,5 +184,6 @@ def test_invalid_privilege_code_is_rejected_without_a_change(api) -> None:
     client, connection = api
     connection.script(ALLOWED)
     response = client.put(f"/api/v1/roles/{uuid4()}/privileges/DROP TABLE", json={"granted": True})
-    assert response.status_code == 422
+    assert response.status_code in (400, 422)
+    assert response.json()["detail"]["shortCode"] == "INVALID_DATA"
     assert not any("set_role_privilege" in query for query, _ in connection.calls)

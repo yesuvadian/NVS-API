@@ -5,7 +5,7 @@ import '../../services/auth_service.dart';
 import '../../services/localization_service.dart';
 
 /// Action columns in display order (privilege type codes).
-const privilegeTypeOrder = ['V', 'C', 'E', 'A', 'D', 'X', 'H', 'U'];
+const privilegeTypeOrder = ['V', 'C', 'E', 'A', 'D', 'X', 'H', 'U', 'O'];
 
 /// Organisation admin: pick a role, tick module x action privileges, save.
 /// Changes apply immediately.

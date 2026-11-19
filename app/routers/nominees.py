@@ -47,7 +47,8 @@ async def add_nominee(
     return await run_idempotent(
         conn, key=validate_key(idempotency_key, required=False), operation="mbr.add_nominee",
         payload=values, response=response,
-        action=lambda: NomineeService(conn).add(member_id, payload.nominee_member_id, payload.relationship),
+        action=lambda: NomineeService(conn).add(
+            member_id, payload.nominee_member_id, payload.relationship, payload.override_reason),
     )
 
 
@@ -72,4 +73,5 @@ async def set_nominee_status(
     _principal: TenantPrincipal = Depends(require_tenant_permission("member.edit")),
 ):
     """Deactivate, mark deceased or reactivate (limits apply on reactivation)."""
-    return await NomineeService(conn).set_status(nominee_id, payload.status, expected_version, payload.reason)
+    return await NomineeService(conn).set_status(
+        nominee_id, payload.status, expected_version, payload.reason, payload.limit_override)

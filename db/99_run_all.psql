@@ -32,6 +32,7 @@
 \ir 31c_access_control.sql
 \ir 31d_member_nominees.sql
 \ir 31e_null_safe_scope_helpers.sql
+\ir 31f_nominee_override.sql
 \ir 32_functions_loan_servicing.sql
 \ir 33_functions_loan_repayment.sql
 \ir 34_functions_loan_notifications.sql

@@ -5,6 +5,16 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 
+def _override_fields(override: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        "nominee_override": override is not None,
+        "nominee_override_reason": override["nominee_override_reason"] if override else None,
+        "nominee_override_by": override["nominee_override_by"] if override else None,
+        "nominee_override_by_name": override["nominee_override_by_name"] if override else None,
+        "nominee_override_at": override["nominee_override_at"] if override else None,
+    }
+
+
 class LoanRepository:
     def __init__(self, conn: AsyncConnection) -> None:
         self.conn = conn
@@ -60,7 +70,31 @@ class LoanRepository:
             "SELECT * FROM loan.get_application(%s,%s)",
             (loan_id, lock),
         )
-        return await cursor.fetchone()
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        overrides = await self.nominee_overrides([loan_id])
+        return {**row, **_override_fields(overrides.get(loan_id))}
+
+    async def nominee_overrides(self, loan_ids: list[UUID]) -> dict[UUID, dict[str, Any]]:
+        """Nominee overrides recorded at submission (db/31f), by loan id."""
+        if not loan_ids:
+            return {}
+        cursor = await self.conn.execute(
+            "SELECT * FROM loan.get_nominee_overrides(%s::uuid[])", (list(loan_ids),)
+        )
+        return {row["loan_id"]: row for row in await cursor.fetchall()}
+
+    async def has_privilege(self, privilege_code: str) -> bool:
+        row = await (await self.conn.execute(
+            "SELECT iam.has_privilege(app.user_id(), %s) AS allowed", (privilege_code,)
+        )).fetchone()
+        return bool(row and row["allowed"])
+
+    async def record_nominee_override(self, loan_id: UUID, reason: str, allowed: bool) -> None:
+        await self.conn.execute(
+            "SELECT loan.record_nominee_override(%s,%s,%s)", (loan_id, reason, allowed)
+        )
 
     async def application_nominee_count(self, loan_id: UUID) -> int:
         cursor = await self.conn.execute(
@@ -144,4 +178,7 @@ class LoanRepository:
             "SELECT * FROM loan.get_approval_inbox(%s,%s)",
             (limit + 1, offset),
         )
-        return await cursor.fetchall()
+        rows = await cursor.fetchall()
+        overrides = await self.nominee_overrides([row["loan_id"] for row in rows])
+        # The approver sees when the nominee rule was overridden, and why.
+        return [{**row, **_override_fields(overrides.get(row["loan_id"]))} for row in rows]

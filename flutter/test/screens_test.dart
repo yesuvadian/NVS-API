@@ -324,6 +324,58 @@ void main() {
     });
   });
 
+  testWidgets('override privileges appear in an Override column', (
+    tester,
+  ) async {
+    final service = RolePrivilegeService(
+      config,
+      client: MockClient(
+        (_) async => json({
+          'can_edit': true,
+          'roles': [
+            {
+              'id': 'r-mgr',
+              'role_code': 'MGR',
+              'role_name': 'Manager',
+              'privileges': ['loan.nominee_override'],
+            },
+          ],
+          'modules': [
+            {
+              'module_code': 'LOAN',
+              'module_name': 'Loans',
+              'actions': [
+                {
+                  'privilege_code': 'loan.view',
+                  'type_code': 'V',
+                  'name': 'View',
+                },
+                {
+                  'privilege_code': 'loan.nominee_override',
+                  'type_code': 'O',
+                  'name': 'Nominee override',
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    await pump(
+      tester,
+      RolesPrivilegesScreen(
+        service: service,
+        token: 'tok',
+        language: () => 'en',
+      ),
+    );
+
+    expect(find.text('Override'), findsOneWidget);
+    final boxes = tester.widgetList<Checkbox>(find.byType(Checkbox)).toList();
+    expect(boxes, hasLength(2));
+    expect(boxes.last.value, isTrue, reason: 'MGR holds loan.nominee_override');
+  });
+
   group('Organisation modules', () {
     testWidgets(
       'switching a module asks for a reason and sends the row version',

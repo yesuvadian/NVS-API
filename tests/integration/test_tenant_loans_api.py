@@ -208,6 +208,7 @@ def test_submit_creates_manager_approval_request_and_task(loan_api):
         [
             FakeResult(one={"allowed": True}),
             FakeResult(one=loan),
+            FakeResult(many=[]),                                    # loan.get_nominee_overrides
             FakeResult(one=product),
             FakeResult(one=member),
             FakeResult(one=default_settings()),
@@ -217,6 +218,7 @@ def test_submit_creates_manager_approval_request_and_task(loan_api):
             FakeResult(one=workflow),
             FakeResult(one={"approval_request_id": approval_request_id}),
             FakeResult(one=loan_row(status="UNDER_APPROVAL", member_id=loan["member_id"], loan_type_id=loan["loan_type_id"])),
+            FakeResult(many=[]),                                    # loan.get_nominee_overrides
         ]
     )
 

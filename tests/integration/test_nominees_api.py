@@ -88,7 +88,8 @@ def test_add_nominee_links_an_existing_member(api):
     assert response.status_code == 201, response.text
     assert response.json()["nominee_member_no"] == "MEM-0002"
     assert connection.calls[0][1][1] == "member.edit"
-    assert connection.calls[1] == ("SELECT mbr.add_nominee(%s,%s,%s) AS result", (MEMBER, NOMINEE_MEMBER, "SISTER"))
+    assert connection.calls[1] == ("SELECT mbr.add_nominee(%s,%s,%s,%s) AS result",
+                                   (MEMBER, NOMINEE_MEMBER, "SISTER", None))
 
 
 def test_add_nominee_validation(api):
@@ -140,7 +141,7 @@ def test_update_and_deactivate_pass_row_version(api):
     assert updated.status_code == 200 and updated.json()["relationship"] == "BROTHER"
     assert status.status_code == 200 and status.json()["status"] == "INACTIVE"
     assert connection.calls[1][1] == (NOMINEE, "BROTHER", 1)
-    assert connection.calls[3][1] == (NOMINEE, "INACTIVE", 2, "Moved away")
+    assert connection.calls[3][1] == (NOMINEE, "INACTIVE", 2, "Moved away", False)
 
 
 def test_changes_need_member_edit(api):
@@ -150,3 +151,21 @@ def test_changes_need_member_edit(api):
                            json={"nominee_member_id": str(NOMINEE_MEMBER), "relationship": "SON"})
     assert response.status_code == 403
     assert connection.calls[0][1][1] == "member.edit"
+
+
+def test_add_nominee_passes_override_reason_and_reactivation_override(api):
+    client, connection = api
+    connection.script(ALLOWED, {"result": nominee_row(limit_override=True, limit_override_reason="Only relative")},
+                      ALLOWED, {"result": nominee_row(row_version=2)})
+
+    added = client.post(f"/api/v1/members/{MEMBER}/nominees",
+                        json={"nominee_member_id": str(NOMINEE_MEMBER), "relationship": "SON",
+                              "override_reason": "  Only relative  "})
+    reactivated = client.post(f"/api/v1/member-nominees/{NOMINEE}/status",
+                              json={"status": "ACTIVE", "reason": "Back home", "limit_override": True},
+                              headers={"X-Expected-Row-Version": "1"})
+
+    assert added.status_code == 201 and added.json()["limit_override"] is True
+    assert connection.calls[1][1] == (MEMBER, NOMINEE_MEMBER, "SON", "Only relative")
+    assert reactivated.status_code == 200
+    assert connection.calls[3][1] == (NOMINEE, "ACTIVE", 1, "Back home", True)
