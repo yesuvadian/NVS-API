@@ -159,3 +159,24 @@ def test_module_functions_refuse_non_platform_callers():
         await db.fails("SELECT platform.set_tenant_module(%s,'NOPE',false,'x')", (t.id,), code="UNKNOWN_MODULE")
 
     run_db(scenario)
+
+
+def test_platform_scope_may_change_role_privileges_tenant_users_may_not():
+    """The role-privilege trigger allows Super Admin (platform scope) changes and
+    still refuses tenant users without user_role.edit (is_platform_scope() is
+    NULL outside platform scope, so the guard must use IS NOT TRUE)."""
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+        emp_role = await _role_id(db, t, "EMP")
+        await db.act(t, "EMP", t.today)
+        await db.fails("DELETE FROM iam.role_privilege WHERE role_id=%s AND privilege_code='member.view'",
+                       (emp_role,), code="NO_PRIVILEGE")
+
+        platform_user = await db.val("SELECT id FROM platform.platform_user ORDER BY created_at LIMIT 1")
+        await db.conn.execute("SELECT app.set_platform_context(%s, %s, NULL, true, NULL)", (platform_user, t.id))
+        await db.conn.execute("SELECT set_config('app.user_id', %s, true)", (str(t.users["EMP"]),))
+        await db.conn.execute("DELETE FROM iam.role_privilege WHERE role_id=%s AND privilege_code='member.view'",
+                              (emp_role,))
+        assert not await _has(db, t, "EMP", "member.view")
+
+    run_db(scenario)
