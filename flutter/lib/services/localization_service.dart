@@ -10,6 +10,14 @@ class AppStrings {
   String text(String key) =>
       _values[locale.languageCode]?[key] ?? _values['en']![key] ?? key;
 
+  String textWith(String key, Map<String, String> values) {
+    var result = text(key);
+    for (final entry in values.entries) {
+      result = result.replaceAll('{${entry.key}}', entry.value);
+    }
+    return result;
+  }
+
   static const delegate = _AppStringsDelegate();
   static const _values = <String, Map<String, String>>{
     'en': {
@@ -76,6 +84,26 @@ class AppStrings {
       'single_session_help':
           'When enabled, a new sign-in asks before logging out the other device.',
       'org_enable_collections': 'Enable loan repayments and Collections',
+      'legal_name': 'Legal name',
+      'registration_no': 'Registration number',
+      'org_address': 'Address',
+      'time_zone': 'Time zone',
+      'currency_code': 'Currency code',
+      'data_region': 'Data region',
+      'sandbox_organisation': 'Create as sandbox organisation',
+      'fixed_setting': 'Fixed by platform',
+      'proposed_setting': 'Proposed',
+      'json_value_hint': 'Enter a valid JSON value',
+      'invalid_settings_json': 'Check the setting values and JSON format.',
+      'wizard_step_profile': 'Organisation profile',
+      'wizard_step_admin_security': 'Admin and security',
+      'wizard_step_modules_features': 'Modules and features',
+      'wizard_step_settings': 'Organisation settings',
+      'wizard_step_of': 'Step {step} of {count}',
+      'template_defaults_note':
+          'Values are prefilled from published defaults (template v{version}).',
+      'next': 'Next',
+      'back': 'Back',
       'org_created_notice':
           'Organisation created with the selected security settings.',
       'disable_org': 'Disable organisation',
@@ -285,7 +313,29 @@ class AppStrings {
           'ஒரு பயனருக்கு ஒரு செயலில் உள்ள உள்நுழைவு மட்டும்',
       'single_session_help':
           'இயக்கப்பட்டால், புதிய உள்நுழைவு மற்ற சாதனத்தை வெளியேற்றுவதற்கு முன் உறுதிப்படுத்தும்.',
-      'org_enable_collections': 'கடன் திருப்பிச் செலுத்தல் மற்றும் வசூலை இயக்கவும்',
+      'org_enable_collections':
+          'கடன் திருப்பிச் செலுத்தல் மற்றும் வசூலை இயக்கவும்',
+      'legal_name': 'சட்டப்பூர்வ பெயர்',
+      'registration_no': 'பதிவு எண்',
+      'org_address': 'முகவரி',
+      'time_zone': 'நேர மண்டலம்',
+      'currency_code': 'நாணயக் குறியீடு',
+      'data_region': 'தரவு பகுதி',
+      'sandbox_organisation': 'சோதனை நிறுவனமாக உருவாக்கு',
+      'fixed_setting': 'தளத்தால் நிர்ணயிக்கப்பட்டது',
+      'proposed_setting': 'முன்மொழிவு',
+      'json_value_hint': 'சரியான JSON மதிப்பை உள்ளிடவும்',
+      'invalid_settings_json':
+          'அமைப்பு மதிப்புகளையும் JSON வடிவத்தையும் சரிபார்க்கவும்.',
+      'wizard_step_profile': 'நிறுவன விவரங்கள்',
+      'wizard_step_admin_security': 'நிர்வாகி மற்றும் பாதுகாப்பு',
+      'wizard_step_modules_features': 'தொகுதிகள் மற்றும் அம்சங்கள்',
+      'wizard_step_settings': 'நிறுவன அமைப்புகள்',
+      'wizard_step_of': 'படி {step} / {count}',
+      'template_defaults_note':
+          'வெளியிடப்பட்ட இயல்புநிலைகளிலிருந்து மதிப்புகள் நிரப்பப்பட்டுள்ளன (வார்ப்புரு v{version}).',
+      'next': 'அடுத்து',
+      'back': 'பின்செல்',
       'org_created_notice':
           'தேர்ந்தெடுத்த பாதுகாப்பு அமைப்புகளுடன் நிறுவனம் உருவாக்கப்பட்டது.',
       'disable_org': 'நிறுவனத்தை முடக்கு',

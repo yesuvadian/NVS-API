@@ -1,5 +1,6 @@
 from collections import deque
 from datetime import UTC, datetime, timedelta
+import json
 from uuid import uuid4
 
 import jwt
@@ -125,6 +126,8 @@ def test_create_organisation_calls_provisioning_repository_and_returns_record(ap
             FakeResult(one={"ignored": None}),
             FakeResult(one={"ignored": None}),
             FakeResult(one={"ignored": None}),
+            FakeResult(one={"ignored": None}),
+            FakeResult(one={"ignored": None}),
             FakeResult(
                 one={
                     "id": tenant_id,
@@ -152,6 +155,16 @@ def test_create_organisation_calls_provisioning_repository_and_returns_record(ap
         "is_sandbox": True,
         "password_history_count": 8,
         "single_session_enabled": True,
+        "legal_name": "Demo Legal Name",
+        "registration_no": "REG-2026-01",
+        "address": {"formatted": "123 Test Road"},
+        "currency_code": "INR",
+        "data_region": "IN",
+        "settings": {
+            "users.password_history": 8,
+            "users.single_session": True,
+            "ui.page_size": 25,
+        },
     }
 
     response = client.post(
@@ -161,7 +174,7 @@ def test_create_organisation_calls_provisioning_repository_and_returns_record(ap
     assert response.status_code == 201, response.json()
     assert response.json()["id"] == str(tenant_id)
     assert response.json()["status"] == "PROVISIONING"
-    assert len(connection.calls) == 5
+    assert len(connection.calls) == 7
     assert "platform.provision_tenant" in connection.calls[0][0]
     assert connection.calls[0][1][0:5] == (
         "demo-org",
@@ -174,7 +187,53 @@ def test_create_organisation_calls_provisioning_repository_and_returns_record(ap
     assert connection.calls[1][1] == (tenant_id, 8)
     assert "platform.set_tenant_single_session" in connection.calls[2][0]
     assert connection.calls[2][1] == (tenant_id, True)
-    assert "iam.set_default_org_admin_password" in connection.calls[3][0]
+    assert "platform.apply_tenant_onboarding_profile" in connection.calls[3][0]
+    assert json.loads(connection.calls[3][1][1]) == {
+        "legal_name": "Demo Legal Name",
+        "registration_no": "REG-2026-01",
+        "address": {"formatted": "123 Test Road"},
+        "time_zone": "Asia/Kolkata",
+        "currency_code": "INR",
+        "data_region": "IN",
+        "is_sandbox": True,
+    }
+    assert "platform.apply_tenant_onboarding_settings" in connection.calls[4][0]
+    assert json.loads(connection.calls[4][1][1]) == {
+        "users.password_history": 8,
+        "users.single_session": True,
+        "ui.page_size": 25,
+    }
+    assert "iam.set_default_org_admin_password" in connection.calls[5][0]
+
+
+def test_organisation_setup_options_returns_published_defaults(api_setup) -> None:
+    client, connection, settings = api_setup
+    connection.results.append(
+        FakeResult(
+            one={
+                "options": {
+                    "settings_template_version": 3,
+                    "defaults": {"currency_code": "INR", "page_size": 15},
+                    "modules": [{"code": "MEMBER", "default_enabled": True}],
+                    "features": [],
+                    "settings": [
+                        {"key": "users.password_history", "default_value": 5}
+                    ],
+                }
+            }
+        )
+    )
+
+    response = client.get(
+        "/api/v1/super-admin/organisations/setup-options",
+        headers=auth_headers(settings),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["settings_template_version"] == 3
+    assert response.json()["defaults"]["page_size"] == 15
+    assert len(connection.calls) == 1
+    assert "platform.get_organisation_setup_options" in connection.calls[0][0]
 
 
 def test_super_admin_can_disable_and_reenable_an_organisation(api_setup) -> None:

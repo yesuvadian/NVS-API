@@ -122,23 +122,36 @@ void main() {
       if (orgTitle.evaluate().isEmpty) {
         createdTenant = true;
         await tapOn(tester, find.text('Create organisation').first);
-        final orgFields = find.descendant(
+        final profileFields = find.descendant(
           of: find.byType(AlertDialog),
           matching: find.byType(TextField),
         );
-        await typeInto(tester, orgFields.at(0), tenantCode);
-        await typeInto(tester, orgFields.at(1), 'Flutter E2E $tenantCode');
-        await typeInto(tester, orgFields.at(2), 'Flutter E2E Administrator');
+        await typeInto(tester, profileFields.at(0), tenantCode);
+        await typeInto(tester, profileFields.at(1), 'Flutter E2E $tenantCode');
+        await tapOn(tester, find.widgetWithText(FilledButton, 'Next'));
+
+        final adminFields = find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        );
+        await typeInto(tester, adminFields.at(0), 'Flutter E2E Administrator');
         final stamp = DateTime.now().millisecondsSinceEpoch;
         final mobile = '9${(stamp % 1000000000).toString().padLeft(9, '0')}';
-        await typeInto(tester, orgFields.at(3), mobile);
-        await typeInto(tester, orgFields.at(4), adminUser);
-        await tester.tap(
-          find.byKey(const ValueKey('org-loan-repayment-module')),
+        await typeInto(tester, adminFields.at(1), mobile);
+        await typeInto(tester, adminFields.at(2), adminUser);
+        await tapOn(tester, find.widgetWithText(FilledButton, 'Next'));
+        await tapOn(tester, find.byKey(const ValueKey('org-module-LOAN')));
+        await tapOn(
+          tester,
+          find.byKey(const ValueKey('org-module-LOAN_REPAY')),
         );
-        await tester.pumpAndSettle();
+        await tapOn(tester, find.widgetWithText(FilledButton, 'Next'));
+        final settingFields = find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        );
         setupFormValues = tester
-            .widgetList<TextField>(orgFields)
+            .widgetList<TextField>(settingFields)
             .map((field) => field.controller?.text ?? '')
             .join(' | ');
 

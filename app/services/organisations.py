@@ -21,6 +21,9 @@ class OrganisationService:
             raise AppError("ORGANISATION_NOT_FOUND")
         return tenant
 
+    async def setup_options(self):
+        return await self.repository.setup_options()
+
     async def set_enabled(self, tenant_id: UUID, enabled: bool, reason: str):
         result = await self.repository.set_enabled(tenant_id, enabled, reason)
         if result is None:
@@ -47,6 +50,22 @@ class OrganisationService:
             tenant_id, payload.password_history_count
         )
         await self.repository.set_single_session(tenant_id, payload.single_session_enabled)
+        await self.repository.apply_onboarding_profile(
+            tenant_id,
+            {
+                "legal_name": payload.legal_name,
+                "registration_no": payload.registration_no,
+                "address": payload.address,
+                "time_zone": payload.time_zone,
+                "currency_code": payload.currency_code,
+                "data_region": payload.data_region,
+                "is_sandbox": payload.is_sandbox,
+            },
+        )
+        settings = dict(payload.settings)
+        settings.setdefault("users.password_history", payload.password_history_count)
+        settings.setdefault("users.single_session", payload.single_session_enabled)
+        await self.repository.apply_onboarding_settings(tenant_id, settings)
         default_hash = await run_in_threadpool(
             hash_password, INITIAL_DEFAULT_PASSWORD, minimum_length=1
         )

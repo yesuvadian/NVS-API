@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 from datetime import datetime
 from uuid import UUID
 
@@ -14,10 +14,16 @@ class OrganisationCreate(BaseModel):
     admin_name: str = Field(min_length=2, max_length=160)
     admin_mobile: Mobile
     admin_email: EmailStr
+    legal_name: str | None = Field(default=None, max_length=250)
+    registration_no: str | None = Field(default=None, max_length=100)
+    address: dict[str, Any] = Field(default_factory=dict)
     optional_modules: list[str] = Field(default_factory=list, max_length=40)
     features: list[str] = Field(default_factory=list, max_length=40)
     is_sandbox: bool = False
     time_zone: str = "Asia/Kolkata"
+    currency_code: str = Field(default="INR", min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
+    data_region: str = Field(default="IN", min_length=2, max_length=8, pattern=r"^[A-Z]{2,8}$")
+    settings: dict[str, Any] = Field(default_factory=dict)
     password_history_count: int = Field(default=5, ge=1, le=24)
     single_session_enabled: bool = False
 

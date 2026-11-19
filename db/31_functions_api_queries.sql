@@ -982,6 +982,190 @@ $$;
 REVOKE ALL ON FUNCTION platform.set_tenant_single_session(uuid,boolean) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform.set_tenant_single_session(uuid,boolean) TO nvs_app;
 
+-- Super Admin organisation wizard: published defaults and configurable setup choices.
+CREATE OR REPLACE FUNCTION platform.get_organisation_setup_options()
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, platform, app AS
+$$
+DECLARE v_version integer;
+BEGIN
+    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+       OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
+        PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can view organisation setup options');
+    END IF;
+    SELECT version_no INTO v_version FROM platform.settings_template WHERE status='PUBLISHED';
+    IF v_version IS NULL THEN
+        PERFORM app.fail('NO_SETTINGS_TEMPLATE', 'No published default settings template');
+    END IF;
+    RETURN jsonb_build_object(
+        'settings_template_version', v_version,
+        'defaults', jsonb_build_object(
+            'time_zone', coalesce((SELECT value #>> '{}' FROM platform.settings_template_item
+                                    WHERE version_no=v_version AND setting_key='general.time_zone'), 'Asia/Kolkata'),
+            'currency_code', coalesce((SELECT value #>> '{}' FROM platform.settings_template_item
+                                        WHERE version_no=v_version AND setting_key='general.currency'), 'INR'),
+            'data_region', 'IN',
+            'is_sandbox', false,
+            'password_history', coalesce((SELECT (value #>> '{}')::integer FROM platform.settings_template_item
+                                           WHERE version_no=v_version AND setting_key='users.password_history'), 5),
+            'single_session', coalesce((SELECT (value #>> '{}')::boolean FROM platform.settings_template_item
+                                         WHERE version_no=v_version AND setting_key='users.single_session'), false),
+            'page_size', coalesce((SELECT (value #>> '{}')::integer FROM platform.settings_template_item
+                                    WHERE version_no=v_version AND setting_key='ui.page_size'), 15),
+            'language', coalesce((SELECT value #>> '{}' FROM platform.settings_template_item
+                                   WHERE version_no=v_version AND setting_key='general.language'), 'en')
+        ),
+        'modules', coalesce((
+            SELECT jsonb_agg(jsonb_build_object(
+                'code', m.module_code, 'name', m.module_name, 'description', m.description,
+                'is_core', m.is_core, 'is_optional_legal', m.is_optional_legal,
+                'default_enabled', m.is_core
+            ) ORDER BY m.menu_order, m.module_code)
+              FROM platform.module m
+             WHERE m.is_active AND m.is_menu
+               AND m.module_type IN ('MODULE','CONFIGURATION','REPORT')
+        ), '[]'::jsonb),
+        'features', coalesce((
+            SELECT jsonb_agg(jsonb_build_object(
+                'code', f.feature_code, 'name', f.name, 'description', f.description,
+                'module_code', f.module_code, 'legal_warning', f.legal_warning,
+                'default_enabled', false
+            ) ORDER BY f.sort_order, f.feature_code)
+              FROM platform.compliance_feature f
+        ), '[]'::jsonb),
+        'settings', coalesce((
+            SELECT jsonb_agg(jsonb_build_object(
+                'key', d.setting_key, 'area', d.area, 'name', d.name,
+                'description', d.description, 'data_type', d.data_type,
+                'editable_by', d.editable_by, 'validation', d.validation,
+                'is_proposed', d.is_proposed, 'default_value', i.value
+            ) ORDER BY d.sort_order, d.setting_key)
+              FROM platform.setting_definition d
+              LEFT JOIN platform.settings_template_item i
+                ON i.version_no=v_version AND i.setting_key=d.setting_key
+        ), '[]'::jsonb)
+    );
+END
+$$;
+
+CREATE OR REPLACE FUNCTION platform.apply_tenant_onboarding_profile(
+    p_tenant_id uuid, p_profile jsonb)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, platform, app AS
+$$
+DECLARE v_zone text; v_currency text; v_region text;
+BEGIN
+    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+       OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
+        PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can configure organisation profile defaults');
+    END IF;
+    IF jsonb_typeof(p_profile) IS DISTINCT FROM 'object' THEN
+        PERFORM app.fail('INVALID_DATA', 'Organisation profile settings must be an object');
+    END IF;
+    v_zone := p_profile->>'time_zone';
+    v_currency := p_profile->>'currency_code';
+    v_region := p_profile->>'data_region';
+    IF v_zone IS NULL OR NOT EXISTS (SELECT 1 FROM pg_timezone_names WHERE name=v_zone) THEN
+        PERFORM app.fail('INVALID_DATA', 'Choose a valid time zone');
+    END IF;
+    IF v_currency IS NULL OR v_currency !~ '^[A-Z]{3}$' THEN
+        PERFORM app.fail('INVALID_DATA', 'Currency must be a three-letter uppercase code');
+    END IF;
+    IF v_region IS NULL OR v_region !~ '^[A-Z]{2,8}$' THEN
+        PERFORM app.fail('INVALID_DATA', 'Data region code is invalid');
+    END IF;
+    UPDATE platform.tenant
+       SET legal_name=nullif(btrim(p_profile->>'legal_name'),''),
+           registration_no=nullif(btrim(p_profile->>'registration_no'),''),
+           address=coalesce(p_profile->'address','{}'::jsonb),
+           time_zone=v_zone, currency_code=v_currency, data_region=v_region,
+           is_sandbox=coalesce((p_profile->>'is_sandbox')::boolean,false),
+           updated_at=now(), updated_by=app.platform_user_id(), row_version=row_version+1
+     WHERE id=p_tenant_id;
+    IF NOT FOUND THEN PERFORM app.fail('ORGANISATION_NOT_FOUND','Organisation not found'); END IF;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION platform.apply_tenant_onboarding_settings(
+    p_tenant_id uuid, p_settings jsonb)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, platform, cfg, app AS
+$$
+DECLARE v_item record; v_count integer := 0; v_kind text; v_number numeric;
+BEGIN
+    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+       OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
+        PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can configure organisation settings');
+    END IF;
+    IF jsonb_typeof(p_settings) IS DISTINCT FROM 'object' THEN
+        PERFORM app.fail('INVALID_DATA', 'Organisation settings must be an object');
+    END IF;
+    FOR v_item IN SELECT d.*, e.key AS supplied_key, e.value AS supplied_value
+                    FROM jsonb_each(p_settings) e
+                    LEFT JOIN platform.setting_definition d ON d.setting_key=e.key
+    LOOP
+        IF v_item.setting_key IS NULL OR v_item.editable_by='FIXED' THEN
+            PERFORM app.fail('INVALID_DATA', 'Unknown or fixed organisation setting: ' || v_item.supplied_key);
+        END IF;
+        v_kind := jsonb_typeof(v_item.supplied_value);
+        IF v_kind<>'null' AND (
+               (v_item.data_type='boolean' AND v_kind<>'boolean')
+            OR (v_item.data_type IN ('integer','decimal') AND v_kind<>'number')
+            OR (v_item.data_type='string' AND v_kind<>'string')
+            OR (v_item.data_type='list' AND v_kind<>'array')
+            OR (v_item.data_type='json' AND v_kind NOT IN ('object','array'))
+            OR (v_item.data_type='date' AND (v_kind<>'string' OR v_item.supplied_value #>> '{}' !~ '^\\d{4}-\\d{2}-\\d{2}$'))
+        ) THEN
+            PERFORM app.fail('INVALID_DATA', 'Setting value has the wrong type: ' || v_item.supplied_key);
+        END IF;
+        IF v_kind='number' THEN
+            v_number := (v_item.supplied_value #>> '{}')::numeric;
+            IF v_item.data_type='integer' AND trunc(v_number)<>v_number THEN
+                PERFORM app.fail('INVALID_DATA', 'Setting must be a whole number: ' || v_item.supplied_key);
+            END IF;
+            IF v_item.validation ? 'min' AND v_number < (v_item.validation->>'min')::numeric THEN
+                PERFORM app.fail('INVALID_DATA', 'Setting is below its minimum: ' || v_item.supplied_key);
+            END IF;
+            IF v_item.validation ? 'max' AND v_number > (v_item.validation->>'max')::numeric THEN
+                PERFORM app.fail('INVALID_DATA', 'Setting exceeds its maximum: ' || v_item.supplied_key);
+            END IF;
+        END IF;
+        IF v_item.validation ? 'enum' AND NOT (v_item.validation->'enum' @> jsonb_build_array(v_item.supplied_value)) THEN
+            PERFORM app.fail('INVALID_DATA', 'Setting value is not allowed: ' || v_item.supplied_key);
+        END IF;
+        UPDATE cfg.tenant_setting
+           SET value=v_item.supplied_value, source='SUPER_ADMIN',
+               is_locked=(v_item.editable_by='SUPER_ADMIN'),
+               reason='Configured by Super Administrator during organisation creation',
+               updated_at=now(), updated_by=app.platform_user_id(), row_version=row_version+1
+         WHERE id=(SELECT s.id FROM cfg.tenant_setting s
+                    WHERE s.tenant_id=p_tenant_id AND s.setting_key=v_item.setting_key
+                      AND s.status='ACTIVE'
+                    ORDER BY s.effective_from DESC, s.created_at DESC LIMIT 1);
+        IF NOT FOUND THEN
+            INSERT INTO cfg.tenant_setting(
+                tenant_id,setting_key,value,effective_from,status,source,template_version,
+                is_locked,reason,created_by,updated_by
+            )
+            SELECT p_tenant_id,v_item.setting_key,v_item.supplied_value,current_date,'ACTIVE','SUPER_ADMIN',
+                   t.settings_template_version,(v_item.editable_by='SUPER_ADMIN'),
+                   'Configured by Super Administrator during organisation creation',
+                   app.platform_user_id(),app.platform_user_id()
+              FROM platform.tenant t WHERE t.id=p_tenant_id;
+        END IF;
+        v_count := v_count + 1;
+    END LOOP;
+    RETURN v_count;
+END
+$$;
+
+REVOKE ALL ON FUNCTION platform.get_organisation_setup_options(),
+    platform.apply_tenant_onboarding_profile(uuid,jsonb),
+    platform.apply_tenant_onboarding_settings(uuid,jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.get_organisation_setup_options(),
+    platform.apply_tenant_onboarding_profile(uuid,jsonb),
+    platform.apply_tenant_onboarding_settings(uuid,jsonb) TO nvs_app;
+
 CREATE TABLE IF NOT EXISTS iam.auth_session (
     session_id uuid PRIMARY KEY,
     principal_kind text NOT NULL CHECK (principal_kind IN ('PLATFORM','TENANT')),

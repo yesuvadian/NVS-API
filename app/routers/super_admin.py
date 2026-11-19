@@ -1,4 +1,5 @@
 from typing import Literal
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Path, Query, status
@@ -44,6 +45,15 @@ async def list_organisations(
     _permission: PlatformPrincipal = Depends(require_platform_permission("tenants:can_view")),
 ):
     return await _org_service(conn).list(query=q, status_filter=status_filter, limit=limit, offset=offset)
+
+
+@router.get("/organisations/setup-options")
+async def organisation_setup_options(
+    conn: AsyncConnection = Depends(get_platform_db),
+    _permission: PlatformPrincipal = Depends(require_platform_permission("tenants:can_add")),
+) -> dict[str, Any]:
+    """Published defaults, module catalogue, features, and editable settings for the create wizard."""
+    return await _org_service(conn).setup_options()
 
 
 @router.get("/organisations/{tenant_id}", response_model=OrganisationOut)

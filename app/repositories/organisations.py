@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from uuid import UUID
 
@@ -25,6 +26,29 @@ class OrganisationRepository:
             (tenant_id,),
         )
         return await result.fetchone()
+
+    async def setup_options(self) -> dict[str, Any]:
+        result = await self.conn.execute(
+            "SELECT platform.get_organisation_setup_options() AS options"
+        )
+        row = await result.fetchone()
+        return row["options"]
+
+    async def apply_onboarding_profile(
+        self, tenant_id: UUID, profile: dict[str, Any]
+    ) -> None:
+        await self.conn.execute(
+            "SELECT platform.apply_tenant_onboarding_profile(%s,%s::jsonb)",
+            (tenant_id, json.dumps(profile)),
+        )
+
+    async def apply_onboarding_settings(
+        self, tenant_id: UUID, settings: dict[str, Any]
+    ) -> None:
+        await self.conn.execute(
+            "SELECT platform.apply_tenant_onboarding_settings(%s,%s::jsonb)",
+            (tenant_id, json.dumps(settings)),
+        )
 
     async def set_password_history_count(self, tenant_id: UUID, count: int) -> None:
         await self.conn.execute(
