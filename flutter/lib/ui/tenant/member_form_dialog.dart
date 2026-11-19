@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../providers/member_provider.dart';
 import '../../services/localization_service.dart';
 import '../../services/member_service.dart';
+import '../shared/reason_dialog.dart';
 
 /// What the form dialog returns.
 sealed class MemberFormResult {
@@ -121,61 +122,15 @@ class _MemberFormDialogState extends State<MemberFormDialog> {
     }
   }
 
-  Future<String?> _askDuplicateReason(String message) async {
+  Future<String?> _askDuplicateReason(String message) {
     final strings = AppStrings.of(context);
-    final controller = TextEditingController();
-    String? problem;
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(strings.text('duplicate_title')),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(message),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  maxLength: 500,
-                  maxLines: 3,
-                  minLines: 1,
-                  decoration: InputDecoration(
-                    labelText: strings.text('duplicate_reason_prompt'),
-                    errorText: problem,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(strings.text('cancel')),
-            ),
-            FilledButton(
-              onPressed: () {
-                final text = controller.text.trim();
-                if (text.length < 3 || text.length > 500) {
-                  setDialogState(
-                    () => problem = strings.text('reason_required'),
-                  );
-                  return;
-                }
-                Navigator.pop(context, text);
-              },
-              child: Text(strings.text('confirm_save')),
-            ),
-          ],
-        ),
-      ),
+    return askReason(
+      context,
+      title: strings.text('duplicate_title'),
+      message: message,
+      label: strings.text('duplicate_reason_prompt'),
+      confirmLabel: strings.text('confirm_save'),
     );
-    controller.dispose();
-    return reason;
   }
 
   Future<void> _offerReload(String message) async {

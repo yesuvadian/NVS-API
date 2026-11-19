@@ -42,7 +42,7 @@ class ManagedRole {
 
 class UserService {
   UserService(this.config, {http.Client? client})
-    : _client = client ?? ApiHttpClient();
+    : _client = client ?? ApiHttpClient(config.httpClient);
   final AppConfig config;
   final http.Client _client;
 

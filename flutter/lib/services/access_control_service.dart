@@ -44,7 +44,7 @@ class TenantModule {
 /// Super Admin: enable or disable an organisation's modules.
 class ModuleAccessService {
   ModuleAccessService(this.config, {http.Client? client})
-    : _client = client ?? ApiHttpClient();
+    : _client = client ?? ApiHttpClient(config.httpClient);
   final AppConfig config;
   final http.Client _client;
 
@@ -194,7 +194,7 @@ bool canChangePrivilege(
 /// Organisation: role x privilege matrix; changes apply immediately.
 class RolePrivilegeService {
   RolePrivilegeService(this.config, {http.Client? client})
-    : _client = client ?? ApiHttpClient();
+    : _client = client ?? ApiHttpClient(config.httpClient);
   final AppConfig config;
   final http.Client _client;
 

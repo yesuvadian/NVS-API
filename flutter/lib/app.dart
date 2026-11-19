@@ -13,8 +13,15 @@ import 'ui/shared/app_shell.dart';
 import 'ui/theme/app_theme.dart';
 
 class CfmsApp extends StatefulWidget {
-  const CfmsApp({super.key, required this.config});
+  const CfmsApp({
+    super.key,
+    required this.config,
+    this.sessionCheckInterval = const Duration(seconds: 30),
+  });
   final AppConfig config;
+
+  /// How often the session and privileges are re-checked.
+  final Duration sessionCheckInterval;
 
   @override
   State<CfmsApp> createState() => _CfmsAppState();
@@ -33,7 +40,7 @@ class _CfmsAppState extends State<CfmsApp> {
   void initState() {
     super.initState();
     _sessionMonitor = Timer.periodic(
-      const Duration(seconds: 30),
+      widget.sessionCheckInterval,
       (_) => _auth.verifySession(_locale.locale.languageCode),
     );
   }

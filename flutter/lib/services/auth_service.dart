@@ -80,7 +80,7 @@ abstract interface class AuthService {
 
 class ApiAuthService implements AuthService {
   ApiAuthService(this.config, {http.Client? client})
-    : _client = client ?? http.Client();
+    : _client = client ?? config.httpClient ?? http.Client();
 
   final AppConfig config;
   final http.Client _client;

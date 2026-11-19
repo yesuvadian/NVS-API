@@ -20,7 +20,7 @@ class OrganisationItem {
 
 class OrganisationService {
   OrganisationService(this.config, {http.Client? client})
-    : _client = client ?? ApiHttpClient();
+    : _client = client ?? ApiHttpClient(config.httpClient);
   final AppConfig config;
   final http.Client _client;
   Uri _uri(String path) =>

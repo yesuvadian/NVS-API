@@ -98,20 +98,13 @@ class _MembersScreenState extends State<MembersScreen> {
   Future<void> _edit(String memberId) async {
     if (_opening) return;
     setState(() => _opening = true);
+    Member member;
     try {
-      final member = await widget.service.get(
+      member = await widget.service.get(
         widget.token,
         widget.language(),
         memberId,
       );
-      if (!mounted) return;
-      final result = await showDialog<MemberFormResult>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) =>
-            MemberFormDialog(controller: _controller(existing: member)),
-      );
-      await _afterForm(result);
     } on AuthException catch (e) {
       if ({'SESSION_EXPIRED', 'NOT_SIGNED_IN'}.contains(e.code)) {
         widget.onSessionExpired?.call(e.message, e.code!);
@@ -120,9 +113,19 @@ class _MembersScreenState extends State<MembersScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text(e.message)));
       }
+      return;
     } finally {
+      // Stop the progress bar before the form opens.
       if (mounted) setState(() => _opening = false);
     }
+    if (!mounted) return;
+    final result = await showDialog<MemberFormResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          MemberFormDialog(controller: _controller(existing: member)),
+    );
+    await _afterForm(result);
   }
 
   Future<void> _afterForm(MemberFormResult? result) async {

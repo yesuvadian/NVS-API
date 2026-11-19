@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 class AppConfig {
   const AppConfig({
@@ -12,6 +13,7 @@ class AppConfig {
     required this.themeMode,
     required this.defaultPageSize,
     required this.maxPageSize,
+    this.httpClient,
   });
 
   final String appName;
@@ -22,6 +24,10 @@ class AppConfig {
   final String themeMode;
   final int defaultPageSize;
   final int maxPageSize;
+
+  /// HTTP client for every API call; tests pass a fake backend here.
+  /// Null in the app, which uses a real client.
+  final http.Client? httpClient;
 
   static Future<AppConfig> load() async {
     final envText = await rootBundle.loadString('.env');

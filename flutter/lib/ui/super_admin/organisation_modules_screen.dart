@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/access_control_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/localization_service.dart';
+import '../shared/reason_dialog.dart';
 
 /// Super Admin: switch an organisation's modules on and off.
 class OrganisationModulesScreen extends StatefulWidget {
@@ -67,48 +68,14 @@ class _OrganisationModulesScreenState extends State<OrganisationModulesScreen> {
     }
   }
 
-  Future<String?> _askReason(String title) async {
+  Future<String?> _askReason(String title) {
     final strings = AppStrings.of(context);
-    final controller = TextEditingController();
-    String? problem;
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(title),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 500,
-            decoration: InputDecoration(
-              labelText: strings.text('reason'),
-              errorText: problem,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(strings.text('cancel')),
-            ),
-            FilledButton(
-              onPressed: () {
-                final text = controller.text.trim();
-                if (text.length < 3) {
-                  setDialogState(
-                    () => problem = strings.text('reason_required'),
-                  );
-                  return;
-                }
-                Navigator.pop(context, text);
-              },
-              child: Text(strings.text('save')),
-            ),
-          ],
-        ),
-      ),
+    return askReason(
+      context,
+      title: title,
+      label: strings.text('reason'),
+      confirmLabel: strings.text('save'),
     );
-    controller.dispose();
-    return reason;
   }
 
   Future<void> _toggle(TenantModule module, bool enabled) async {
