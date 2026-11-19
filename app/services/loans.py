@@ -103,6 +103,20 @@ def exposure_reasons(*, definition: dict[str, Any], exposure: dict[str, Any] | N
     return reasons, required
 
 
+def nominee_requirement(
+    rule: dict[str, Any], *, first_loan: bool, first_loan_setting: bool, requested_amount: Decimal
+) -> bool:
+    """NOMINEE rule of the loan type: a nominee is needed for every loan
+    (everyLoan), for a member's first loan (firstLoan and the organisation
+    setting), or when the amount reaches thresholdAmount."""
+    if rule.get("everyLoan"):
+        return True
+    if first_loan and first_loan_setting and rule.get("firstLoan", True):
+        return True
+    threshold = rule.get("thresholdAmount")
+    return threshold is not None and requested_amount >= _decimal(threshold)
+
+
 class LoanService:
     def __init__(self, conn: AsyncConnection) -> None:
         self.repository = LoanRepository(conn)
@@ -191,10 +205,11 @@ class LoanService:
             reasons.append("TENURE_OUTSIDE_LOAN_TYPE_LIMITS")
 
         first_loan = bool(member["is_first_loan"] if first_loan is None else first_loan)
-        nominee_required = bool(
-            first_loan
-            and settings["nominee_mandatory_first_loan"]
-            and nominee_rule.get("firstLoan", True)
+        nominee_required = nominee_requirement(
+            nominee_rule,
+            first_loan=first_loan,
+            first_loan_setting=bool(settings["nominee_mandatory_first_loan"]),
+            requested_amount=requested_amount,
         )
         fee_enabled = bool(fee_rule.get("enabled", False))
         fee_amount = Decimal("0")

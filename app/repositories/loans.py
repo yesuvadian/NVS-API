@@ -64,7 +64,8 @@ class LoanRepository:
 
     async def application_nominee_count(self, loan_id: UUID) -> int:
         cursor = await self.conn.execute(
-            "SELECT loan.count_application_nominees(%s) AS nominee_count",
+            # Only nominees still ACTIVE count towards the nominee rule (db/31d).
+            "SELECT loan.count_active_application_nominees(%s) AS nominee_count",
             (loan_id,),
         )
         row = await cursor.fetchone()
