@@ -5,9 +5,6 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-import pytest
-
-from app.core.errors import AppError
 from app.schemas.dashboard import PlatformSummaryOut, TenantSummaryOut
 from app.services.dashboard import DashboardService, visible_sections
 
@@ -68,15 +65,26 @@ def test_tenant_summary_requests_and_returns_only_permitted_sections() -> None:
     }
 
 
-def test_tenant_summary_without_any_view_privilege_is_refused() -> None:
+def test_tenant_summary_without_any_view_privilege_returns_no_sections() -> None:
     repository = FakeRepository(privileges=["member.create"])
 
-    with pytest.raises(AppError) as error:
-        asyncio.run(_service(repository).tenant_summary("EMP"))
+    result = asyncio.run(_service(repository).tenant_summary("EMP"))
 
-    assert error.value.short_code == "NO_PRIVILEGE"
-    assert error.value.status_code == 403
+    assert result == {"working_date": None, "sections": []}
     assert repository.requested_sections is None
+
+
+def test_administration_section_for_user_or_settings_viewers() -> None:
+    assert visible_sections(["org.view"]) == ["administration"]
+    assert visible_sections(["user_role.view", "org.view"]) == ["administration"]
+    repository = FakeRepository(
+        privileges=["user_role.view"],
+        summary={"working_date": "2026-11-19", "administration": {
+            "active_users": 6, "locked_users": 1, "must_change_password": 2, "pending_setting_approvals": 1}},
+    )
+    result = asyncio.run(_service(repository).tenant_summary("ADM"))
+    assert repository.requested_sections == ["administration"]
+    assert result["administration"]["locked_users"] == 1
 
 
 def test_platform_summary_passes_through_repository_result() -> None:

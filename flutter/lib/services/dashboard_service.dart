@@ -74,6 +74,10 @@ class TenantSummary {
     this.pendingApprovals,
     this.collectionsCount,
     this.collectionsAmount,
+    this.activeUsers,
+    this.lockedUsers,
+    this.mustChangePassword,
+    this.pendingSettingApprovals,
   });
   final String? workingDate;
   final int? membersTotal;
@@ -82,18 +86,24 @@ class TenantSummary {
   final int? pendingApprovals;
   final int? collectionsCount;
   final double? collectionsAmount;
+  final int? activeUsers;
+  final int? lockedUsers;
+  final int? mustChangePassword;
+  final int? pendingSettingApprovals;
 
   bool get isEmpty =>
       membersTotal == null &&
       openApplications == null &&
       pendingApprovals == null &&
-      collectionsCount == null;
+      collectionsCount == null &&
+      activeUsers == null;
 
   factory TenantSummary.fromJson(Map<String, dynamic> json) {
     final members = json['members'] as Map<String, dynamic>?;
     final loans = json['loans'] as Map<String, dynamic>?;
     final approvals = json['approvals'] as Map<String, dynamic>?;
     final collections = json['collections'] as Map<String, dynamic>?;
+    final admin = json['administration'] as Map<String, dynamic>?;
     return TenantSummary(
       workingDate: json['working_date'] as String?,
       membersTotal: members == null ? null : _int(members['total']),
@@ -104,6 +114,14 @@ class TenantSummary {
       collectionsAmount: collections == null
           ? null
           : _double(collections['amount']),
+      activeUsers: admin == null ? null : _int(admin['active_users']),
+      lockedUsers: admin == null ? null : _int(admin['locked_users']),
+      mustChangePassword: admin == null
+          ? null
+          : _int(admin['must_change_password']),
+      pendingSettingApprovals: admin == null
+          ? null
+          : _int(admin['pending_setting_approvals']),
     );
   }
 }

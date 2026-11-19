@@ -49,6 +49,13 @@ class CollectionSummary(BaseModel):
     amount: Decimal = Decimal("0")
 
 
+class AdministrationSummary(BaseModel):
+    active_users: int = 0
+    locked_users: int = 0
+    must_change_password: int = 0
+    pending_setting_approvals: int = 0
+
+
 class TenantSummaryOut(BaseModel):
     working_date: dt.date | None = None
     sections: list[str]
@@ -56,3 +63,4 @@ class TenantSummaryOut(BaseModel):
     loans: LoanSummary | None = None
     approvals: ApprovalSummary | None = None
     collections: CollectionSummary | None = None
+    administration: AdministrationSummary | None = None

@@ -5,22 +5,22 @@ from typing import Any
 
 from psycopg import AsyncConnection
 
-from app.core.errors import AppError
 from app.repositories.dashboard import DashboardRepository
 
-# Overview section -> privilege needed to see it. Order is the display order.
-TENANT_SECTION_PRIVILEGES: dict[str, str] = {
-    "members": "member.view",
-    "loans": "loan.view",
-    "approvals": "loan.approve",
-    "collections": "loan_repay.view",
+# Overview section -> privileges, any of which shows it. Order is display order.
+TENANT_SECTION_PRIVILEGES: dict[str, frozenset[str]] = {
+    "members": frozenset({"member.view"}),
+    "loans": frozenset({"loan.view"}),
+    "approvals": frozenset({"loan.approve"}),
+    "collections": frozenset({"loan_repay.view"}),
+    "administration": frozenset({"user_role.view", "org.view"}),
 }
 
 
 def visible_sections(privileges: Iterable[str]) -> list[str]:
     """Sections of the tenant Overview the holder of these privileges may see."""
     held = set(privileges)
-    return [section for section, privilege in TENANT_SECTION_PRIVILEGES.items() if privilege in held]
+    return [section for section, needed in TENANT_SECTION_PRIVILEGES.items() if held & needed]
 
 
 class DashboardService:
@@ -31,12 +31,11 @@ class DashboardService:
         return await self.repository.platform_summary()
 
     async def tenant_summary(self, role_code: str) -> dict[str, Any]:
+        """The Overview never refuses a signed-in user: without any matching
+        privilege it returns no sections."""
         sections = visible_sections(await self.repository.tenant_privileges(role_code))
         if not sections:
-            raise AppError(
-                "NO_PRIVILEGE",
-                params={"privilege": " / ".join(TENANT_SECTION_PRIVILEGES.values())},
-            )
+            return {"working_date": None, "sections": []}
         summary = await self.repository.tenant_summary(sections)
         # Only the sections the user may see, even if the database returns more.
         return {

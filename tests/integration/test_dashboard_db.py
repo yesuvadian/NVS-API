@@ -14,7 +14,7 @@ from tests.integration.loan_harness import LoanDb, run_db
 
 pytestmark = pytest.mark.postgres
 
-ALL_SECTIONS = ["members", "loans", "approvals", "collections"]
+ALL_SECTIONS = ["members", "loans", "approvals", "collections", "administration"]
 
 
 def test_tenant_summary_counts_members_applications_approvals_and_collections():
@@ -98,5 +98,38 @@ def test_platform_summary_refuses_tenant_scope():
         await db.fails("SELECT platform.get_platform_summary()", code="PLATFORM_CONTEXT_REQUIRED")
         await db.conn.execute("SELECT app.clear_context()")
         await db.fails("SELECT platform.get_platform_summary()", code="PLATFORM_CONTEXT_REQUIRED")
+
+    run_db(scenario)
+
+
+def test_tenant_summary_administration_counts_users_and_pending_settings():
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+        await db.act(t, "ADM", t.d0)
+        before = (await db.val("SELECT core.get_tenant_summary(%s::text[])", (["administration"],)))["administration"]
+        expected_active = await db.val(
+            "SELECT count(*) FROM iam.app_user WHERE tenant_id=%s AND status='ACTIVE'", (t.id,))
+        expected_change = await db.val(
+            "SELECT count(*) FROM iam.app_user WHERE tenant_id=%s AND status='ACTIVE' AND must_change_password",
+            (t.id,))
+        assert before["active_users"] == expected_active >= 6
+        assert before["must_change_password"] == expected_change
+        assert before["locked_users"] == 0
+
+        await db.conn.execute("UPDATE iam.app_user SET locked_until = now() + interval '1 hour' WHERE id=%s",
+                              (t.users["EMP"],))
+        await db.conn.execute(
+            """INSERT INTO cfg.tenant_setting (tenant_id, setting_key, value, effective_from, status)
+               VALUES (%s, 'ui.page_size', '30'::jsonb, %s, 'PENDING_APPROVAL')""", (t.id, t.d0))
+        await db.act(t, "ADM", t.d0)
+        after = (await db.val("SELECT core.get_tenant_summary(%s::text[])", (["administration"],)))["administration"]
+        assert after["locked_users"] == 1
+        assert after["pending_setting_approvals"] == before["pending_setting_approvals"] + 1
+
+        # Another organisation's users are not counted.
+        other = await db.new_tenant()
+        await db.act(other, "ADM", other.d0)
+        theirs = (await db.val("SELECT core.get_tenant_summary(%s::text[])", (["administration"],)))["administration"]
+        assert theirs["locked_users"] == 0
 
     run_db(scenario)

@@ -14,5 +14,6 @@ async def tenant_summary(
     principal: TenantPrincipal = Depends(require_tenant_user),
     conn: AsyncConnection = Depends(get_tenant_db),
 ):
-    """Live Overview counts; only sections the user's privileges allow."""
+    """Live Overview counts; only sections the user's privileges allow.
+    Never 403 for a signed-in user: no matching privilege gives no sections."""
     return await DashboardService(conn).tenant_summary(principal.role_code)

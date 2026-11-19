@@ -140,6 +140,45 @@ void main() {
     expect(expiredCode, 'SESSION_EXPIRED');
   });
 
+  test('empty tenant summary has no sections', () async {
+    final service = DashboardService(
+      config,
+      client: MockClient((request) async => json({'sections': []})),
+    );
+
+    final summary = await service.tenantSummary('tok', 'en');
+
+    expect(summary.isEmpty, isTrue);
+    expect(summary.activeUsers, isNull);
+  });
+
+  test('administration section is parsed', () async {
+    final service = DashboardService(
+      config,
+      client: MockClient(
+        (request) async => json({
+          'working_date': '2026-11-19',
+          'sections': ['administration'],
+          'administration': {
+            'active_users': 6,
+            'locked_users': 1,
+            'must_change_password': 2,
+            'pending_setting_approvals': 3,
+          },
+        }),
+      ),
+    );
+
+    final summary = await service.tenantSummary('tok', 'en');
+
+    expect(summary.isEmpty, isFalse);
+    expect(summary.membersTotal, isNull);
+    expect(summary.activeUsers, 6);
+    expect(summary.lockedUsers, 1);
+    expect(summary.mustChangePassword, 2);
+    expect(summary.pendingSettingApprovals, 3);
+  });
+
   test('rupee amounts use Indian digit grouping', () {
     expect(formatRupees(0), '₹0.00');
     expect(formatRupees(42500), '₹42,500.00');

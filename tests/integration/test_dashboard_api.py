@@ -156,12 +156,28 @@ def test_tenant_summary_collections_amount_is_returned(api) -> None:
     assert "members" not in body
 
 
-def test_tenant_summary_without_privilege_is_403(api) -> None:
+def test_tenant_summary_without_privilege_is_200_with_no_sections(api) -> None:
     client, connection, _ = api
     connection.script({"capabilities": {"privileges": ["member.create"]}})
 
     response = client.get("/api/v1/tenant/summary")
 
-    assert response.status_code == 403
-    assert response.json()["detail"]["shortCode"] == "NO_PRIVILEGE"
+    assert response.status_code == 200
+    assert response.json() == {"sections": []}
     assert len(connection.calls) == 1  # summary not computed
+
+
+def test_org_admin_gets_administration_section(api) -> None:
+    client, connection, _ = api
+    admin = {"active_users": 6, "locked_users": 1, "must_change_password": 2, "pending_setting_approvals": 1}
+    connection.script(
+        {"capabilities": {"role_code": "ADM", "privileges": ["org.edit", "org.view", "user_role.view"]}},
+        {"summary": {"working_date": "2026-11-19", "administration": admin}},
+    )
+
+    response = client.get("/api/v1/tenant/summary")
+
+    assert response.status_code == 200
+    assert response.json() == {"working_date": "2026-11-19", "sections": ["administration"],
+                               "administration": admin}
+    assert connection.calls[1][1] == (["administration"],)

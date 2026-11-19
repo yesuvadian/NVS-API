@@ -57,7 +57,8 @@ GRANT EXECUTE ON FUNCTION platform.get_platform_summary() TO nvs_app;
 
 -- p_sections chooses which parts to compute; the API passes only the sections
 -- the user may see: 'members' (member.view), 'loans' (loan.view),
--- 'approvals' (loan.approve), 'collections' (loan_repay.view).
+-- 'approvals' (loan.approve), 'collections' (loan_repay.view),
+-- 'administration' (user_role.view or org.view).
 -- Sections the tenant has no data for return zeros.
 CREATE OR REPLACE FUNCTION core.get_tenant_summary(p_sections text[])
 RETURNS jsonb LANGUAGE plpgsql STABLE AS
@@ -119,6 +120,19 @@ BEGIN
              WHERE r.tenant_id = app.tenant_id()
                AND r.value_date = v_today
                AND r.status = 'POSTED'));
+    END IF;
+
+    IF 'administration' = ANY (p_sections) THEN
+        v_result := v_result || jsonb_build_object('administration', jsonb_build_object(
+            'active_users', (SELECT count(*) FROM iam.app_user u
+                              WHERE u.tenant_id = app.tenant_id() AND u.status = 'ACTIVE'),
+            'locked_users', (SELECT count(*) FROM iam.app_user u
+                              WHERE u.tenant_id = app.tenant_id() AND u.locked_until > now()),
+            'must_change_password', (SELECT count(*) FROM iam.app_user u
+                              WHERE u.tenant_id = app.tenant_id() AND u.status = 'ACTIVE'
+                                AND u.must_change_password),
+            'pending_setting_approvals', (SELECT count(*) FROM cfg.tenant_setting s
+                              WHERE s.tenant_id = app.tenant_id() AND s.status = 'PENDING_APPROVAL')));
     END IF;
 
     RETURN v_result || jsonb_build_object('working_date', v_today);

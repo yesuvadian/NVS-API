@@ -88,7 +88,23 @@ class _TenantDashboardState extends State<TenantDashboard> {
               if (summary == null && _provider.isLoading)
                 const DashboardLoading(),
               if (summary != null && summary.isEmpty)
-                Text(strings.text('no_dashboard_data')),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.dashboard_customize_outlined,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(strings.text('no_dashboard_data')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (summary != null && !summary.isEmpty)
                 Wrap(
                   spacing: 14,
@@ -124,6 +140,28 @@ class _TenantDashboardState extends State<TenantDashboard> {
                             .text('receipts_count')
                             .replaceAll('{n}', '${summary.collectionsCount}'),
                       ),
+                    if (summary.activeUsers != null) ...[
+                      MetricCard(
+                        label: strings.text('active_users'),
+                        value: '${summary.activeUsers}',
+                        icon: Icons.people_alt_outlined,
+                      ),
+                      MetricCard(
+                        label: strings.text('locked_users'),
+                        value: '${summary.lockedUsers ?? 0}',
+                        icon: Icons.lock_outline,
+                      ),
+                      MetricCard(
+                        label: strings.text('must_change_password_users'),
+                        value: '${summary.mustChangePassword ?? 0}',
+                        icon: Icons.password_outlined,
+                      ),
+                      MetricCard(
+                        label: strings.text('pending_setting_approvals'),
+                        value: '${summary.pendingSettingApprovals ?? 0}',
+                        icon: Icons.rule_outlined,
+                      ),
+                    ],
                   ],
                 ),
               const SizedBox(height: 18),
