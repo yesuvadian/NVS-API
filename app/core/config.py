@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     database_pool_max: int = 10
     web_concurrency: int = Field(default=1, ge=1, validation_alias="WEB_CONCURRENCY")
     require_platform_mfa: bool = True
+    require_tenant_mfa: bool = True
+    auth_access_token_minutes: int = Field(default=60, ge=5, le=1440)
+    cors_origins: list[str] = Field(default_factory=list)
+    # Optional regex for allowed origins, e.g. any localhost port during local
+    # Flutter web development (flutter run -d chrome picks a random port).
+    cors_origin_regex: str | None = None
     platform_jwt_secret: SecretStr | None = None
     platform_jwt_issuer: str = "cfms-platform"
     platform_jwt_audience: str = "cfms-super-admin-api"

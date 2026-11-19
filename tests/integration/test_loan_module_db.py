@@ -766,7 +766,7 @@ class Api:
     async def call(self, role: str, method: str, path: str, *, on: date | None = None, lang: str = "en",
                    json=None, headers: dict[str, str] | None = None) -> httpx.Response:
         on = on or self.tenant.d0
-        self.principal = TenantPrincipal(tenant_id=self.tenant.id, user_id=self.tenant.users[role],
+        self.principal = TenantPrincipal(tenant_id=self.tenant.id, user_id=self.tenant.users[role], session_id=uuid4(),
                                          role_code=role.rstrip("2"), channel="WEB", mfa_verified=False,
                                          working_date=on)
         await self.db.act(self.tenant, role, on)

@@ -1,8 +1,10 @@
 from uuid import UUID
+from starlette.concurrency import run_in_threadpool
 
 from psycopg import AsyncConnection, errors
 
 from app.core.errors import AppError
+from app.core.passwords import INITIAL_DEFAULT_PASSWORD, hash_password
 from app.repositories.organisations import OrganisationRepository
 
 
@@ -18,6 +20,12 @@ class OrganisationService:
         if tenant is None:
             raise AppError("ORGANISATION_NOT_FOUND")
         return tenant
+
+    async def set_enabled(self, tenant_id: UUID, enabled: bool, reason: str):
+        result = await self.repository.set_enabled(tenant_id, enabled, reason)
+        if result is None:
+            raise AppError("ORGANISATION_NOT_FOUND")
+        return result
 
     async def create(self, payload, platform_user_id: UUID):
         try:
@@ -35,6 +43,14 @@ class OrganisationService:
             )
         except errors.UniqueViolation:
             raise AppError("ORGANISATION_CODE_EXISTS") from None
+        await self.repository.set_password_history_count(
+            tenant_id, payload.password_history_count
+        )
+        await self.repository.set_single_session(tenant_id, payload.single_session_enabled)
+        default_hash = await run_in_threadpool(
+            hash_password, INITIAL_DEFAULT_PASSWORD, minimum_length=1
+        )
+        await self.repository.set_default_admin_password(tenant_id, default_hash)
         # Rules raised by platform.provision_tenant (app.fail) reach the database
         # error handler, which returns their catalogue code and localised message.
         return await self.get(tenant_id)

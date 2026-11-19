@@ -42,6 +42,7 @@ def loan_api():
     principal = TenantPrincipal(
         tenant_id=uuid4(),
         user_id=uuid4(),
+        session_id=uuid4(),
         role_code="EMP",
         channel="WEB",
         mfa_verified=False,

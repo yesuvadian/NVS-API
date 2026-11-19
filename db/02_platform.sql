@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS platform.platform_user (
                      CHECK (platform_role IN ('SUPER_ADMIN','SUPPORT','BILLING')),
     status           text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','INACTIVE','LOCKED')),
     password_hash    text,
+    must_change_password boolean NOT NULL DEFAULT true,
     mfa_enabled      boolean NOT NULL DEFAULT true,   -- MFA mandatory for platform roles
     mfa_secret_enc   text,
     failed_attempts  integer NOT NULL DEFAULT 0,
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS platform.platform_user (
     updated_by       uuid,
     row_version      integer NOT NULL DEFAULT 1
 );
+ALTER TABLE platform.platform_user ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT true;
 CREATE UNIQUE INDEX IF NOT EXISTS platform_user_email_uq ON platform.platform_user (lower(email));
 
 CREATE TABLE IF NOT EXISTS platform.platform_sign_in (

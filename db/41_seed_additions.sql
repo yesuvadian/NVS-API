@@ -16,7 +16,8 @@ WITH s(setting_key, area, name, data_type, editable_by, value, scope_ref, is_pro
  ('branding.document_headers','Branding','Headers and footers for statements, payslips and reports','json','ORG_ADMIN',
   '{"statement":{"header":"","footer":""},"payslip":{"header":"","footer":""},"report":{"header":"","footer":""}}','35.6',false,26),
  ('payroll.frequency','Payroll','Payroll frequency','string','ORG_ADMIN','"MONTHLY"','4.3',true,150),
- ('ui.auto_refresh_minutes','User interface','Dashboard and queue auto-refresh (minutes, 0 = off)','integer','ORG_ADMIN','5','36',false,160)
+ ('ui.auto_refresh_minutes','User interface','Dashboard and queue auto-refresh (minutes, 0 = off)','integer','ORG_ADMIN','5','36',false,160),
+ ('ui.page_size','User interface','Rows per page','integer','ORG_ADMIN','15','36',false,161)
 ),
 d AS (
     INSERT INTO platform.setting_definition (setting_key, area, name, data_type, editable_by, scope_ref, is_proposed, sort_order)

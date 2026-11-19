@@ -31,14 +31,17 @@
 -- -----------------------------------------------------------------------------
 -- Confirms the token's user, role assignment and channel access are active on
 -- the working date. Returns no row when access must be refused.
+DROP FUNCTION IF EXISTS iam.get_tenant_access(uuid,uuid,text,date,text);
 CREATE OR REPLACE FUNCTION iam.get_tenant_access(
     p_tenant_id uuid, p_user_id uuid, p_role_code text,
     p_working_date date, p_channel text)
-RETURNS TABLE (status text, web_access boolean, mobile_access boolean, requires_mfa boolean)
+RETURNS TABLE (status text, web_access boolean, mobile_access boolean, requires_mfa boolean,
+               tenant_enabled boolean)
 LANGUAGE sql STABLE AS
 $$
-    SELECT u.status, u.web_access, u.mobile_access, r.requires_mfa
+    SELECT u.status, u.web_access, u.mobile_access, r.requires_mfa, t.status = 'ACTIVE'
       FROM iam.app_user u
+      JOIN platform.tenant t ON t.id = u.tenant_id
       JOIN iam.user_role ur ON ur.tenant_id = u.tenant_id AND ur.user_id = u.id
       JOIN iam.role r ON r.tenant_id = ur.tenant_id AND r.id = ur.role_id
      WHERE u.tenant_id = p_tenant_id AND u.id = p_user_id AND r.role_code = p_role_code
@@ -382,3 +385,681 @@ GRANT EXECUTE ON FUNCTION
     platform.is_active_language(text),
     platform.get_error_catalogue()
 TO nvs_app;
+
+-- -----------------------------------------------------------------------------
+-- Authentication (called before any tenant/platform DB context exists)
+-- -----------------------------------------------------------------------------
+-- SECURITY DEFINER is limited to these credential/attempt operations. Password
+-- hashes are returned only to the API runtime for verification; raw passwords
+-- are never sent to PostgreSQL.
+DROP FUNCTION IF EXISTS iam.login_candidates(text,text);
+CREATE OR REPLACE FUNCTION iam.login_candidates(p_identifier text, p_channel text)
+RETURNS TABLE (
+    principal_kind text, user_id uuid, tenant_id uuid, display_name text,
+    password_hash text, account_status text, platform_role text, role_code text,
+    channel_access boolean, mfa_enabled boolean, role_requires_mfa boolean,
+    must_change_password boolean, locked_until timestamptz, tenant_status text)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, iam, platform AS
+$$
+    SELECT 'PLATFORM'::text, pu.id, NULL::uuid, pu.full_name, pu.password_hash,
+           pu.status, pu.platform_role, NULL::text, p_channel = 'WEB',
+           pu.mfa_enabled, pu.mfa_enabled, pu.must_change_password, pu.locked_until, NULL::text
+      FROM platform.platform_user pu
+     WHERE (lower(pu.email) = lower(btrim(p_identifier)) OR pu.id::text = lower(btrim(p_identifier)))
+       AND pu.platform_role = 'SUPER_ADMIN'
+    UNION ALL
+    SELECT 'TENANT'::text, u.id, u.tenant_id, u.full_name, u.password_hash,
+           u.status, NULL::text, role_pick.role_code,
+           t.status = 'ACTIVE' AND CASE p_channel WHEN 'WEB' THEN u.web_access
+                                                  WHEN 'MOBILE' THEN u.mobile_access ELSE false END,
+           u.mfa_enabled, coalesce(role_pick.requires_mfa, false), u.must_change_password, u.locked_until, t.status
+      FROM iam.app_user u
+      JOIN platform.tenant t ON t.id = u.tenant_id
+      LEFT JOIN LATERAL (
+          SELECT r.role_code, r.requires_mfa
+            FROM iam.user_role ur
+            JOIN iam.role r ON r.tenant_id = ur.tenant_id AND r.id = ur.role_id
+           WHERE ur.tenant_id = u.tenant_id AND ur.user_id = u.id
+             AND r.status = 'ACTIVE'
+             AND ur.effective_from <= current_date
+             AND (ur.effective_to IS NULL OR ur.effective_to >= current_date)
+           ORDER BY (ur.role_id = u.primary_role_id) DESC, ur.effective_from DESC, r.role_code
+           LIMIT 1
+      ) role_pick ON true
+     WHERE lower(btrim(p_identifier)) IN (lower(u.username), lower(u.email))
+        OR u.mobile = btrim(p_identifier)
+        OR u.id::text = lower(btrim(p_identifier))
+     ORDER BY 1, 3 NULLS FIRST
+     LIMIT 3
+$$;
+
+CREATE OR REPLACE FUNCTION iam.record_login_attempt(
+    p_principal_kind text, p_user_id uuid, p_tenant_id uuid, p_identifier text,
+    p_channel text, p_success boolean, p_failure_reason text,
+    p_ip_address text DEFAULT NULL, p_device text DEFAULT NULL, p_user_agent text DEFAULT NULL)
+RETURNS timestamptz LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam, platform, cfg AS
+$$
+DECLARE
+    v_locked_until timestamptz;
+    v_threshold integer := 5;
+    v_attempts integer;
+BEGIN
+    IF p_principal_kind = 'PLATFORM' AND p_user_id IS NOT NULL THEN
+        IF p_success THEN
+            UPDATE platform.platform_user
+               SET failed_attempts = 0, locked_until = NULL, last_login_at = now()
+             WHERE id = p_user_id
+             RETURNING locked_until INTO v_locked_until;
+        ELSIF p_failure_reason <> 'LOCKED' THEN
+            UPDATE platform.platform_user
+               SET failed_attempts = failed_attempts + 1,
+                   locked_until = CASE WHEN failed_attempts + 1 >= v_threshold
+                                       THEN now() + interval '30 minutes' ELSE locked_until END
+             WHERE id = p_user_id
+             RETURNING locked_until INTO v_locked_until;
+        ELSE
+            SELECT locked_until INTO v_locked_until FROM platform.platform_user WHERE id = p_user_id;
+        END IF;
+        INSERT INTO platform.platform_sign_in(platform_user_id, username, success, failure_reason,
+                                              ip_address, device, user_agent)
+        VALUES (p_user_id, p_identifier, p_success, CASE WHEN p_success THEN NULL ELSE p_failure_reason END,
+                nullif(p_ip_address, '')::inet, p_device, p_user_agent);
+    ELSIF p_principal_kind = 'TENANT' AND p_user_id IS NOT NULL AND p_tenant_id IS NOT NULL THEN
+        v_threshold := coalesce((cfg.get_setting('users.lockout_attempts', current_date, p_tenant_id) #>> '{}')::integer, 5);
+        IF p_success THEN
+            UPDATE iam.app_user
+               SET failed_attempts = 0, locked_until = NULL, last_login_at = now()
+             WHERE tenant_id = p_tenant_id AND id = p_user_id
+             RETURNING locked_until INTO v_locked_until;
+        ELSIF p_failure_reason <> 'LOCKED' THEN
+            UPDATE iam.app_user
+               SET failed_attempts = failed_attempts + 1,
+                   locked_until = CASE WHEN failed_attempts + 1 >= v_threshold
+                                       THEN now() + interval '30 minutes' ELSE locked_until END
+             WHERE tenant_id = p_tenant_id AND id = p_user_id
+             RETURNING locked_until INTO v_locked_until;
+        ELSE
+            SELECT locked_until INTO v_locked_until FROM iam.app_user
+             WHERE tenant_id = p_tenant_id AND id = p_user_id;
+        END IF;
+        INSERT INTO iam.sign_in_history(tenant_id, user_id, username, platform, success,
+                                        failure_reason, ip_address, device, user_agent)
+        VALUES (p_tenant_id, p_user_id, p_identifier, p_channel, p_success,
+                CASE WHEN p_success THEN NULL ELSE p_failure_reason END,
+                nullif(p_ip_address, '')::inet, p_device, p_user_agent);
+    ELSE
+        INSERT INTO platform.platform_sign_in(username, success, failure_reason,
+                                              ip_address, device, user_agent)
+        VALUES (p_identifier, false, coalesce(p_failure_reason, 'INVALID_CREDENTIALS'),
+                nullif(p_ip_address, '')::inet, p_device, p_user_agent);
+    END IF;
+    RETURN v_locked_until;
+END
+$$;
+
+-- Operator-only, one-time provisioning for accounts which have no password.
+-- The API runtime role cannot execute this function.
+CREATE OR REPLACE FUNCTION iam.set_initial_password(
+    p_principal_kind text, p_user_id uuid, p_tenant_id uuid, p_password_hash text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam, platform AS
+$$
+DECLARE v_changed integer;
+BEGIN
+    IF p_password_hash IS NULL OR p_password_hash !~ '^scrypt\$1\$32768\$8\$1\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$' THEN
+        RAISE EXCEPTION 'Invalid password hash format';
+    END IF;
+    IF p_principal_kind = 'PLATFORM' AND p_tenant_id IS NULL THEN
+        UPDATE platform.platform_user SET password_hash = p_password_hash, must_change_password = true,
+               failed_attempts = 0,
+               locked_until = NULL, updated_at = now(), row_version = row_version + 1
+         WHERE id = p_user_id AND status = 'ACTIVE' AND password_hash IS NULL;
+    ELSIF p_principal_kind = 'TENANT' AND p_tenant_id IS NOT NULL THEN
+        UPDATE iam.app_user SET password_hash = p_password_hash, password_changed_at = now(),
+               must_change_password = true, failed_attempts = 0, locked_until = NULL,
+               updated_at = now(), row_version = row_version + 1
+         WHERE tenant_id = p_tenant_id AND id = p_user_id AND status = 'ACTIVE'
+           AND password_hash IS NULL;
+    ELSE
+        RETURN false;
+    END IF;
+    GET DIAGNOSTICS v_changed = ROW_COUNT;
+    RETURN v_changed = 1;
+END
+$$;
+
+REVOKE ALL ON FUNCTION iam.login_candidates(text, text),
+    iam.record_login_attempt(text, uuid, uuid, text, text, boolean, text, text, text, text),
+    iam.set_initial_password(text, uuid, uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION iam.login_candidates(text, text),
+    iam.record_login_attempt(text, uuid, uuid, text, text, boolean, text, text, text, text)
+TO nvs_app;
+GRANT EXECUTE ON FUNCTION iam.set_initial_password(text, uuid, uuid, text) TO nvs;
+
+-- Provisioning uses the shared first-use password only for the newly created
+-- default Org Admin. User-management services can call the generic helper for
+-- additional tenant users created with the same first-login requirement.
+CREATE OR REPLACE FUNCTION iam.set_default_org_admin_password(p_tenant_id uuid, p_password_hash text)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam AS
+$$
+DECLARE v_user_id uuid;
+BEGIN
+    UPDATE iam.app_user
+       SET password_hash = p_password_hash, password_changed_at = now(),
+           must_change_password = true, failed_attempts = 0, locked_until = NULL,
+           updated_at = now(), row_version = row_version + 1
+     WHERE tenant_id = p_tenant_id AND is_default_org_admin AND status = 'ACTIVE'
+       AND password_hash IS NULL
+    RETURNING id INTO v_user_id;
+    RETURN v_user_id;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION iam.set_default_user_password(
+    p_tenant_id uuid, p_user_id uuid, p_password_hash text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam AS
+$$
+DECLARE v_changed integer;
+BEGIN
+    UPDATE iam.app_user
+       SET password_hash = p_password_hash, password_changed_at = now(),
+           must_change_password = true, failed_attempts = 0, locked_until = NULL,
+           updated_at = now(), row_version = row_version + 1
+     WHERE tenant_id = p_tenant_id AND id = p_user_id AND status = 'ACTIVE'
+       AND password_hash IS NULL;
+    GET DIAGNOSTICS v_changed = ROW_COUNT;
+    RETURN v_changed = 1;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION iam.complete_initial_password_change(
+    p_principal_kind text, p_user_id uuid, p_tenant_id uuid,
+    p_expected_hash text, p_new_hash text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam, platform AS
+$$
+DECLARE v_changed integer;
+BEGIN
+    IF p_principal_kind = 'PLATFORM' AND p_tenant_id IS NULL THEN
+        UPDATE platform.platform_user
+           SET password_hash = p_new_hash, must_change_password = false,
+               failed_attempts = 0, locked_until = NULL, updated_at = now(),
+               row_version = row_version + 1
+         WHERE id = p_user_id AND status = 'ACTIVE' AND must_change_password
+           AND password_hash = p_expected_hash;
+    ELSE
+        RETURN false;
+    END IF;
+    GET DIAGNOSTICS v_changed = ROW_COUNT;
+    RETURN v_changed = 1;
+END
+$$;
+
+REVOKE ALL ON FUNCTION iam.set_default_org_admin_password(uuid, text),
+    iam.set_default_user_password(uuid, uuid, text),
+    iam.complete_initial_password_change(text, uuid, uuid, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION iam.set_default_org_admin_password(uuid, text),
+    iam.set_default_user_password(uuid, uuid, text),
+    iam.complete_initial_password_change(text, uuid, uuid, text, text)
+TO nvs_app;
+
+-- Password policy and user password operations. History depth is organization
+-- configured but clamped to at least one so reuse protection cannot be disabled.
+DROP FUNCTION IF EXISTS iam.get_password_hashes_for_policy(uuid,uuid);
+CREATE OR REPLACE FUNCTION iam.get_password_hashes_for_policy()
+RETURNS TABLE(password_hash text)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, iam, cfg, app AS
+$$
+    WITH policy AS (
+        SELECT greatest(1, coalesce((cfg.get_setting('users.password_history', NULL, app.tenant_id())->>0)::integer, 5)) AS depth
+    ), hashes AS (
+        SELECT u.password_hash, 0 AS position, u.password_changed_at AS changed_at
+          FROM iam.app_user u
+         WHERE app.context_is_valid() AND u.tenant_id = app.tenant_id() AND u.id = app.user_id()
+        UNION ALL
+        SELECT h.password_hash, row_number() OVER (ORDER BY h.created_at DESC)::integer,
+               h.created_at
+          FROM iam.password_history h
+         WHERE app.context_is_valid() AND h.tenant_id = app.tenant_id() AND h.user_id = app.user_id()
+    )
+    SELECT h.password_hash FROM hashes h, policy p
+     WHERE h.password_hash IS NOT NULL AND h.position <= p.depth
+     ORDER BY h.position, h.changed_at DESC
+$$;
+
+CREATE OR REPLACE FUNCTION iam.change_own_password(
+    p_expected_hash text, p_new_hash text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam, app AS
+$$
+DECLARE v_changed integer;
+BEGIN
+    IF NOT app.context_is_valid() OR app.tenant_id() IS NULL OR app.user_id() IS NULL THEN
+        RAISE EXCEPTION 'Signed tenant context required' USING ERRCODE = '42501';
+    END IF;
+    INSERT INTO iam.password_history(tenant_id, user_id, password_hash)
+    SELECT tenant_id, id, password_hash FROM iam.app_user
+     WHERE tenant_id = app.tenant_id() AND id = app.user_id()
+       AND status = 'ACTIVE' AND password_hash = p_expected_hash;
+    UPDATE iam.app_user
+       SET password_hash = p_new_hash, password_changed_at = now(),
+           must_change_password = false, failed_attempts = 0, locked_until = NULL,
+           updated_at = now(), row_version = row_version + 1
+     WHERE tenant_id = app.tenant_id() AND id = app.user_id()
+       AND status = 'ACTIVE' AND password_hash = p_expected_hash;
+    GET DIAGNOSTICS v_changed = ROW_COUNT;
+    RETURN v_changed = 1;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION iam.reset_user_password(
+    p_target_user_id uuid, p_default_hash text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam, app AS
+$$
+DECLARE v_changed integer;
+BEGIN
+    IF NOT app.context_is_valid() OR app.role_code() IS DISTINCT FROM 'ADM' THEN
+        RAISE EXCEPTION 'No privilege' USING ERRCODE = '42501';
+    END IF;
+    INSERT INTO iam.password_history(tenant_id, user_id, password_hash)
+    SELECT u.tenant_id, u.id, u.password_hash FROM iam.app_user u
+     WHERE u.tenant_id = app.tenant_id() AND u.id = p_target_user_id
+       AND u.id <> app.user_id() AND u.status='ACTIVE'
+       AND u.password_hash IS NOT NULL AND u.primary_role_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM iam.role r WHERE r.tenant_id=u.tenant_id
+                        AND r.role_code='ADM' AND EXISTS (
+                            SELECT 1 FROM iam.user_role ur WHERE ur.tenant_id=u.tenant_id
+                             AND ur.user_id=u.id AND ur.role_id=r.id
+                             AND ur.effective_from <= current_date
+                             AND (ur.effective_to IS NULL OR ur.effective_to >= current_date)));
+    UPDATE iam.app_user u
+       SET password_hash = p_default_hash, password_changed_at = now(),
+           must_change_password = true, failed_attempts = 0, locked_until = NULL,
+           updated_at = now(), row_version = row_version + 1
+     WHERE u.tenant_id = app.tenant_id() AND u.id = p_target_user_id
+       AND u.id <> app.user_id() AND u.status = 'ACTIVE' AND u.primary_role_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM iam.role r WHERE r.tenant_id=u.tenant_id
+                        AND r.role_code='ADM' AND EXISTS (
+                            SELECT 1 FROM iam.user_role ur WHERE ur.tenant_id=u.tenant_id
+                             AND ur.user_id=u.id AND ur.role_id=r.id
+                             AND ur.effective_from <= current_date
+                             AND (ur.effective_to IS NULL OR ur.effective_to >= current_date)));
+    GET DIAGNOSTICS v_changed = ROW_COUNT;
+    RETURN v_changed = 1;
+END
+$$;
+
+REVOKE ALL ON FUNCTION iam.get_password_hashes_for_policy(),
+    iam.change_own_password(text,text), iam.reset_user_password(uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION iam.get_password_hashes_for_policy(),
+    iam.change_own_password(text,text), iam.reset_user_password(uuid,text) TO nvs_app;
+
+DROP FUNCTION IF EXISTS iam.list_tenant_users();
+CREATE OR REPLACE FUNCTION iam.list_tenant_users(p_offset integer DEFAULT 0)
+RETURNS TABLE(id uuid, full_name text, username text, email text, mobile text,
+              status text, role_code text, locked_until timestamptz,
+              must_change_password boolean)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, iam, cfg, app AS
+$$
+    SELECT u.id, u.full_name, u.username, u.email, u.mobile, u.status,
+           r.role_code, u.locked_until, u.must_change_password
+      FROM iam.app_user u
+      LEFT JOIN iam.role r ON r.tenant_id=u.tenant_id AND r.id=u.primary_role_id
+     WHERE app.context_is_valid() AND app.role_code()='ADM'
+       AND u.tenant_id=app.tenant_id() AND u.status <> 'INACTIVE'
+     ORDER BY lower(u.full_name), u.id
+     LIMIT greatest(1, coalesce((cfg.get_setting('ui.page_size', app.working_date())#>>'{}')::integer, 15))
+     OFFSET greatest(coalesce(p_offset, 0), 0)
+$$;
+
+CREATE OR REPLACE FUNCTION iam.list_assignable_roles()
+RETURNS TABLE(role_code text, role_name text)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, iam, app AS
+$$
+    SELECT r.role_code, r.role_name FROM iam.role r
+     WHERE app.context_is_valid() AND app.role_code()='ADM'
+       AND r.tenant_id=app.tenant_id() AND r.status='ACTIVE' AND r.role_code <> 'ADM'
+     ORDER BY r.sort_order, r.role_name
+$$;
+
+CREATE OR REPLACE FUNCTION iam.create_tenant_user(
+    p_full_name text, p_mobile text, p_email text, p_role_code text, p_password_hash text)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam, app AS
+$$
+DECLARE v_role_id uuid; v_user_id uuid;
+BEGIN
+    IF NOT app.context_is_valid() OR app.role_code() IS DISTINCT FROM 'ADM' THEN
+        RAISE EXCEPTION 'No privilege' USING ERRCODE = '42501';
+    END IF;
+    IF nullif(btrim(p_full_name),'') IS NULL OR
+       (nullif(btrim(p_mobile),'') IS NULL AND nullif(btrim(p_email),'') IS NULL) OR
+       p_role_code IS NULL OR p_role_code='ADM' THEN
+        PERFORM app.fail('INVALID_DATA', 'A name, contact and non-administrator role are required');
+    END IF;
+    IF p_password_hash IS NULL OR p_password_hash !~ '^scrypt\$1\$32768\$8\$1\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$' THEN
+        PERFORM app.fail('INVALID_DATA', 'Initial password hash is invalid');
+    END IF;
+    SELECT id INTO v_role_id FROM iam.role
+     WHERE tenant_id=app.tenant_id() AND role_code=p_role_code AND status='ACTIVE';
+    IF v_role_id IS NULL THEN
+        PERFORM app.fail('INVALID_REFERENCE', 'Selected role is unavailable');
+    END IF;
+    INSERT INTO iam.app_user(tenant_id,full_name,mobile,email,web_access,mobile_access,
+                             username,password_hash,password_changed_at,must_change_password,
+                             primary_role_id,created_by)
+    VALUES(app.tenant_id(),btrim(p_full_name),nullif(btrim(p_mobile),''),
+           nullif(lower(btrim(p_email)),''),true,false,
+           coalesce(nullif(lower(btrim(p_email)),''),nullif(btrim(p_mobile),'')),
+           p_password_hash,now(),true,v_role_id,app.user_id())
+    RETURNING id INTO v_user_id;
+    INSERT INTO iam.user_role(tenant_id,user_id,role_id,effective_from,reason,created_by)
+    VALUES(app.tenant_id(),v_user_id,v_role_id,current_date,'Created by Org Admin',app.user_id());
+    RETURN v_user_id;
+END
+$$;
+
+REVOKE ALL ON FUNCTION iam.list_tenant_users(integer), iam.list_assignable_roles(),
+    iam.create_tenant_user(text,text,text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION iam.list_tenant_users(integer), iam.list_assignable_roles(),
+    iam.create_tenant_user(text,text,text,text,text) TO nvs_app;
+
+CREATE OR REPLACE FUNCTION cfg.get_ui_page_size()
+RETURNS TABLE(page_size integer, pending_setting_id uuid, pending_page_size integer)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, cfg, app AS
+$$
+    SELECT coalesce((cfg.get_setting('ui.page_size', app.working_date())#>>'{}')::integer, 15),
+           pending.id, (pending.value#>>'{}')::integer
+      FROM (SELECT 1) AS seed
+      LEFT JOIN LATERAL (
+          SELECT s.id, s.value FROM cfg.tenant_setting s
+           WHERE s.tenant_id=app.tenant_id() AND s.setting_key='ui.page_size'
+             AND s.status='PENDING_APPROVAL'
+           ORDER BY s.created_at DESC LIMIT 1
+      ) pending ON true
+     WHERE app.context_is_valid()
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.request_ui_page_size(p_page_size integer)
+RETURNS TABLE(setting_id uuid, status text, page_size integer)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, cfg, app AS
+$$
+DECLARE v_id uuid; v_current integer;
+BEGIN
+    IF NOT app.context_is_valid() OR app.role_code() IS DISTINCT FROM 'ADM' THEN
+        RAISE EXCEPTION 'No privilege' USING ERRCODE = '42501';
+    END IF;
+    IF p_page_size IS NULL OR p_page_size < 1 OR p_page_size > 100 THEN
+        PERFORM app.fail('INVALID_DATA', 'Page size must be between 1 and 100');
+    END IF;
+    v_current := coalesce((cfg.get_setting('ui.page_size', app.working_date())#>>'{}')::integer, 15);
+    SELECT s.id INTO v_id FROM cfg.tenant_setting s
+     WHERE s.tenant_id=app.tenant_id() AND s.setting_key='ui.page_size'
+       AND s.status='PENDING_APPROVAL'
+     ORDER BY s.created_at DESC LIMIT 1 FOR UPDATE;
+    IF p_page_size = v_current THEN
+        IF v_id IS NOT NULL THEN
+            UPDATE cfg.tenant_setting
+               SET status='CANCELLED', updated_at=now(), updated_by=app.user_id(),
+                   reason='Cancelled by Org Admin; requested value matches the active setting',
+                   row_version=row_version+1
+             WHERE tenant_id=app.tenant_id() AND id=v_id;
+        END IF;
+        RETURN QUERY SELECT NULL::uuid, 'UNCHANGED'::text, v_current;
+        RETURN;
+    END IF;
+    IF v_id IS NULL THEN
+        INSERT INTO cfg.tenant_setting(tenant_id,setting_key,value,effective_from,status,source,reason,created_by)
+        VALUES(app.tenant_id(),'ui.page_size',to_jsonb(p_page_size),app.working_date(),
+               'PENDING_APPROVAL','ORG_ADMIN','Page size changed by Org Admin',app.user_id())
+        RETURNING id INTO v_id;
+    ELSE
+        UPDATE cfg.tenant_setting
+           SET value=to_jsonb(p_page_size), reason='Page size changed by Org Admin',
+               updated_at=now(), updated_by=app.user_id(), row_version=row_version+1
+         WHERE tenant_id=app.tenant_id() AND id=v_id;
+    END IF;
+    RETURN QUERY SELECT v_id, 'PENDING_APPROVAL'::text, p_page_size;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.decide_ui_page_size(
+    p_setting_id uuid, p_approve boolean, p_reason text DEFAULT NULL)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, cfg, app AS
+$$
+BEGIN
+    IF NOT app.context_is_valid() OR app.role_code() IS DISTINCT FROM 'LDR' THEN
+        RAISE EXCEPTION 'No privilege' USING ERRCODE = '42501';
+    END IF;
+    PERFORM cfg.approve_tenant_setting(p_setting_id,p_approve,p_reason);
+END
+$$;
+
+REVOKE ALL ON FUNCTION cfg.get_ui_page_size(), cfg.request_ui_page_size(integer),
+    cfg.decide_ui_page_size(uuid,boolean,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION cfg.get_ui_page_size(), cfg.request_ui_page_size(integer),
+    cfg.decide_ui_page_size(uuid,boolean,text) TO nvs_app;
+
+CREATE OR REPLACE FUNCTION iam.get_user_capabilities(p_role_code text)
+RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, iam, platform, app AS
+$$
+    SELECT CASE WHEN app.context_is_valid() THEN jsonb_build_object(
+      'role_code', app.role_code(),
+      'privileges', coalesce((
+        SELECT jsonb_agg(DISTINCT rp.privilege_code ORDER BY rp.privilege_code)
+          FROM iam.user_role ur
+          JOIN iam.role r ON r.tenant_id=ur.tenant_id AND r.id=ur.role_id
+          JOIN iam.role_privilege rp ON rp.tenant_id=r.tenant_id AND rp.role_id=r.id
+          JOIN platform.tenant_privilege_ceiling pc ON pc.tenant_id=rp.tenant_id
+             AND pc.privilege_code=rp.privilege_code
+          JOIN platform.privilege p ON p.privilege_code=rp.privilege_code
+          JOIN platform.tenant_module tm ON tm.tenant_id=rp.tenant_id
+             AND tm.module_code=p.module_code AND tm.is_enabled
+         WHERE ur.tenant_id=app.tenant_id() AND ur.user_id=app.user_id()
+           AND r.role_code=p_role_code AND r.status='ACTIVE'
+           AND ur.effective_from<=app.working_date()
+           AND (ur.effective_to IS NULL OR ur.effective_to>=app.working_date())
+      ), '[]'::jsonb),
+      'modules', coalesce((
+        SELECT jsonb_agg(jsonb_build_object(
+            'module_code',m.module_code,'module_name',m.module_name,
+            'module_type',m.module_type,'route',m.route,'icon',m.icon,
+            'parent_module_code',m.parent_module_code,'menu_order',m.menu_order
+        ) ORDER BY m.menu_order,m.module_code)
+          FROM platform.module m
+         WHERE m.is_active AND m.is_menu
+           AND m.module_type IN ('MODULE','CONFIGURATION','REPORT','DASHBOARD')
+           AND EXISTS (SELECT 1 FROM platform.tenant_module tm
+                        WHERE tm.tenant_id=app.tenant_id() AND tm.module_code=m.module_code
+                          AND tm.is_enabled)
+           AND EXISTS (
+               SELECT 1 FROM iam.user_role ur
+               JOIN iam.role r ON r.tenant_id=ur.tenant_id AND r.id=ur.role_id
+               JOIN iam.role_privilege rp ON rp.tenant_id=r.tenant_id AND rp.role_id=r.id
+               JOIN platform.privilege p ON p.privilege_code=rp.privilege_code
+               WHERE ur.tenant_id=app.tenant_id() AND ur.user_id=app.user_id()
+                 AND r.role_code=p_role_code AND r.status='ACTIVE'
+                 AND p.module_code=m.module_code
+                 AND ur.effective_from<=app.working_date()
+                 AND (ur.effective_to IS NULL OR ur.effective_to>=app.working_date())
+           )
+      ), '[]'::jsonb)
+    ) ELSE '{}'::jsonb END
+$$;
+REVOKE ALL ON FUNCTION iam.get_user_capabilities(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION iam.get_user_capabilities(text) TO nvs_app;
+
+CREATE OR REPLACE FUNCTION platform.set_tenant_password_history(p_tenant_id uuid, p_count integer)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, platform, cfg, app AS
+$$
+BEGIN
+    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+       OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
+        PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can set password history policy');
+    END IF;
+    IF p_count < 1 OR p_count > 24 THEN
+        PERFORM app.fail('INVALID_DATA', 'Password history must be between 1 and 24');
+    END IF;
+    UPDATE cfg.tenant_setting
+       SET value = to_jsonb(p_count), source = 'SUPER_ADMIN', is_locked = true,
+           reason = 'Set by Super Administrator during organisation provisioning',
+           updated_at = now(), updated_by = app.platform_user_id(),
+           row_version = row_version + 1
+     WHERE tenant_id = p_tenant_id AND setting_key = 'users.password_history'
+       AND status = 'ACTIVE';
+    IF NOT FOUND THEN
+        PERFORM app.fail('ORGANISATION_NOT_FOUND', 'Password history setting was not provisioned');
+    END IF;
+END
+$$;
+REVOKE ALL ON FUNCTION platform.set_tenant_password_history(uuid,integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.set_tenant_password_history(uuid,integer) TO nvs_app;
+
+CREATE OR REPLACE FUNCTION platform.set_tenant_enabled(p_tenant_id uuid, p_enabled boolean, p_reason text)
+RETURNS TABLE(tenant_id uuid, status text, status_reason text, suspended_at timestamptz)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, platform, iam, app AS
+$$
+BEGIN
+    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+       OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
+        PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can enable or disable an organisation');
+    END IF;
+    RETURN QUERY
+    UPDATE platform.tenant t
+       SET status = CASE WHEN p_enabled THEN 'ACTIVE' ELSE 'SUSPENDED' END,
+           suspended_at = CASE WHEN p_enabled THEN NULL ELSE coalesce(t.suspended_at, now()) END,
+           status_reason = nullif(btrim(p_reason), ''),
+           updated_at = now(), row_version = row_version + 1
+     WHERE t.id = p_tenant_id AND t.status IN ('ACTIVE','SUSPENDED')
+    RETURNING t.id, t.status, t.status_reason, t.suspended_at;
+    IF NOT FOUND THEN
+        PERFORM app.fail('ORGANISATION_NOT_FOUND', 'Organisation was not found or cannot be changed');
+    END IF;
+    IF NOT p_enabled THEN
+        UPDATE iam.auth_session SET revoked_at=now(), revoked_reason='ORGANISATION_DISABLED'
+         WHERE principal_kind='TENANT' AND tenant_id=p_tenant_id AND revoked_at IS NULL;
+    END IF;
+END
+$$;
+REVOKE ALL ON FUNCTION platform.set_tenant_enabled(uuid,boolean,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.set_tenant_enabled(uuid,boolean,text) TO nvs_app;
+
+CREATE OR REPLACE FUNCTION platform.set_tenant_single_session(p_tenant_id uuid, p_enabled boolean)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, platform, cfg, app AS
+$$
+BEGIN
+    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+       OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
+        PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can set single-session policy');
+    END IF;
+    UPDATE cfg.tenant_setting
+       SET value = to_jsonb(p_enabled), source = 'SUPER_ADMIN', is_locked = true,
+           reason = 'Set by Super Administrator during organisation provisioning',
+           updated_at = now(), updated_by = app.platform_user_id(),
+           row_version = row_version + 1
+     WHERE tenant_id = p_tenant_id AND setting_key = 'users.single_session'
+       AND status = 'ACTIVE';
+    IF NOT FOUND THEN
+        PERFORM app.fail('ORGANISATION_NOT_FOUND', 'Single-session setting was not provisioned');
+    END IF;
+END
+$$;
+REVOKE ALL ON FUNCTION platform.set_tenant_single_session(uuid,boolean) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform.set_tenant_single_session(uuid,boolean) TO nvs_app;
+
+CREATE TABLE IF NOT EXISTS iam.auth_session (
+    session_id uuid PRIMARY KEY,
+    principal_kind text NOT NULL CHECK (principal_kind IN ('PLATFORM','TENANT')),
+    user_id uuid NOT NULL,
+    tenant_id uuid,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz NOT NULL,
+    revoked_at timestamptz,
+    revoked_reason text,
+    client_ip inet,
+    device text,
+    CHECK ((principal_kind='PLATFORM' AND tenant_id IS NULL) OR
+           (principal_kind='TENANT' AND tenant_id IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS auth_session_user_active_idx
+    ON iam.auth_session(principal_kind, tenant_id, user_id, expires_at)
+    WHERE revoked_at IS NULL;
+
+CREATE OR REPLACE FUNCTION iam.prepare_auth_session(
+    p_kind text, p_user_id uuid, p_tenant_id uuid, p_session_id uuid,
+    p_expires_at timestamptz, p_force_logout boolean, p_client_ip text, p_device text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam, cfg AS
+$$
+DECLARE v_single boolean := false; v_active boolean;
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtextextended(p_kind || ':' || coalesce(p_tenant_id::text,'') || ':' || p_user_id::text, 0));
+    IF p_kind='TENANT' THEN
+        v_single := coalesce((cfg.get_setting('users.single_session', current_date, p_tenant_id)#>>'{}')::boolean, false);
+    END IF;
+    UPDATE iam.auth_session SET revoked_at=now(), revoked_reason='EXPIRED'
+     WHERE expires_at <= now() AND revoked_at IS NULL
+       AND principal_kind=p_kind AND user_id=p_user_id
+       AND tenant_id IS NOT DISTINCT FROM p_tenant_id;
+    SELECT EXISTS (SELECT 1 FROM iam.auth_session s WHERE s.principal_kind=p_kind
+       AND s.user_id=p_user_id AND s.tenant_id IS NOT DISTINCT FROM p_tenant_id
+       AND s.revoked_at IS NULL AND s.expires_at>now()) INTO v_active;
+    IF v_single AND v_active AND NOT p_force_logout THEN RETURN false; END IF;
+    IF v_single AND v_active AND p_force_logout THEN
+        UPDATE iam.auth_session SET revoked_at=now(), revoked_reason='FORCE_LOGOUT'
+         WHERE principal_kind=p_kind AND user_id=p_user_id
+           AND tenant_id IS NOT DISTINCT FROM p_tenant_id
+           AND revoked_at IS NULL AND expires_at>now();
+    END IF;
+    INSERT INTO iam.auth_session(session_id,principal_kind,user_id,tenant_id,expires_at,client_ip,device)
+    VALUES(p_session_id,p_kind,p_user_id,p_tenant_id,p_expires_at,
+           nullif(p_client_ip,'')::inet,p_device);
+    RETURN true;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION iam.is_auth_session_active(
+    p_kind text, p_user_id uuid, p_tenant_id uuid, p_session_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, iam AS
+$$
+    SELECT EXISTS (SELECT 1 FROM iam.auth_session s
+      WHERE s.principal_kind=p_kind AND s.user_id=p_user_id
+        AND s.tenant_id IS NOT DISTINCT FROM p_tenant_id
+        AND s.session_id=p_session_id AND s.revoked_at IS NULL AND s.expires_at>now())
+$$;
+
+CREATE OR REPLACE FUNCTION iam.revoke_auth_session(
+    p_kind text, p_user_id uuid, p_tenant_id uuid, p_session_id uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam AS
+$$
+DECLARE v_count integer;
+BEGIN
+    UPDATE iam.auth_session SET revoked_at=now(), revoked_reason='LOGOUT'
+     WHERE principal_kind=p_kind AND user_id=p_user_id
+       AND tenant_id IS NOT DISTINCT FROM p_tenant_id
+       AND session_id=p_session_id AND revoked_at IS NULL;
+    GET DIAGNOSTICS v_count=ROW_COUNT;
+    RETURN v_count=1;
+END
+$$;
+REVOKE ALL ON FUNCTION iam.prepare_auth_session(text,uuid,uuid,uuid,timestamptz,boolean,text,text),
+    iam.is_auth_session_active(text,uuid,uuid,uuid), iam.revoke_auth_session(text,uuid,uuid,uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION iam.prepare_auth_session(text,uuid,uuid,uuid,timestamptz,boolean,text,text),
+    iam.is_auth_session_active(text,uuid,uuid,uuid), iam.revoke_auth_session(text,uuid,uuid,uuid) TO nvs_app;

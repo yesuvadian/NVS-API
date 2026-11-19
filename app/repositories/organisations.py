@@ -26,6 +26,29 @@ class OrganisationRepository:
         )
         return await result.fetchone()
 
+    async def set_password_history_count(self, tenant_id: UUID, count: int) -> None:
+        await self.conn.execute(
+            "SELECT platform.set_tenant_password_history(%s,%s)", (tenant_id, count)
+        )
+
+    async def set_single_session(self, tenant_id: UUID, enabled: bool) -> None:
+        await self.conn.execute(
+            "SELECT platform.set_tenant_single_session(%s,%s)", (tenant_id, enabled)
+        )
+
+    async def set_default_admin_password(self, tenant_id: UUID, password_hash: str) -> None:
+        await self.conn.execute(
+            "SELECT iam.set_default_org_admin_password(%s,%s)",
+            (tenant_id, password_hash),
+        )
+
+    async def set_enabled(self, tenant_id: UUID, enabled: bool, reason: str) -> dict[str, Any] | None:
+        result = await self.conn.execute(
+            "SELECT * FROM platform.set_tenant_enabled(%s,%s,%s)",
+            (tenant_id, enabled, reason),
+        )
+        return await result.fetchone()
+
     async def provision(
         self,
         *,

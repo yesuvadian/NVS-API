@@ -62,6 +62,7 @@ def token(settings: Settings, *, role="SUPER_ADMIN", mfa=True) -> str:
     return jwt.encode(
         {
             "sub": str(uuid4()),
+            "sid": str(uuid4()),
             "iss": settings.platform_jwt_issuer,
             "aud": settings.platform_jwt_audience,
             "iat": now,
@@ -121,6 +122,9 @@ def test_create_organisation_calls_provisioning_repository_and_returns_record(ap
     connection.results.extend(
         [
             FakeResult(one={"tenant_id": tenant_id}),
+            FakeResult(one={"ignored": None}),
+            FakeResult(one={"ignored": None}),
+            FakeResult(one={"ignored": None}),
             FakeResult(
                 one={
                     "id": tenant_id,
@@ -146,6 +150,8 @@ def test_create_organisation_calls_provisioning_repository_and_returns_record(ap
         "optional_modules": [],
         "features": [],
         "is_sandbox": True,
+        "password_history_count": 8,
+        "single_session_enabled": True,
     }
 
     response = client.post(
@@ -155,7 +161,7 @@ def test_create_organisation_calls_provisioning_repository_and_returns_record(ap
     assert response.status_code == 201, response.json()
     assert response.json()["id"] == str(tenant_id)
     assert response.json()["status"] == "PROVISIONING"
-    assert len(connection.calls) == 2
+    assert len(connection.calls) == 5
     assert "platform.provision_tenant" in connection.calls[0][0]
     assert connection.calls[0][1][0:5] == (
         "demo-org",
@@ -164,6 +170,28 @@ def test_create_organisation_calls_provisioning_repository_and_returns_record(ap
         "+919000000001",
         "admin@example.com",
     )
+    assert "platform.set_tenant_password_history" in connection.calls[1][0]
+    assert connection.calls[1][1] == (tenant_id, 8)
+    assert "platform.set_tenant_single_session" in connection.calls[2][0]
+    assert connection.calls[2][1] == (tenant_id, True)
+    assert "iam.set_default_org_admin_password" in connection.calls[3][0]
+
+
+def test_super_admin_can_disable_and_reenable_an_organisation(api_setup) -> None:
+    client, connection, settings = api_setup
+    tenant_id = uuid4()
+    connection.results.extend([
+        FakeResult(one={"tenant_id": tenant_id, "status": "SUSPENDED", "status_reason": "maintenance", "suspended_at": datetime.now(UTC)}),
+        FakeResult(one={"tenant_id": tenant_id, "status": "ACTIVE", "status_reason": "restored", "suspended_at": None}),
+    ])
+    headers = auth_headers(settings)
+    disabled = client.patch(f"/api/v1/super-admin/organisations/{tenant_id}/status", headers=headers,
+                            json={"enabled": False, "reason": "maintenance"})
+    enabled = client.patch(f"/api/v1/super-admin/organisations/{tenant_id}/status", headers=headers,
+                           json={"enabled": True, "reason": "restored"})
+    assert disabled.status_code == 200 and disabled.json()["status"] == "SUSPENDED"
+    assert enabled.status_code == 200 and enabled.json()["status"] == "ACTIVE"
+    assert all("platform.set_tenant_enabled" in call[0] for call in connection.calls)
 
 
 def test_draft_translation_endpoint_invokes_repository_transaction_steps(api_setup) -> None:

@@ -1,0 +1,9 @@
+{
+  "appName": "CFMS",
+  "apiPrefix": "/api/v1",
+  "defaultLocale": "en",
+  "supportedLocales": ["en", "ta"],
+  "themeMode": "system",
+  "defaultPageSize": 15,
+  "maxPageSize": 100
+}

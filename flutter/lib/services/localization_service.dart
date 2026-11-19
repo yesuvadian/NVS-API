@@ -1,0 +1,278 @@
+import 'package:flutter/widgets.dart';
+
+class AppStrings {
+  const AppStrings(this.locale);
+  final Locale locale;
+
+  static AppStrings of(BuildContext context) =>
+      Localizations.of<AppStrings>(context, AppStrings)!;
+
+  String text(String key) =>
+      _values[locale.languageCode]?[key] ?? _values['en']![key] ?? key;
+
+  static const delegate = _AppStringsDelegate();
+  static const _values = <String, Map<String, String>>{
+    'en': {
+      'sign_in_title': 'Sign in to your workspace',
+      'user_id': 'User ID',
+      'password': 'Password',
+      'sign_in': 'Sign in',
+      'enter_user_id': 'Enter your user ID',
+      'enter_password': 'Enter your password',
+      'preview_note': 'Sign in with your account details.',
+      'nav_overview': 'Overview',
+      'nav_organisations': 'Organisations',
+      'nav_workflows': 'Workflow templates',
+      'nav_actions': 'Action registry',
+      'nav_defaults': 'Default org settings',
+      'nav_roles': 'Roles & privileges',
+      'nav_languages': 'Language packs',
+      'nav_audit': 'Platform audit log',
+      'nav_members': 'Members',
+      'nav_loans': 'Loans',
+      'nav_approvals': 'Approvals',
+      'nav_collections': 'Collections',
+      'nav_reports': 'Reports',
+      'nav_settings': 'Organisation settings',
+      'nav_my_settings': 'My settings',
+      'working_day': 'Working day',
+      'sign_out': 'Sign out',
+      'change_password': 'Change password',
+      'current_password': 'Current password',
+      'new_password': 'New password',
+      'confirm_password': 'Confirm new password',
+      'save_password': 'Save password',
+      'password_changed': 'Password changed successfully.',
+      'first_login_password_note':
+          'For your security, set a new password before continuing.',
+      'password_minimum': 'Use at least 10 characters.',
+      'passwords_mismatch': 'The passwords do not match.',
+      'my_settings': 'My settings',
+      'active_session_title': 'Account already signed in',
+      'active_session_message':
+          'This account is active on another device. Force logout there and continue here?',
+      'force_logout': 'Force logout and continue',
+      'cancel': 'Cancel',
+      'create_user': 'Create user',
+      'user_management': 'User management',
+      'full_name': 'Full name',
+      'email': 'Email',
+      'mobile': 'Mobile',
+      'role': 'Role',
+      'reset_password': 'Reset password',
+      'password_reset_done':
+          'Password reset. The user must change it at next sign-in.',
+      'default_password_notice':
+          'Initial password: Welcome@123. The user must change it at first sign-in.',
+      'user_created_notice':
+          'User created. Share Welcome@123 securely; it must be changed at first sign-in.',
+      'reset_password_confirmation':
+          'Reset this user’s password to Welcome@123? They will be required to change it at next sign-in.',
+      'org_code': 'Organisation code',
+      'org_name': 'Organisation name',
+      'admin_name': 'Organisation administrator name',
+      'password_history_count': 'Previous passwords blocked',
+      'single_session_enabled': 'Allow one active sign-in per user',
+      'single_session_help':
+          'When enabled, a new sign-in asks before logging out the other device.',
+      'org_created_notice':
+          'Organisation created with the selected security settings.',
+      'disable_org': 'Disable organisation',
+      'enable_org': 'Enable organisation',
+      'disable_org_confirm':
+          'All users will be signed out and blocked from using this organisation until it is enabled again.',
+      'enable_org_confirm':
+          'Allow users to sign in to this organisation again?',
+      'disable': 'Disable',
+      'enable': 'Enable',
+      'status_active': 'Active',
+      'status_suspended': 'Disabled',
+      'status_provisioning': 'Provisioning',
+      'status_closed': 'Closed',
+      'platform_overview': 'Platform overview',
+      'platform_subtitle':
+          'Manage organisations, platform configuration, and governance.',
+      'organisations': 'Organisations',
+      'active': 'Active',
+      'pending_setup': 'Pending setup',
+      'platform_alerts': 'Platform alerts',
+      'recent_orgs': 'Recent organisations',
+      'create_org': 'Create organisation',
+      'tenant_subtitle':
+          'A quick view of today’s work and collection position.',
+      'members': 'Members',
+      'loan_applications': 'Loan applications',
+      'approvals_pending': 'Approvals pending',
+      'todays_collections': 'Today’s collections',
+      'tasks_to_review': 'Tasks to review',
+      'loan_review': 'Loan applications awaiting review',
+      'member_registration': 'New member registrations',
+      'receipt_corrections': 'Receipts awaiting correction review',
+      'branding_note':
+          'Tenant branding and receipt logo settings will be available under Organisation settings.',
+      'screen_ready': 'This workspace screen is ready for its feature slice.',
+      'demo_preview': 'Local preview',
+      'more': 'More',
+      'english': 'English',
+      'tamil': 'தமிழ்',
+      'language': 'Language',
+      'access_denied': 'You do not have permission to access this page.',
+      'load_more': 'Load more',
+      'page_size': 'Rows per page',
+      'page_size_help':
+          'Choose how many rows are shown before loading more. Changes take effect after Leadership approval.',
+      'page_size_pending':
+          'Awaiting Leadership approval. Requested rows per page:',
+      'page_size_submitted':
+          'Page size change submitted for Leadership approval.',
+      'page_size_unchanged': 'The page size is already set to this value.',
+      'page_size_approved': 'Page size change approved.',
+      'page_size_rejected': 'Page size change rejected.',
+      'save': 'Save',
+      'approve': 'Approve',
+      'reject': 'Reject',
+      'validation_org_fields':
+          'Enter a valid organisation code, organisation name, administrator name, mobile number, and email address.',
+      'validation_user_fields':
+          'Enter a name, select a role, and provide either an email address or mobile number.',
+    },
+    'ta': {
+      'sign_in_title': 'உங்கள் பணியிடத்தில் உள்நுழைக',
+      'user_id': 'பயனர் அடையாளம்',
+      'password': 'கடவுச்சொல்',
+      'sign_in': 'உள்நுழை',
+      'enter_user_id': 'பயனர் அடையாளத்தை உள்ளிடவும்',
+      'enter_password': 'கடவுச்சொல்லை உள்ளிடவும்',
+      'preview_note': 'உங்கள் கணக்கு விவரங்களுடன் உள்நுழையவும்.',
+      'nav_overview': 'கண்ணோட்டம்',
+      'nav_organisations': 'நிறுவனங்கள்',
+      'nav_workflows': 'பணிப்பாய்வு வார்ப்புருக்கள்',
+      'nav_actions': 'செயல் பதிவேடு',
+      'nav_defaults': 'இயல்புநிலை அமைப்புகள்',
+      'nav_roles': 'பாத்திரங்கள் மற்றும் அனுமதிகள்',
+      'nav_languages': 'மொழித் தொகுப்புகள்',
+      'nav_audit': 'தள தணிக்கை பதிவு',
+      'nav_members': 'உறுப்பினர்கள்',
+      'nav_loans': 'கடன்கள்',
+      'nav_approvals': 'ஒப்புதல்கள்',
+      'nav_collections': 'வசூல்கள்',
+      'nav_reports': 'அறிக்கைகள்',
+      'nav_settings': 'நிறுவன அமைப்புகள்',
+      'nav_my_settings': 'எனது அமைப்புகள்',
+      'working_day': 'செயல்பாட்டு நாள்',
+      'sign_out': 'வெளியேறு',
+      'change_password': 'கடவுச்சொல்லை மாற்று',
+      'current_password': 'தற்போதைய கடவுச்சொல்',
+      'new_password': 'புதிய கடவுச்சொல்',
+      'confirm_password': 'புதிய கடவுச்சொல்லை உறுதிப்படுத்து',
+      'save_password': 'கடவுச்சொல்லை சேமி',
+      'password_changed': 'கடவுச்சொல் வெற்றிகரமாக மாற்றப்பட்டது.',
+      'first_login_password_note':
+          'பாதுகாப்பிற்காக, தொடர்வதற்கு முன் புதிய கடவுச்சொல்லை அமைக்கவும்.',
+      'password_minimum': 'குறைந்தது 10 எழுத்துகள் இருக்க வேண்டும்.',
+      'passwords_mismatch': 'கடவுச்சொற்கள் பொருந்தவில்லை.',
+      'my_settings': 'எனது அமைப்புகள்',
+      'active_session_title': 'இந்தக் கணக்கு ஏற்கனவே உள்நுழைந்துள்ளது',
+      'active_session_message':
+          'இந்தக் கணக்கு வேறு சாதனத்தில் செயலில் உள்ளது. அங்கிருந்து வெளியேற்றி இங்கே தொடரவா?',
+      'force_logout': 'வெளியேற்றி தொடரவும்',
+      'cancel': 'ரத்து செய்',
+      'create_user': 'பயனரை உருவாக்கு',
+      'user_management': 'பயனர் மேலாண்மை',
+      'full_name': 'முழுப் பெயர்',
+      'email': 'மின்னஞ்சல்',
+      'mobile': 'கைபேசி',
+      'role': 'பங்கு',
+      'reset_password': 'கடவுச்சொல்லை மீட்டமை',
+      'password_reset_done':
+          'கடவுச்சொல் மீட்டமைக்கப்பட்டது. அடுத்த முறை உள்நுழையும்போது பயனர் மாற்ற வேண்டும்.',
+      'default_password_notice':
+          'தொடக்கக் கடவுச்சொல்: Welcome@123. முதல் உள்நுழைவில் பயனர் இதை மாற்ற வேண்டும்.',
+      'user_created_notice':
+          'பயனர் உருவாக்கப்பட்டார். Welcome@123-ஐ பாதுகாப்பாகப் பகிரவும்; முதல் உள்நுழைவில் மாற்ற வேண்டும்.',
+      'reset_password_confirmation':
+          'இந்தப் பயனரின் கடவுச்சொல்லை Welcome@123 ஆக மாற்றவா? அடுத்த உள்நுழைவில் அதை மாற்ற வேண்டும்.',
+      'org_code': 'நிறுவனக் குறியீடு',
+      'org_name': 'நிறுவனப் பெயர்',
+      'admin_name': 'நிறுவன நிர்வாகியின் பெயர்',
+      'password_history_count': 'தடுக்கப்படும் முந்தைய கடவுச்சொற்கள்',
+      'single_session_enabled':
+          'ஒரு பயனருக்கு ஒரு செயலில் உள்ள உள்நுழைவு மட்டும்',
+      'single_session_help':
+          'இயக்கப்பட்டால், புதிய உள்நுழைவு மற்ற சாதனத்தை வெளியேற்றுவதற்கு முன் உறுதிப்படுத்தும்.',
+      'org_created_notice':
+          'தேர்ந்தெடுத்த பாதுகாப்பு அமைப்புகளுடன் நிறுவனம் உருவாக்கப்பட்டது.',
+      'disable_org': 'நிறுவனத்தை முடக்கு',
+      'enable_org': 'நிறுவனத்தை இயக்கு',
+      'disable_org_confirm':
+          'மீண்டும் இயக்கும் வரை அனைத்து பயனர்களும் வெளியேற்றப்பட்டு இந்த நிறுவனத்தைப் பயன்படுத்த முடியாது.',
+      'enable_org_confirm':
+          'இந்த நிறுவனத்தில் பயனர்கள் மீண்டும் உள்நுழைய அனுமதிக்கவா?',
+      'disable': 'முடக்கு',
+      'enable': 'இயக்கு',
+      'status_active': 'செயலில்',
+      'status_suspended': 'முடக்கப்பட்டது',
+      'status_provisioning': 'அமைக்கப்படுகிறது',
+      'status_closed': 'மூடப்பட்டது',
+      'platform_overview': 'தள கண்ணோட்டம்',
+      'platform_subtitle':
+          'நிறுவனங்கள், தள அமைப்புகள் மற்றும் நிர்வாகத்தைப் பராமரிக்கவும்.',
+      'organisations': 'நிறுவனங்கள்',
+      'active': 'செயலில்',
+      'pending_setup': 'அமைப்பு நிலுவையில்',
+      'platform_alerts': 'தள எச்சரிக்கைகள்',
+      'recent_orgs': 'சமீபத்திய நிறுவனங்கள்',
+      'create_org': 'நிறுவனத்தை உருவாக்கு',
+      'tenant_subtitle': 'இன்றைய பணிகள் மற்றும் வசூல் நிலை.',
+      'members': 'உறுப்பினர்கள்',
+      'loan_applications': 'கடன் விண்ணப்பங்கள்',
+      'approvals_pending': 'ஒப்புதல்கள் நிலுவையில்',
+      'todays_collections': 'இன்றைய வசூல்',
+      'tasks_to_review': 'மதிப்பாய்வு செய்ய வேண்டிய பணிகள்',
+      'loan_review': 'மதிப்பாய்வுக்காக காத்திருக்கும் கடன் விண்ணப்பங்கள்',
+      'member_registration': 'புதிய உறுப்பினர் பதிவுகள்',
+      'receipt_corrections': 'திருத்த மதிப்பாய்வுக்காக காத்திருக்கும் ரசீதுகள்',
+      'branding_note':
+          'நிறுவன அமைப்புகளில் லோகோ மற்றும் ரசீது தலைப்பு அமைப்புகள் கிடைக்கும்.',
+      'screen_ready': 'இந்த பணியிடத் திரை அதன் அம்சப் பணிக்குத் தயாராக உள்ளது.',
+      'demo_preview': 'உள்ளூர் முன்னோட்டம்',
+      'more': 'மேலும்',
+      'english': 'English',
+      'tamil': 'தமிழ்',
+      'language': 'மொழி',
+      'access_denied': 'இந்தப் பக்கத்தை அணுக உங்களுக்கு அனுமதி இல்லை.',
+      'load_more': 'மேலும் ஏற்று',
+      'page_size': 'ஒரு பக்கத்தில் காட்ட வேண்டிய வரிசைகள்',
+      'page_size_help':
+          'மேலும் ஏற்றுவதற்கு முன் காட்ட வேண்டிய வரிசைகளின் எண்ணிக்கையைத் தேர்ந்தெடுக்கவும். தலைமை ஒப்புதலுக்குப் பிறகு மாற்றம் அமலுக்கு வரும்.',
+      'page_size_pending':
+          'தலைமை ஒப்புதலுக்காக காத்திருக்கிறது. கோரப்பட்ட வரிசைகள்:',
+      'page_size_submitted':
+          'பக்க அளவு மாற்றம் தலைமை ஒப்புதலுக்கு அனுப்பப்பட்டது.',
+      'page_size_unchanged': 'பக்க அளவு ஏற்கனவே இந்த மதிப்பில் உள்ளது.',
+      'page_size_approved': 'பக்க அளவு மாற்றம் அங்கீகரிக்கப்பட்டது.',
+      'page_size_rejected': 'பக்க அளவு மாற்றம் நிராகரிக்கப்பட்டது.',
+      'save': 'சேமி',
+      'approve': 'ஒப்புதல்',
+      'reject': 'நிராகரி',
+      'validation_org_fields':
+          'சரியான நிறுவனக் குறியீடு, நிறுவனப் பெயர், நிர்வாகியின் பெயர், கைபேசி எண் மற்றும் மின்னஞ்சல் முகவரியை உள்ளிடவும்.',
+      'validation_user_fields':
+          'பெயரை உள்ளிட்டு, பங்கைத் தேர்ந்தெடுத்து, மின்னஞ்சல் முகவரி அல்லது கைபேசி எண்ணை வழங்கவும்.',
+    },
+  };
+}
+
+class _AppStringsDelegate extends LocalizationsDelegate<AppStrings> {
+  const _AppStringsDelegate();
+
+  @override
+  bool isSupported(Locale locale) =>
+      const {'en', 'ta'}.contains(locale.languageCode);
+
+  @override
+  Future<AppStrings> load(Locale locale) async => AppStrings(locale);
+
+  @override
+  bool shouldReload(_AppStringsDelegate old) => false;
+}

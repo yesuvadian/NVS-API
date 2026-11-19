@@ -21,6 +21,7 @@ from typing import Any
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("cfms.errors")
@@ -33,8 +34,17 @@ _KEY_DETAIL = re.compile(r"Key \(([^)]+)\)")
 # HTTP status used only when the catalogue could not be loaded (for example in
 # unit tests without a database). The catalogue's http_status always wins.
 FALLBACK_STATUS: dict[str, int] = {
+    "INVALID_CREDENTIALS": 401,
+    "ACCOUNT_LOCKED": 403,
+    "AUTH_NOT_CONFIGURED": 503,
+    "PASSWORD_CHANGE_REQUIRED": 403,
+    "PASSWORD_CHANGE_NOT_REQUIRED": 409,
+    "PASSWORD_REUSE": 422,
+    "ACTIVE_SESSION_EXISTS": 409,
     "NOT_SIGNED_IN": 401,
+    "SESSION_EXPIRED": 401,
     "TENANT_ACCESS_INACTIVE": 401,
+    "ORGANISATION_DISABLED": 403,
     "NO_PRIVILEGE": 403,
     "SUPER_ADMIN_REQUIRED": 403,
     "MFA_NOT_VERIFIED": 403,
@@ -92,6 +102,7 @@ FALLBACK_STATUS: dict[str, int] = {
     "DECEASED_DECISION_EXISTS": 409,
     "GUARANTOR_ALREADY_ADDED": 409,
     "REPLACEMENT_ALREADY_PENDING": 409,
+    "INVALID_DATA": 422,
     "UNEXPECTED_ERROR": 500,
     "CONTEXT_SIGNING_NOT_CONFIGURED": 503,
     "LOAN_WORKFLOW_NOT_CONFIGURED": 503,
@@ -277,7 +288,29 @@ async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResp
     return _response(status, body)
 
 
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Render request-body/query validation failures in the standard error shape.
+
+    FastAPI's default is ``{"detail": [...]}``; clients expect ``detail.shortCode``
+    and ``detail.message``. The first failing field fills ``{field}`` and every
+    failure is listed in ``details.errors`` so a form can mark each field.
+    """
+    await localisation.refresh_if_stale(request)
+    errors = []
+    for item in exc.errors():
+        location = [str(part) for part in item.get("loc", ()) if part not in ("body", "query", "path", "header")]
+        errors.append({"field": ".".join(location) or None, "type": item.get("type"), "message": item.get("msg")})
+    field = next((error["field"] for error in errors if error["field"]), "value")
+    status, body = localisation.render(
+        "INVALID_DATA", localisation.language_for(request), params={"field": field}, fallback_status=422
+    )
+    body["params"] = {"field": field}
+    body["details"] = {"errors": errors}
+    return _response(status, body)
+
+
 def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(AppError, app_error_handler)
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(psycopg.Error, database_error_handler)
     app.add_exception_handler(Exception, unexpected_error_handler)

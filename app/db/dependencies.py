@@ -10,6 +10,17 @@ from app.core.tenant_security import TenantPrincipal, require_tenant_user
 from app.db.context import set_signed_platform_context, set_signed_tenant_context
 
 
+async def get_auth_db(request: Request) -> AsyncIterator[AsyncConnection]:
+    """Unauthenticated connection for login and activation operations."""
+    database = request.app.state.database
+    async with database.pool.connection() as conn:
+        await conn.set_autocommit(True)
+        try:
+            yield conn
+        finally:
+            await conn.set_autocommit(False)
+
+
 async def get_platform_db(
     request: Request,
     principal: PlatformPrincipal = Depends(require_super_admin),
@@ -19,6 +30,12 @@ async def get_platform_db(
     async with database.pool.connection() as conn:
         async with conn.transaction():
             await set_signed_platform_context(conn, principal, request, settings)
+            session = await (await conn.execute(
+                "SELECT iam.is_auth_session_active('PLATFORM',%s,NULL,%s) AS active",
+                (principal.user_id, principal.session_id),
+            )).fetchone()
+            if session is None or not session["active"]:
+                raise AppError("SESSION_EXPIRED")
             yield conn
 
 
@@ -45,7 +62,15 @@ async def get_tenant_db(
             ).fetchone()
             if access is None:
                 raise AppError("TENANT_ACCESS_INACTIVE")
-            if access["requires_mfa"] and not principal.mfa_verified:
+            if not access["tenant_enabled"]:
+                raise AppError("ORGANISATION_DISABLED")
+            session = await (await conn.execute(
+                "SELECT iam.is_auth_session_active('TENANT',%s,%s,%s) AS active",
+                (principal.user_id, principal.tenant_id, principal.session_id),
+            )).fetchone()
+            if session is None or not session["active"]:
+                raise AppError("SESSION_EXPIRED")
+            if settings.require_tenant_mfa and access["requires_mfa"] and not principal.mfa_verified:
                 raise AppError("MFA_NOT_VERIFIED")
             yield conn
 

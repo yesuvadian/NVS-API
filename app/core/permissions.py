@@ -16,6 +16,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
         {
             "tenants:can_view",
             "tenants:can_add",
+            "tenants:can_edit",
             "language_packs:can_view",
             "language_packs:can_add",
             "language_packs:can_edit",

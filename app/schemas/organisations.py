@@ -18,6 +18,8 @@ class OrganisationCreate(BaseModel):
     features: list[str] = Field(default_factory=list, max_length=40)
     is_sandbox: bool = False
     time_zone: str = "Asia/Kolkata"
+    password_history_count: int = Field(default=5, ge=1, le=24)
+    single_session_enabled: bool = False
 
 
 class OrganisationOut(BaseModel):
@@ -33,4 +35,9 @@ class OrganisationOut(BaseModel):
     contact_email: str | None = None
     contact_mobile: str | None = None
     created_at: datetime
+
+
+class OrganisationStatusChange(BaseModel):
+    enabled: bool
+    reason: str = Field(min_length=3, max_length=500)
 

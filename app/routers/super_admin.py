@@ -7,7 +7,7 @@ from psycopg import AsyncConnection
 from app.core.permissions import require_platform_permission
 from app.core.security import PlatformPrincipal
 from app.db.dependencies import get_platform_db
-from app.schemas.organisations import OrganisationCreate, OrganisationOut
+from app.schemas.organisations import OrganisationCreate, OrganisationOut, OrganisationStatusChange
 from app.schemas.translations import TranslationEntryUpdate, TranslationPackOut
 from app.services.organisations import OrganisationService
 from app.services.translations import TranslationService
@@ -49,6 +49,18 @@ async def create_organisation(
     conn: AsyncConnection = Depends(get_platform_db),
 ):
     return await _org_service(conn).create(payload, principal.user_id)
+
+
+@router.patch("/organisations/{tenant_id}/status")
+async def set_organisation_status(
+    tenant_id: UUID,
+    payload: OrganisationStatusChange,
+    conn: AsyncConnection = Depends(get_platform_db),
+    _permission: PlatformPrincipal = Depends(require_platform_permission("tenants:can_edit")),
+):
+    return await _org_service(conn).set_enabled(
+        tenant_id, payload.enabled, payload.reason
+    )
 
 
 @router.get("/language-packs/{language_code}", response_model=list[TranslationPackOut])

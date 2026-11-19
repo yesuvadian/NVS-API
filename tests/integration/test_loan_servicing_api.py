@@ -25,7 +25,7 @@ def api():
     from datetime import date
 
     connection = FakeConnection()
-    principal = TenantPrincipal(tenant_id=uuid4(), user_id=uuid4(), role_code="MGR", channel="WEB",
+    principal = TenantPrincipal(tenant_id=uuid4(), user_id=uuid4(), session_id=uuid4(), role_code="MGR", channel="WEB",
                                 mfa_verified=False, working_date=date(2026, 11, 15))
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")

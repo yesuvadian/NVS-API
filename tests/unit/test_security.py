@@ -26,6 +26,7 @@ def make_token(settings: Settings, *, role: str = "SUPER_ADMIN", mfa_verified: b
     return jwt.encode(
         {
             "sub": str(uuid4()),
+            "sid": str(uuid4()),
             "iss": settings.platform_jwt_issuer,
             "aud": settings.platform_jwt_audience,
             "iat": now,
@@ -92,7 +93,7 @@ def test_platform_permission_rejects_roles_without_explicit_grant() -> None:
     import asyncio
 
     check = require_platform_permission("tenants:can_view")
-    support = PlatformPrincipal(user_id=uuid4(), role="SUPPORT", mfa_verified=True)
+    support = PlatformPrincipal(user_id=uuid4(), session_id=uuid4(), role="SUPPORT", mfa_verified=True)
 
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(check(principal=support))

@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core.config import Settings
+from app.core.errors import AppError
 from app.core.tenant_security import require_tenant_user
 
 
@@ -20,13 +21,15 @@ def make_settings() -> Settings:
     )
 
 
-def make_token(settings: Settings, *, channel: str = "WEB") -> str:
+def make_token(settings: Settings, *, channel: str = "WEB", must_change: bool = False) -> str:
     now = datetime.now(UTC)
     return jwt.encode(
         {
             "sub": str(uuid4()),
+            "sid": str(uuid4()),
             "tenant_id": str(uuid4()),
             "role_code": "EMP",
+            "must_change_password": must_change,
             "channel": channel,
             "working_date": "2026-11-15",
             "iss": settings.tenant_jwt_issuer,
@@ -74,3 +77,13 @@ def test_tenant_token_requires_configured_secret() -> None:
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(require_tenant_user(None, settings, None, None))
     assert exc_info.value.status_code == 401
+
+
+def test_tenant_token_requires_initial_password_change_before_app_access() -> None:
+    settings = make_settings()
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer", credentials=make_token(settings, must_change=True)
+    )
+    with pytest.raises(AppError) as exc_info:
+        asyncio.run(require_tenant_user(credentials, settings, None, None))
+    assert exc_info.value.short_code == "PASSWORD_CHANGE_REQUIRED"
