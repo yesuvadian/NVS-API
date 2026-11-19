@@ -21,10 +21,13 @@ import '../../services/tenant_settings_service.dart';
 import '../tenant/organisation_settings_screen.dart';
 
 /// Whether the session's privileges and enabled modules allow a menu item.
-bool navItemAllowed(AuthSession session, NavItem item) =>
-    (item.permission == null ||
-        session.permissions.contains(item.permission)) &&
-    (item.module == null || session.modules.contains(item.module));
+bool navItemAllowed(AuthSession session, NavItem item) {
+  bool reachable(String? module, String? permission) =>
+      (permission == null || session.permissions.contains(permission)) &&
+      (module == null || session.modules.contains(module));
+  return reachable(item.module, item.permission) ||
+      item.alternatives.any((alt) => reachable(alt.$1, alt.$2));
+}
 
 /// The side menu for a session: an item shows only when the user's role holds
 /// its privilege and the module is enabled for the organisation.
@@ -71,6 +74,8 @@ List<NavItem> navItemsFor(AuthSession session) {
             Icons.approval_outlined,
             module: 'APPROVAL',
             permission: 'approval.view',
+            // Loan approvers reach the loan approval inbox (loan.approve).
+            alternatives: [('LOAN', 'loan.approve')],
           ),
           NavItem(
             'nav_collections',
@@ -83,6 +88,8 @@ List<NavItem> navItemsFor(AuthSession session) {
             Icons.insert_chart_outlined,
             module: 'FIN_REPORT',
             permission: 'fin_report.view',
+            // Loan reports are management reports (mgmt_report.view).
+            alternatives: [('MGMT_REPORT', 'mgmt_report.view')],
           ),
           NavItem(
             'nav_settings',
@@ -352,11 +359,20 @@ class _AppShellState extends State<AppShell> {
 }
 
 class NavItem {
-  const NavItem(this.key, this.icon, {this.module, this.permission});
+  const NavItem(
+    this.key,
+    this.icon, {
+    this.module,
+    this.permission,
+    this.alternatives = const [],
+  });
   final String key;
   final IconData icon;
   final String? module;
   final String? permission;
+
+  /// Other (module, permission) pairs that also show the item.
+  final List<(String, String)> alternatives;
 }
 
 class _AccessDenied extends StatelessWidget {

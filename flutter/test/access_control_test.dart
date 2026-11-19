@@ -87,6 +87,58 @@ class FakeAuthService implements AuthService {
 
 void main() {
   group('side menu filtering', () {
+    test('Approvals shows for approval.view or loan approvers', () {
+      expect(
+        menu(tenant(permissions: {'approval.view'}, modules: {'APPROVAL'})),
+        contains('nav_approvals'),
+      );
+      expect(
+        menu(tenant(permissions: {'loan.approve'}, modules: {'LOAN'})),
+        contains('nav_approvals'),
+      );
+      expect(
+        menu(tenant(permissions: {'loan.approve'}, modules: {'APPROVAL'})),
+        isNot(contains('nav_approvals')),
+        reason: 'loan.approve needs the LOAN module enabled',
+      );
+      expect(
+        menu(tenant(permissions: {'loan.view'}, modules: {'LOAN'})),
+        isNot(contains('nav_approvals')),
+      );
+    });
+
+    test('Reports shows for financial or management report viewers', () {
+      expect(
+        menu(tenant(permissions: {'fin_report.view'}, modules: {'FIN_REPORT'})),
+        contains('nav_reports'),
+      );
+      expect(
+        menu(
+          tenant(permissions: {'mgmt_report.view'}, modules: {'MGMT_REPORT'}),
+        ),
+        contains('nav_reports'),
+      );
+      expect(
+        menu(
+          tenant(permissions: {'mgmt_report.view'}, modules: {'FIN_REPORT'}),
+        ),
+        isNot(contains('nav_reports')),
+      );
+    });
+
+    test('Collections needs loan_repay.view with the LOAN_REPAY module', () {
+      expect(
+        menu(tenant(permissions: {'loan_repay.view'}, modules: {'LOAN_REPAY'})),
+        contains('nav_collections'),
+      );
+      expect(
+        menu(
+          tenant(permissions: {'loan_repay.create'}, modules: {'LOAN_REPAY'}),
+        ),
+        isNot(contains('nav_collections')),
+      );
+    });
+
     test('needs both the privilege and the enabled module', () {
       expect(
         menu(tenant(permissions: {'member.view'})),
