@@ -79,8 +79,12 @@ def run(job: str, working_date: date | None, only: str | None) -> int:
                     result = conn.execute(sql, (working_date,)).fetchone()["result"]
                 print(f"[ OK ] {tenant['code']}: {json.dumps(result)}")
             except psycopg.Error as exc:
-                failures += 1
                 message = exc.diag.message_primary or str(exc)
+                if exc.diag.message_hint == "JOB_ALREADY_RUNNING":
+                    # Another run (cron or manual) holds this organisation; it is not a failure.
+                    print(f"[SKIP] {tenant['code']}: {message}")
+                    continue
+                failures += 1
                 print(f"[FAIL] {tenant['code']}: {message}")
                 try:
                     with conn.transaction():

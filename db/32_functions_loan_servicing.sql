@@ -238,6 +238,10 @@ BEGIN
     IF v_tenant IS NULL THEN
         PERFORM app.fail('TENANT_CONTEXT_REQUIRED', 'The daily loan job needs a valid signed tenant context (check CFMS_DB_CONTEXT_SIGNING_KEY)');
     END IF;
+    -- One run per organisation at a time (cron and a manual run can overlap).
+    IF NOT pg_try_advisory_xact_lock(hashtextextended('loan.run_daily_status:' || v_tenant::text, 0)) THEN
+        PERFORM app.fail('JOB_ALREADY_RUNNING', 'The daily loan job is already running for this organisation.');
+    END IF;
     v_go_live := nullif(cfg.get_setting('migration.go_live_date') #>> '{}', '')::date;
 
     -- 1. Approvals not disbursed within the window (approval_expires_on).
@@ -675,13 +679,18 @@ DECLARE
     v_cool jsonb;
     v_cool_until date;
 BEGIN
-    SELECT * INTO v_s FROM loan.loan_settlement
-     WHERE tenant_id = app.tenant_id() AND id = p_settlement_id AND settlement_type IN ('EARLY','DEFAULT') FOR UPDATE;
+    -- Lock the loan first, then the quote: the same order as quoting
+    -- (loan.quote_early_settlement), so a quote and a collection on the same
+    -- loan cannot deadlock.
+    SELECT loan_id INTO v_s FROM loan.loan_settlement
+     WHERE tenant_id = app.tenant_id() AND id = p_settlement_id AND settlement_type IN ('EARLY','DEFAULT');
     IF NOT FOUND THEN
         PERFORM app.fail('SETTLEMENT_NOT_FOUND', 'The settlement quote was not found.');
     END IF;
     SELECT id, member_id, loan_type_id, status, rule_snapshot, rule_set_version_id INTO v_loan
       FROM loan.loan WHERE tenant_id = app.tenant_id() AND id = v_s.loan_id FOR UPDATE;
+    SELECT * INTO v_s FROM loan.loan_settlement
+     WHERE tenant_id = app.tenant_id() AND id = p_settlement_id AND settlement_type IN ('EARLY','DEFAULT') FOR UPDATE;
     IF v_s.status = 'QUOTED' AND coalesce((v_s.components->>'approval_required')::boolean, true) THEN
         PERFORM app.fail('SETTLEMENT_NOT_APPROVED', 'The settlement quote must be approved before collection.');
     END IF;

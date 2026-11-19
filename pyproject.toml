@@ -38,6 +38,7 @@ select = ["E", "F", "I", "UP", "B"]
 testpaths = ["tests"]
 markers = [
     "postgres: needs the local PostgreSQL database configured in .env (skipped when unreachable)",
+    "concurrency: two-session race tests; they commit a throw-away organisation and close it afterwards",
 ]
 
 [tool.coverage.run]

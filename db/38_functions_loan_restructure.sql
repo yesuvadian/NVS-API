@@ -85,6 +85,9 @@ BEGIN
     IF EXISTS (SELECT 1 FROM loan.loan_disbursement WHERE tenant_id=app.tenant_id() AND loan_id=p_loan_id AND status='PREPARED') THEN
         PERFORM app.fail('DISBURSEMENT_STATE','A prepared disbursement is already waiting for release');
     END IF;
+    IF v_loan.status='APPROVED' AND v_loan.disbursed_amount=0 THEN
+        PERFORM loan.assert_concurrent_loan_limit(p_loan_id);
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM platform.payment_mode WHERE mode_code = v_mode AND is_enabled) THEN
         PERFORM app.fail('PAYMENT_MODE_DISABLED', 'The payment mode is not enabled');
     END IF;
@@ -108,9 +111,11 @@ BEGIN
     IF v_principal_account IS NULL THEN PERFORM app.fail('ACCOUNT_MAPPING_MISSING','Loan principal account is not configured'); END IF;
     v_voucher_no := acct.next_number('PAYMENT',app.working_date(),app.tenant_id());
     INSERT INTO acct.payment_voucher (voucher_no,cash_account_id,payee_type,member_id,payee_name,
-        payee_mobile,amount,payment_mode,payment_reference,purpose,source_module,source_entity_type,source_entity_id)
+        payee_mobile,amount,payment_mode,payment_reference,purpose,source_module,source_entity_type,source_entity_id,
+        idempotency_key)
     VALUES (v_voucher_no,v_cash.id,'MEMBER',v_loan.member_id,v_loan.full_name,v_loan.mobile,
-        p_gross_amount-v_deduction,v_mode,p_payment_reference,'LOAN_DISBURSEMENT','LOAN','loan.loan',p_loan_id)
+        p_gross_amount-v_deduction,v_mode,p_payment_reference,'LOAN_DISBURSEMENT','LOAN','loan.loan',p_loan_id,
+        core.current_idempotency_key())
     RETURNING id INTO v_voucher_id;
     INSERT INTO acct.payment_voucher_line (payment_voucher_id,line_no,component,amount,account_id)
     VALUES (v_voucher_id,1,'LOAN_PRINCIPAL',p_gross_amount,v_principal_account);

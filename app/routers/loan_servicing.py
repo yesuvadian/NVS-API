@@ -7,10 +7,11 @@ role from setting loans.write_off_approver_role, Leadership by default).
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import HTMLResponse
 from psycopg import AsyncConnection
 
+from app.core.idempotency import IDEMPOTENCY_HEADER, run_idempotent, validate_key
 from app.core.permissions import require_tenant_permission
 from app.core.tenant_security import TenantPrincipal
 from app.db.dependencies import get_tenant_db
@@ -195,12 +196,17 @@ async def decide_write_off(
 
 @router.post("/loans/{loan_id}/written-off-recoveries", status_code=201)
 async def collect_written_off_recovery(
-    loan_id: UUID, payload: WrittenOffRecovery,
+    loan_id: UUID, payload: WrittenOffRecovery, response: Response,
+    idempotency_key: str | None = Header(default=None, alias=IDEMPOTENCY_HEADER, max_length=200),
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan_repay.create")),
 ):
-    return await _service(conn).collect_written_off_recovery(loan_id, payload.amount, payload.payment_mode,
-                                                             payload.payment_reference)
+    """Bad debt recovery receipt. Needs an Idempotency-Key, so a retry cannot post it twice."""
+    return await run_idempotent(
+        conn, key=validate_key(idempotency_key, required=True), operation="loan.collect_written_off_recovery",
+        payload={"loan_id": loan_id, **payload.model_dump()}, response=response,
+        action=lambda: _service(conn).collect_written_off_recovery(loan_id, payload.amount, payload.payment_mode,
+                                                                   payload.payment_reference))
 
 
 # Application withdrawal and cancellation ----------------------------------------

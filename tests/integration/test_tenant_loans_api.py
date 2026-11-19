@@ -234,15 +234,18 @@ def test_application_fee_payment_posts_receipt_and_journal(loan_api):
     connection.results.extend(
         [
             FakeResult(one={"allowed": True}),
+            FakeResult(one={"stored": None}),                       # core.idempotency_begin
             FakeResult(one={"result": {"loan_id": str(loan_id), "fee_amount": "250.00",
                                         "status": "PAID", "cash_receipt_id": str(uuid4()),
                                         "journal_id": str(uuid4())}}),
+            FakeResult(),                                           # core.idempotency_finish
         ]
     )
 
     response = client.post(
         f"/api/v1/loans/{loan_id}/application-fee",
         json={"payment_mode": "CASH"},
+        headers={"Idempotency-Key": "fee-key-0001"},
     )
 
     assert response.status_code == 200
@@ -316,18 +319,22 @@ def test_settlement_quote_and_collection_call_database_routines(loan_api):
     collected = {"settlement_id": OTHER_ID, "status": "PAID", "loan_status": "SETTLED"}
     connection.results.extend([
         FakeResult(one={"allowed": True}), FakeResult(one={"result": quote}),
-        FakeResult(one={"allowed": True}), FakeResult(one={"result": collected}),
+        FakeResult(one={"allowed": True}), FakeResult(one={"stored": None}),
+        FakeResult(one={"result": collected}), FakeResult(),
     ])
 
     quoted = client.post(f"/api/v1/loans/{LOAN_ID}/settlement-quote")
     paid = client.post(f"/api/v1/loan-settlements/{OTHER_ID}/collect",
-                       json={"payment_mode": "CASH", "payment_reference": "R-1"})
+                       json={"payment_mode": "CASH", "payment_reference": "R-1"},
+                       headers={"Idempotency-Key": "settle-key-01"})
 
     assert quoted.status_code == 201 and quoted.json()["total_payable"] == 10060.0
     assert paid.status_code == 201 and paid.json()["loan_status"] == "SETTLED"
     assert "loan.quote_early_settlement" in connection.calls[1][0]
-    assert "loan.collect_early_settlement" in connection.calls[3][0]
-    assert connection.calls[3][1][1:] == ("CASH", "R-1")
+    assert "core.idempotency_begin" in connection.calls[3][0]
+    assert "loan.collect_early_settlement" in connection.calls[4][0]
+    assert connection.calls[4][1][1:] == ("CASH", "R-1")
+    assert "core.idempotency_finish" in connection.calls[5][0]
 
 
 def test_unknown_settlement_is_not_found(loan_api):
@@ -362,12 +369,14 @@ def test_settlement_quote_rejects_negative_waiver(loan_api):
 def test_disbursement_passes_payment_mode_and_reference(loan_api):
     client, connection = loan_api
     connection.results.extend([
-        FakeResult(one={"allowed": True}),
+        FakeResult(one={"allowed": True}), FakeResult(one={"stored": None}),
         FakeResult(one={"result": {"disbursement_id": OTHER_ID, "tranche_no": 1, "cash_limit_approval_required": False}}),
+        FakeResult(),
     ])
     response = client.post(f"/api/v1/loans/{LOAN_ID}/disbursements",
-                           json={"gross_amount": "5000.00", "payment_mode": "bank_transfer", "payment_reference": "NEFT-9"})
+                           json={"gross_amount": "5000.00", "payment_mode": "bank_transfer", "payment_reference": "NEFT-9"},
+                           headers={"Idempotency-Key": "disb-key-0001"})
     assert response.status_code == 201 and response.json()["tranche_no"] == 1
-    sql, params = connection.calls[1]
+    sql, params = connection.calls[2]
     assert "loan.prepare_disbursement(%s,%s,%s,%s)" in sql
     assert params[2:] == ("BANK_TRANSFER", "NEFT-9")

@@ -421,7 +421,7 @@ DECLARE
     v_id uuid;
 BEGIN
     SELECT id, loan_eligibility, cooling_off_until INTO v_member FROM mbr.member
-     WHERE tenant_id = app.tenant_id() AND id = p_member_id AND NOT is_deleted;
+     WHERE tenant_id = app.tenant_id() AND id = p_member_id AND NOT is_deleted FOR NO KEY UPDATE;
     IF NOT FOUND THEN
         PERFORM app.fail('MEMBER_NOT_FOUND', 'The member was not found.');
     END IF;

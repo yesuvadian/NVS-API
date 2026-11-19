@@ -22,6 +22,9 @@ class MemberCreate(BaseModel):
     preferred_language: str | None = Field(default=None, pattern=r"^[a-z]{2,3}$")
     preferred_channel: Literal["SMS", "WHATSAPP", "EMAIL", "NONE"] = "SMS"
     notes: str | None = Field(default=None, max_length=2000)
+    # Confirms that a possible duplicate (same mobile, or same name and date of
+    # birth) is a different person; recorded in the audit trail.
+    duplicate_override_reason: str | None = Field(default=None, min_length=3, max_length=500)
 
 
 class MemberUpdate(BaseModel):
@@ -40,6 +43,7 @@ class MemberUpdate(BaseModel):
     preferred_language: str | None = Field(default=None, pattern=r"^[a-z]{2,3}$")
     preferred_channel: Literal["SMS", "WHATSAPP", "EMAIL", "NONE"] | None = None
     notes: str | None = Field(default=None, max_length=2000)
+    duplicate_override_reason: str | None = Field(default=None, min_length=3, max_length=500)
 
 
 class MemberOut(BaseModel):

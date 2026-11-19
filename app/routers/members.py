@@ -1,10 +1,11 @@
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from psycopg import AsyncConnection
 
 from app.core.errors import AppError
+from app.core.idempotency import IDEMPOTENCY_HEADER, run_idempotent, validate_key
 from app.core.permissions import require_tenant_permission
 from app.core.tenant_security import TenantPrincipal
 from app.db.dependencies import get_tenant_db
@@ -47,10 +48,18 @@ async def list_members(
 @router.post("", response_model=MemberOut, status_code=201)
 async def create_member(
     payload: MemberCreate,
+    response: Response,
+    idempotency_key: str | None = Header(default=None, alias=IDEMPOTENCY_HEADER, max_length=200),
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("member.create")),
 ):
-    return await _service(conn).create(payload.model_dump())
+    """Register a member. A possible duplicate (same mobile, or same name and date of
+    birth) is refused unless duplicate_override_reason is given. An optional
+    Idempotency-Key makes a double-click return the first member."""
+    values = payload.model_dump()
+    return await run_idempotent(
+        conn, key=validate_key(idempotency_key, required=False), operation="mbr.create_member",
+        payload=values, response=response, action=lambda: _service(conn).create(values))
 
 
 @router.get("/{member_id}", response_model=MemberOut)
@@ -70,8 +79,12 @@ async def update_member(
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("member.edit")),
 ):
+    """Change member details. X-Expected-Row-Version (the row_version the user
+    opened) is required, so a save never silently overwrites another user's change."""
+    if expected_version is None:
+        raise AppError("ROW_VERSION_REQUIRED")
     changes = payload.model_dump(exclude_unset=True)
-    if not changes:
+    if not set(changes) - {"duplicate_override_reason"}:
         raise AppError("MEMBER_CHANGES_REQUIRED")
     return await _service(conn).update(
         member_id, values=changes, expected_version=expected_version

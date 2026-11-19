@@ -168,15 +168,17 @@ def test_write_off_flow_and_recovery(api):
     connection.results.extend([
         FakeResult(one={"allowed": True}), FakeResult(one={"result": {"id": str(OTHER), "status": "PENDING"}}),
         FakeResult(one={"allowed": True}), FakeResult(one={"result": {"id": str(OTHER), "status": "APPROVED"}}),
-        FakeResult(one={"allowed": True}), FakeResult(one={"result": {"receipt_no": "R1"}}),
+        FakeResult(one={"allowed": True}), FakeResult(one={"stored": None}),
+        FakeResult(one={"result": {"receipt_no": "R1"}}), FakeResult(),
     ])
     assert client.post(f"/api/v1/loans/{ID}/write-off", json={"reason": "Untraceable"}).status_code == 201
     assert client.post(f"/api/v1/loan-write-offs/{OTHER}/decision", json={"approve": True}).status_code == 200
     paid = client.post(f"/api/v1/loans/{ID}/written-off-recoveries",
-                       json={"amount": "100.00", "payment_mode": "UPI", "payment_reference": "U1"})
+                       json={"amount": "100.00", "payment_mode": "UPI", "payment_reference": "U1"},
+                       headers={"Idempotency-Key": "recovery-key-1"})
     assert paid.status_code == 201 and paid.json()["receipt_no"] == "R1"
-    assert "loan.collect_written_off_recovery" in connection.calls[5][0]
-    assert connection.calls[5][1][2:] == ("UPI", "U1")
+    assert "loan.collect_written_off_recovery" in connection.calls[6][0]
+    assert connection.calls[6][1][2:] == ("UPI", "U1")
 
 
 def test_cooling_off_override_decision_passes_valid_until(api):

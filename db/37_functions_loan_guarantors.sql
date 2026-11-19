@@ -94,8 +94,10 @@ BEGIN
     IF p_member_id = v_loan.member_id THEN
         PERFORM app.fail('GUARANTOR_IS_BORROWER', 'The borrower cannot be their own guarantor.');
     END IF;
+    -- Lock the guarantor: two loans adding the same guarantor at the same
+    -- moment are counted one after the other against the guarantor limits.
     SELECT status, loan_eligibility INTO v_member FROM mbr.member
-     WHERE tenant_id = app.tenant_id() AND id = p_member_id AND NOT is_deleted;
+     WHERE tenant_id = app.tenant_id() AND id = p_member_id AND NOT is_deleted FOR NO KEY UPDATE;
     IF NOT FOUND OR v_member.status <> 'ACTIVE' OR v_member.loan_eligibility NOT IN ('ELIGIBLE','REINSTATED') THEN
         PERFORM app.fail('GUARANTOR_NOT_ELIGIBLE', 'The guarantor must be an active member in good standing.');
     END IF;

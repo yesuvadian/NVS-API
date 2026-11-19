@@ -28,6 +28,34 @@
 -- -----------------------------------------------------------------------------
 -- Approval decisions
 -- -----------------------------------------------------------------------------
+-- Maximum concurrent loans per member (setting loans.max_concurrent_loans),
+-- checked when a loan is approved and again before its first disbursement.
+-- Approved but not yet disbursed loans count, so two applications made at the
+-- same time cannot both go through. The member row lock serialises approvals
+-- and disbursements for the same member.
+CREATE OR REPLACE FUNCTION loan.assert_concurrent_loan_limit(p_loan_id uuid)
+RETURNS void LANGUAGE plpgsql AS
+$$
+DECLARE
+    v_member uuid;
+    v_max integer;
+    v_count integer;
+BEGIN
+    SELECT member_id INTO v_member FROM loan.loan WHERE tenant_id = app.tenant_id() AND id = p_loan_id;
+    IF v_member IS NULL THEN RETURN; END IF;
+    PERFORM 1 FROM mbr.member WHERE tenant_id = app.tenant_id() AND id = v_member FOR NO KEY UPDATE;
+    SELECT max_concurrent_loans INTO v_max FROM loan.get_loan_settings();
+    IF v_max IS NULL THEN RETURN; END IF;
+    SELECT count(*) INTO v_count FROM loan.loan
+     WHERE tenant_id = app.tenant_id() AND member_id = v_member AND id <> p_loan_id AND NOT is_deleted
+       AND status IN ('APPROVED','ACTIVE','OVERDUE','DEFAULTED','RESTRUCTURED');
+    IF v_count >= v_max THEN
+        PERFORM app.fail('MAX_CONCURRENT_LOANS_REACHED',
+            format('The member already has %s approved or running loan(s); the limit is %s.', v_count, v_max));
+    END IF;
+END
+$$;
+
 CREATE OR REPLACE FUNCTION loan.apply_approval_decision(
     p_request_id uuid, p_decision text, p_reason text, p_approved_amount numeric(18,2),
     p_tenure_months integer, p_offline jsonb DEFAULT NULL
@@ -98,6 +126,7 @@ BEGIN
     END IF;
 
     IF p_decision='APPROVED' THEN
+        PERFORM loan.assert_concurrent_loan_limit(v_req.loan_id);
         SELECT upper(coalesce(r->'value'->>'method','FLAT')),
                coalesce((r->'value'->>'annualRatePercent')::numeric,0)
           INTO v_method,v_rate

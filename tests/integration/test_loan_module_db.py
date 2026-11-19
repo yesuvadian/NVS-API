@@ -764,7 +764,7 @@ class Api:
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 
     async def call(self, role: str, method: str, path: str, *, on: date | None = None, lang: str = "en",
-                   json=None) -> httpx.Response:
+                   json=None, headers: dict[str, str] | None = None) -> httpx.Response:
         on = on or self.tenant.d0
         self.principal = TenantPrincipal(tenant_id=self.tenant.id, user_id=self.tenant.users[role],
                                          role_code=role.rstrip("2"), channel="WEB", mfa_verified=False,
@@ -772,7 +772,7 @@ class Api:
         await self.db.act(self.tenant, role, on)
         async with self.db.savepoint():
             return await self.client.request(method, f"/api/v1{path}", json=json,
-                                             headers={"Accept-Language": lang})
+                                             headers={"Accept-Language": lang, **(headers or {})})
 
 
 def test_http_privileges_by_role():
@@ -830,7 +830,8 @@ def test_http_settlement_flow_and_localised_errors():
         quote = await api.call("EMP", "POST", f"/loans/{loan_id}/settlement-quote", on=on)
         assert quote.status_code == 201
         settlement_id = quote.json()["id"]
-        not_approved = await api.call("EMP", "POST", f"/loan-settlements/{settlement_id}/collect", on=on, lang="ta", json={})
+        not_approved = await api.call("EMP", "POST", f"/loan-settlements/{settlement_id}/collect", on=on, lang="ta", json={},
+                                    headers={"Idempotency-Key": "settle-r9-0001"})   # a failed try keeps the key free
         detail = not_approved.json()["detail"]
         assert not_approved.status_code == 409 and detail["shortCode"] == "SETTLEMENT_NOT_APPROVED"
         assert detail["code"] == "CFMS-LOAN-5005" and detail["language"] == "ta" and "அங்கீகரிக்கப்பட" in detail["message"]
@@ -842,7 +843,8 @@ def test_http_settlement_flow_and_localised_errors():
         again = await api.call("MGR", "POST", f"/loan-settlements/{settlement_id}/approve", on=on, json={})
         assert again.status_code == 409 and again.json()["detail"]["shortCode"] == "SETTLEMENT_NOT_PENDING"
         paid = await api.call("EMP", "POST", f"/loan-settlements/{settlement_id}/collect", on=on,
-                              json={"payment_mode": "CASH", "payment_reference": "R-9"})
+                              json={"payment_mode": "CASH", "payment_reference": "R-9"},
+                              headers={"Idempotency-Key": "settle-r9-0001"})
         assert paid.status_code == 201 and paid.json()["loan_status"] == "SETTLED"
         got = await api.call("ACC", "GET", f"/loan-settlements/{settlement_id}", on=on)
         assert got.status_code == 200 and got.json()["status"] == "PAID"

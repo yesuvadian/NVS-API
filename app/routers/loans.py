@@ -1,8 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from psycopg import AsyncConnection
 
+from app.core.errors import AppError
+from app.core.idempotency import IDEMPOTENCY_HEADER, run_idempotent, validate_key
 from app.core.permissions import require_tenant_permission
 from app.core.tenant_security import TenantPrincipal
 from app.db.dependencies import get_tenant_db
@@ -25,6 +27,12 @@ from app.schemas.loans import (
 from app.services.loans import LoanService
 
 router = APIRouter(tags=["loans"])
+
+# Money postings need an Idempotency-Key, so a double-click or a retry after a
+# timeout returns the first receipt instead of posting a second one. Creating
+# an application accepts one too. The key is read here and checked inside the
+# endpoint, after the privilege check.
+IdempotencyKey = Header(default=None, alias=IDEMPOTENCY_HEADER, max_length=200)
 
 
 def _service(conn: AsyncConnection) -> LoanService:
@@ -78,10 +86,15 @@ async def list_loan_applications(
 @router.post("/loans", response_model=LoanOut, status_code=201)
 async def create_loan_application(
     payload: LoanApplicationCreate,
+    response: Response,
+    idempotency_key: str | None = IdempotencyKey,
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan.create")),
 ):
-    return await _service(conn).create_application(payload.model_dump())
+    values = payload.model_dump()
+    return await run_idempotent(
+        conn, key=validate_key(idempotency_key, required=False), operation="loan.create_application",
+        payload=values, response=response, action=lambda: _service(conn).create_application(values))
 
 
 @router.get("/loans/{loan_id}", response_model=LoanOut)
@@ -114,11 +127,16 @@ async def loan_approval_inbox(
 
 @router.post("/loans/{loan_id}/application-fee")
 async def collect_application_fee(
-    loan_id: UUID, payload: LoanFeePayment,
+    loan_id: UUID, payload: LoanFeePayment, response: Response,
+    idempotency_key: str | None = IdempotencyKey,
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan_fee.create")),
 ):
-    return await _service(conn).collect_application_fee(loan_id, **payload.model_dump())
+    values = payload.model_dump()
+    return await run_idempotent(
+        conn, key=validate_key(idempotency_key, required=True), operation="loan.collect_application_fee",
+        payload={"loan_id": loan_id, **values}, response=response,
+        action=lambda: _service(conn).collect_application_fee(loan_id, **values))
 
 
 @router.post("/loan-approvals/{approval_request_id}/decision")
@@ -132,12 +150,16 @@ async def decide_loan_approval(
 
 @router.post("/loans/{loan_id}/disbursements", status_code=201)
 async def prepare_loan_disbursement(
-    loan_id: UUID, payload: LoanDisbursementCreate,
+    loan_id: UUID, payload: LoanDisbursementCreate, response: Response,
+    idempotency_key: str | None = IdempotencyKey,
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan.edit")),
 ):
-    return await _service(conn).prepare_disbursement(loan_id, payload.gross_amount, payload.payment_mode,
-                                                      payload.payment_reference)
+    return await run_idempotent(
+        conn, key=validate_key(idempotency_key, required=True), operation="loan.prepare_disbursement",
+        payload={"loan_id": loan_id, **payload.model_dump()}, response=response,
+        action=lambda: _service(conn).prepare_disbursement(loan_id, payload.gross_amount, payload.payment_mode,
+                                                           payload.payment_reference))
 
 
 @router.post("/loans/{loan_id}/disbursements/{disbursement_id}/release")
@@ -151,11 +173,16 @@ async def release_loan_disbursement(
 
 @router.post("/loans/{loan_id}/repayments", status_code=201)
 async def collect_loan_repayment(
-    loan_id: UUID, payload: LoanRepaymentCreate,
+    loan_id: UUID, payload: LoanRepaymentCreate, response: Response,
+    idempotency_key: str | None = IdempotencyKey,
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan_repay.create")),
 ):
-    return await _service(conn).collect_repayment(loan_id, **payload.model_dump())
+    values = payload.model_dump()
+    return await run_idempotent(
+        conn, key=validate_key(idempotency_key, required=True), operation="loan.collect_repayment",
+        payload={"loan_id": loan_id, **values}, response=response,
+        action=lambda: _service(conn).collect_repayment(loan_id, **values))
 
 
 @router.get("/loans/{loan_id}/schedule")
@@ -188,12 +215,20 @@ async def get_member_loan_statement(
 @router.patch("/loan-applications/{loan_id}")
 async def update_loan_application(
     loan_id: UUID, payload: LoanApplicationUpdate,
+    header_version: int | None = Header(default=None, alias="X-Expected-Row-Version", ge=1),
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan.edit")),
 ):
-    """Change the amount, tenure, purpose or nominees of a draft or returned application."""
+    """Change the amount, tenure, purpose or nominees of a draft or returned application.
+
+    The row version of the application as the user opened it is required (body
+    ``expected_version`` or the X-Expected-Row-Version header), so a save never
+    silently overwrites someone else's change."""
+    expected_version = payload.expected_version or header_version
+    if expected_version is None:
+        raise AppError("ROW_VERSION_REQUIRED")
     values = payload.model_dump(exclude={"expected_version"}, exclude_none=True)
-    return await _service(conn).update_application(loan_id, values, payload.expected_version)
+    return await _service(conn).update_application(loan_id, values, expected_version)
 
 
 @router.post("/loans/{loan_id}/settlement-quote", status_code=201)
@@ -238,8 +273,13 @@ async def approve_loan_settlement(
 
 @router.post("/loan-settlements/{settlement_id}/collect", status_code=201)
 async def collect_loan_settlement(
-    settlement_id: UUID, payload: SettlementCollection,
+    settlement_id: UUID, payload: SettlementCollection, response: Response,
+    idempotency_key: str | None = IdempotencyKey,
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan_settle.create")),
 ):
-    return await _service(conn).collect_settlement(settlement_id, **payload.model_dump())
+    values = payload.model_dump()
+    return await run_idempotent(
+        conn, key=validate_key(idempotency_key, required=True), operation="loan.collect_early_settlement",
+        payload={"settlement_id": settlement_id, **values}, response=response,
+        action=lambda: _service(conn).collect_settlement(settlement_id, **values))

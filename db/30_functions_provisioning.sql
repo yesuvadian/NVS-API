@@ -120,19 +120,21 @@ BEGIN
     INSERT INTO acct.cash_receipt (
         receipt_no,cash_account_id,payer_type,member_id,payer_name,payer_mobile,
         amount,payment_mode,payment_reference,purpose,source_module,
-        source_entity_type,source_entity_id
+        source_entity_type,source_entity_id,idempotency_key
     ) VALUES (
         acct.next_number('RECEIPT',app.working_date(),v_tenant),v_cash.id,'MEMBER',
         v_member.id,v_member.full_name,v_member.mobile,p_amount,p_payment_mode,
-        p_payment_reference,p_purpose,'LOAN',p_source_entity_type,p_source_entity_id
+        p_payment_reference,p_purpose,'LOAN',p_source_entity_type,p_source_entity_id,
+        core.current_idempotency_key()   -- the API request that posted it (double-save guard)
     ) RETURNING id INTO v_receipt_id;
 
     INSERT INTO acct.journal (
         voucher_type,value_date,status,narration,total_amount,source_module,
-        source_entity_type,source_entity_id,source_ref
+        source_entity_type,source_entity_id,source_ref,idempotency_key
     ) VALUES (
         'JOURNAL',app.working_date(),'POSTED',initcap(replace(p_purpose,'_',' ')),
-        p_amount,'LOAN','acct.cash_receipt',v_receipt_id,v_receipt_id::text
+        p_amount,'LOAN','acct.cash_receipt',v_receipt_id,v_receipt_id::text,
+        core.current_idempotency_key()
     ) RETURNING id INTO v_journal_id;
 
     INSERT INTO acct.journal_line (
@@ -234,11 +236,64 @@ $$;
 -- loan.prepare_disbursement and loan.release_disbursement moved to
 -- 38_functions_loan_restructure.sql (tranches and the cash disbursement limit).
 
+-- Possible duplicate of a member (scope 5.5): same mobile number (last ten
+-- digits) or same name with the same date of birth. Exited and deceased
+-- members are not counted, so a family member or a rejoining member can reuse
+-- the details.
+CREATE OR REPLACE FUNCTION mbr.find_duplicate_member(
+    p_exclude_id uuid, p_mobile text, p_full_name text, p_date_of_birth date)
+RETURNS TABLE (member_id uuid, member_no text, matched_on text)
+LANGUAGE sql STABLE AS
+$$
+    SELECT m.id, m.member_no,
+           CASE WHEN nullif(right(regexp_replace(coalesce(p_mobile, ''), '\D', '', 'g'), 10), '') IS NOT NULL
+                     AND right(regexp_replace(coalesce(m.mobile, ''), '\D', '', 'g'), 10)
+                       = right(regexp_replace(p_mobile, '\D', '', 'g'), 10)
+                THEN 'mobile number' ELSE 'name and date of birth' END
+      FROM mbr.member m
+     WHERE m.tenant_id = app.tenant_id() AND NOT m.is_deleted AND m.status NOT IN ('EXITED','DECEASED')
+       AND m.id IS DISTINCT FROM p_exclude_id
+       AND ((nullif(right(regexp_replace(coalesce(p_mobile, ''), '\D', '', 'g'), 10), '') IS NOT NULL
+             AND right(regexp_replace(coalesce(m.mobile, ''), '\D', '', 'g'), 10)
+               = right(regexp_replace(p_mobile, '\D', '', 'g'), 10))
+         OR (p_date_of_birth IS NOT NULL AND m.date_of_birth = p_date_of_birth
+             AND lower(btrim(m.full_name)) = lower(btrim(p_full_name))))
+     ORDER BY m.member_no
+     LIMIT 1
+$$;
+
+-- Fails with DUPLICATE_MEMBER unless the employee confirmed the duplicate with
+-- a reason. Member registrations and key-detail changes of one organisation
+-- are serialised by an advisory lock, so two clerks (or a double-click)
+-- cannot both register the same person at the same moment.
+CREATE OR REPLACE FUNCTION mbr.assert_no_duplicate_member(
+    p_exclude_id uuid, p_mobile text, p_full_name text, p_date_of_birth date, p_override_reason text)
+RETURNS void LANGUAGE plpgsql AS
+$$
+DECLARE v_dup record;
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtextextended('mbr.member.identity:' || app.tenant_id()::text, 0));
+    SELECT * INTO v_dup FROM mbr.find_duplicate_member(p_exclude_id, p_mobile, p_full_name, p_date_of_birth);
+    IF FOUND AND coalesce(btrim(p_override_reason), '') = '' THEN
+        PERFORM app.fail('DUPLICATE_MEMBER',
+            format('Member %s already has the same %s. Open that member, or confirm with a reason that this is a different person.',
+                   v_dup.member_no, v_dup.matched_on));
+    END IF;
+END
+$$;
+
 CREATE OR REPLACE FUNCTION mbr.create_member(p_values jsonb)
 RETURNS jsonb LANGUAGE plpgsql AS
 $$
-DECLARE v_member mbr.member%ROWTYPE;
+DECLARE
+    v_member mbr.member%ROWTYPE;
+    v_override text := nullif(btrim(p_values->>'duplicate_override_reason'), '');
 BEGIN
+    PERFORM mbr.assert_no_duplicate_member(NULL, p_values->>'mobile', p_values->>'full_name',
+                                           (p_values->>'date_of_birth')::date, v_override);
+    IF v_override IS NOT NULL THEN
+        PERFORM app.set_audit_reason('Possible duplicate confirmed: ' || v_override, 'MEMBER', NULL);
+    END IF;
     INSERT INTO mbr.member (member_no,full_name,date_of_birth,gender,mobile,alt_mobile,email,
         address_line1,address_line2,city,district,state,pincode,preferred_language,preferred_channel,notes)
     VALUES (acct.next_number('MEMBER',NULL,app.tenant_id()),p_values->>'full_name',
@@ -254,8 +309,21 @@ $$;
 CREATE OR REPLACE FUNCTION mbr.update_member(p_member_id uuid,p_values jsonb,p_expected_version integer DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql AS
 $$
-DECLARE v_member mbr.member%ROWTYPE;
+DECLARE
+    v_member mbr.member%ROWTYPE;
+    v_current mbr.member%ROWTYPE;
 BEGIN
+    IF p_values ?| ARRAY['mobile','full_name','date_of_birth'] THEN
+        SELECT * INTO v_current FROM mbr.member
+         WHERE tenant_id=app.tenant_id() AND id=p_member_id AND is_deleted=false;
+        IF FOUND THEN
+            PERFORM mbr.assert_no_duplicate_member(p_member_id,
+                CASE WHEN p_values?'mobile' THEN p_values->>'mobile' ELSE v_current.mobile END,
+                CASE WHEN p_values?'full_name' THEN p_values->>'full_name' ELSE v_current.full_name END,
+                CASE WHEN p_values?'date_of_birth' THEN (p_values->>'date_of_birth')::date ELSE v_current.date_of_birth END,
+                p_values->>'duplicate_override_reason');
+        END IF;
+    END IF;
     UPDATE mbr.member SET
         full_name=CASE WHEN p_values?'full_name' THEN p_values->>'full_name' ELSE full_name END,
         date_of_birth=CASE WHEN p_values?'date_of_birth' THEN (p_values->>'date_of_birth')::date ELSE date_of_birth END,
@@ -317,8 +385,19 @@ CREATE OR REPLACE FUNCTION loan.create_application(
 )
 RETURNS uuid LANGUAGE plpgsql AS
 $$
-DECLARE v_loan_id uuid; v_nominee_id uuid;
+DECLARE v_loan_id uuid; v_nominee_id uuid; v_open text;
 BEGIN
+    -- One open application per member and loan type. The member row lock
+    -- serialises concurrent creates (a double-click) for the same member.
+    PERFORM 1 FROM mbr.member WHERE tenant_id=app.tenant_id() AND id=p_member_id AND is_deleted=false FOR NO KEY UPDATE;
+    SELECT loan_no INTO v_open FROM loan.loan
+     WHERE tenant_id=app.tenant_id() AND member_id=p_member_id AND loan_type_id=p_loan_type_id
+       AND NOT is_deleted AND status IN ('DRAFT','FEE_PENDING','SUBMITTED','UNDER_APPROVAL','RETURNED')
+     ORDER BY created_at LIMIT 1;
+    IF v_open IS NOT NULL THEN
+        PERFORM app.fail('LOAN_APPLICATION_ALREADY_OPEN',
+            format('Application %s of this member for the same loan type is still open. Continue that application, or withdraw it first.', v_open));
+    END IF;
     INSERT INTO loan.loan (loan_no,member_id,loan_type_id,purpose,requested_amount,
         requested_tenure_months,application_date,status,status_date,is_first_loan,
         rule_set_version_id,rule_snapshot,workflow_version_id,created_by_employee)

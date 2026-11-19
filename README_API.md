@@ -158,6 +158,32 @@ reduces principal and regenerates the schedule. Business rules, maker-checker an
 approver roles are enforced in PostgreSQL. Workflow and rule configuration
 remains Super Admin only.
 
+## Double-save and concurrent-save protection
+
+Money postings require an `Idempotency-Key` header (8 to 100 letters, digits or
+`_ . : -`): `POST /loans/{id}/application-fee`, `/disbursements`, `/repayments`,
+`/written-off-recoveries` and `/settlements/{id}/collect`. Without it the API
+answers 428 `IDEMPOTENCY_KEY_REQUIRED`. `POST /members` and `POST /loans` accept
+the header but do not require it. Clients create a new key each time the user
+opens the form and send the same key again on a retry. A repeat returns the
+first response with `Idempotent-Replayed: true`; the same key used for a
+different request fails with 409 `IDEMPOTENCY_KEY_REUSED`; a request that
+failed does not use up its key. Receipts, journals and payment vouchers carry
+the key (`idempotency_key`).
+
+Edits use optimistic locking: `PATCH /members/{id}` needs the
+`X-Expected-Row-Version` header and `PATCH /loan-applications/{id}` needs
+`expected_version` in the body or that header (428 `ROW_VERSION_REQUIRED`
+otherwise; a stale version gives 409).
+
+The database also refuses a second member with the same mobile number, or the
+same name and date of birth (`DUPLICATE_MEMBER`; send `duplicate_override_reason`
+to register them anyway), a second open application of the same loan type
+(`LOAN_APPLICATION_ALREADY_OPEN`), approvals or disbursements above the
+member's concurrent-loan limit (`MAX_CONCURRENT_LOANS_REACHED`), and a daily
+status run while another is running for the organisation (`JOB_ALREADY_RUNNING`;
+`jobs.py` skips it).
+
 ## Tests and reports
 
 `python -m pytest` runs the unit tests and, when the database in `.env` is
@@ -165,5 +191,8 @@ reachable, the PostgreSQL integration tests. Each database test provisions its
 own throw-away organisation inside one transaction and rolls it back, so the
 local data is never changed. Generate the HTML test report and coverage report
 with:
+
+Race tests (`-m concurrency`) use two real sessions and must commit; they leave
+a closed throw-away organisation behind. Skip them with `-m "not concurrency"`.
 
     python -m pytest --html=reports/test-report.html --self-contained-html --cov --cov-report=html:reports/coverage --cov-report=term

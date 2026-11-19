@@ -87,7 +87,7 @@ DECLARE
     -- high-volume technical tables with their own status history: not audited
     v_no_audit text[] := ARRAY[
         'wf.action_execution','iam.user_session','notif.notification_message','platform.usage_record',
-        'platform.job_run','core.import_row','core.error_log'];
+        'platform.job_run','core.import_row','core.error_log','core.idempotency_request'];
 BEGIN
     FOR r IN
         SELECT c.oid::regclass AS tbl, n.nspname || '.' || c.relname AS qname

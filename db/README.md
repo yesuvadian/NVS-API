@@ -52,6 +52,7 @@ Loan module additions from the functional gap review (Nov 2026):
 | Script | What it adds |
 |---|---|
 | `16_loan_gap_tables.sql` | Tables for migrated-loan default review, receipt reversal and loan cancellation; cooling-off override columns |
+| `17_concurrency_controls.sql` | Idempotent requests (`core.idempotency_request`, `core.idempotency_begin/finish`) and unique indexes that allow one pending override, waiver, restructure or write-off per item and one late fee per instalment per day |
 | `32_functions_loan_servicing.sql` | Default settlement quotes (rule `DEFAULT_SETTLEMENT`), settlement interest waiver, and a daily job that also assesses late fees, opens recovery cases, ends cooling-off, sends reminders and escalates recovery |
 | `33_functions_loan_repayment.sql` | Repayment allocation order (rule `PAYMENT_ALLOCATION`, else setting `loans.payment_allocation_order`), late fees (rule `LATE_FEE`), advance payments, overpayment with schedule regeneration (rule `OVERPAYMENT`), closing a default and ending cooling-off |
 | `34_functions_loan_notifications.sql` | Templated notifications with opt-out, deceased suppression and quiet hours; due and overdue reminders (`notifications.loan_reminder_schedule`) |
@@ -61,6 +62,7 @@ Loan module additions from the functional gap review (Nov 2026):
 | `38_functions_loan_restructure.sql` | Disbursement tranches (loan type `allows_tranches` and rule `TRANCHES`), cash limit approval (`cash.disbursement_limit`), restructuring (`loans.restructuring`), deceased member's loan decisions and transfer to successors, migrated-loan review decisions |
 | `39_functions_loan_reports.sql` | Loan reports (outstanding, interest, ageing and PAR, demand vs collection, due and overdue lists, restructured and written-off, guarantor exposure), loan documents with required types (`loan_type.required_documents` or rule `REQUIRED_DOCUMENTS`) and the sanction letter data |
 | `46_seed_loan_gaps.sql` | Error codes (English and Tamil), the new settings and the default-notice templates |
+| `47_seed_concurrency_controls.sql` | Error codes (English and Tamil) for idempotency keys, row versions, duplicate members, open applications, the concurrent-loan limit and overlapping daily jobs |
 
 Supported languages live in `platform.language` (script 15): language packs and
 `mbr.member.preferred_language` reference it, and the API validates language

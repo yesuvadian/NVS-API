@@ -22,6 +22,7 @@ EDITABLE_FIELDS = frozenset(
         "preferred_language",
         "preferred_channel",
         "notes",
+        "duplicate_override_reason",   # not stored on the member; confirms a possible duplicate
     }
 )
 
