@@ -29,6 +29,7 @@ RETURNS trigger LANGUAGE plpgsql AS
 $$
 BEGIN
     IF app.user_id() IS NOT NULL
+       AND NOT app.is_platform_scope()
        AND coalesce(app.setting('app.access_change_request'), '') = ''
        AND NOT iam.has_privilege(app.user_id(), 'user_role.edit') THEN
         PERFORM app.fail('NO_PRIVILEGE',

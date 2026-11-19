@@ -59,6 +59,7 @@ class _OrganisationsScreenState extends State<OrganisationsScreen> {
         email = TextEditingController();
     int history = 5;
     bool single = false;
+    bool includeLoanRepayment = false;
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -108,6 +109,14 @@ class _OrganisationsScreenState extends State<OrganisationsScreen> {
                     title: Text(s.text('single_session_enabled')),
                     value: single,
                     onChanged: (value) => setState(() => single = value),
+                  ),
+                  SwitchListTile(
+                    key: const ValueKey('org-loan-repayment-module'),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(s.text('org_enable_collections')),
+                    value: includeLoanRepayment,
+                    onChanged: (value) =>
+                        setState(() => includeLoanRepayment = value),
                   ),
                   Text(
                     s.text('single_session_help'),
@@ -160,7 +169,9 @@ class _OrganisationsScreenState extends State<OrganisationsScreen> {
       'admin_name': admin.text.trim(),
       'admin_mobile': mobile.text.trim(),
       'admin_email': email.text.trim(),
-      'optional_modules': <String>[],
+      'optional_modules': includeLoanRepayment
+          ? <String>['LOAN', 'LOAN_REPAY']
+          : <String>[],
       'features': <String>[],
       'is_sandbox': false,
       'time_zone': 'Asia/Kolkata',

@@ -115,6 +115,25 @@ def test_wrong_password_is_recorded_and_locked_account_gets_localizable_error(mo
     assert LoginRepository.attempts[-1]["failure_reason"] == "LOCKED"
 
 
+def test_disabled_organisation_login_returns_localizable_disable_code(monkeypatch) -> None:
+    client, _settings = _auth_client(monkeypatch, prepared=True)
+    LoginRepository.candidate = {
+        **LoginRepository.candidate,
+        "principal_kind": "TENANT",
+        "tenant_id": uuid4(),
+        "platform_role": None,
+        "role_code": "ADM",
+        "channel_access": False,
+        "tenant_status": "SUSPENDED",
+    }
+    response = client.post('/api/v1/auth/login', json={
+        'user_id': 'admin@example.test', 'password': 'correct', 'channel': 'WEB',
+    })
+    assert response.status_code == 403
+    assert response.json()['detail']['shortCode'] == 'ORGANISATION_DISABLED'
+    assert LoginRepository.attempts[-1]['failure_reason'] == 'NO_ACCESS'
+
+
 class UserRepositoryFake:
     reset_args = None
     created_args = None

@@ -182,6 +182,7 @@ class _OrganisationModulesScreenState extends State<OrganisationModulesScreen> {
                 final module = _modules[index];
                 final locked = module.isCore && module.isEnabled;
                 return SwitchListTile(
+                  key: ValueKey('tenant-module-${module.code}'),
                   title: Text(module.name),
                   subtitle: Text(
                     locked

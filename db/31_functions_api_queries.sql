@@ -1000,6 +1000,68 @@ CREATE INDEX IF NOT EXISTS auth_session_user_active_idx
     ON iam.auth_session(principal_kind, tenant_id, user_id, expires_at)
     WHERE revoked_at IS NULL;
 
+-- Local E2E account reset. Callable only by the schema owner (nvs), never by
+-- the API role. It synchronizes an ignored local test config with account
+-- passwords without exposing plaintext to PostgreSQL or requiring inline SQL.
+CREATE OR REPLACE FUNCTION iam.reset_e2e_account_password(
+    p_identifier text, p_expected_kind text, p_password_hash text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, iam, platform AS
+$$
+DECLARE v_user record; v_count integer; v_changed integer;
+BEGIN
+    IF p_expected_kind NOT IN ('PLATFORM','TENANT') OR
+       p_password_hash IS NULL OR
+       p_password_hash !~ '^scrypt\$1\$32768\$8\$1\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$' THEN
+        RAISE EXCEPTION 'Invalid E2E account reset request' USING ERRCODE = '22023';
+    END IF;
+    SELECT count(*) INTO v_count FROM iam.login_candidates(p_identifier,'WEB')
+     WHERE principal_kind=p_expected_kind;
+    IF v_count <> 1 THEN
+        RAISE EXCEPTION 'E2E account must resolve to exactly one identity' USING ERRCODE = '22023';
+    END IF;
+    SELECT * INTO v_user FROM iam.login_candidates(p_identifier,'WEB')
+     WHERE principal_kind=p_expected_kind;
+    IF v_user.account_status <> 'ACTIVE' THEN
+        RAISE EXCEPTION 'E2E account is not active' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_expected_kind='PLATFORM' THEN
+        IF v_user.platform_role <> 'SUPER_ADMIN' THEN
+            RAISE EXCEPTION 'E2E platform account must be Super Admin' USING ERRCODE = '42501';
+        END IF;
+        UPDATE platform.platform_user
+           SET password_hash=p_password_hash, must_change_password=false,
+               failed_attempts=0, locked_until=NULL, updated_at=now(),
+               row_version=row_version+1
+         WHERE id=v_user.user_id AND status='ACTIVE';
+    ELSE
+        IF v_user.role_code <> 'ADM' OR v_user.tenant_status <> 'ACTIVE' THEN
+            RAISE EXCEPTION 'E2E tenant account must be an active Org Admin' USING ERRCODE = '42501';
+        END IF;
+        INSERT INTO iam.password_history(tenant_id,user_id,password_hash)
+        SELECT v_user.tenant_id,id,password_hash FROM iam.app_user
+         WHERE tenant_id=v_user.tenant_id AND id=v_user.user_id
+           AND password_hash IS NOT NULL AND password_hash <> p_password_hash;
+        UPDATE iam.app_user
+           SET password_hash=p_password_hash, password_changed_at=now(),
+               must_change_password=false, failed_attempts=0, locked_until=NULL,
+               updated_at=now(), row_version=row_version+1
+         WHERE tenant_id=v_user.tenant_id AND id=v_user.user_id AND status='ACTIVE';
+    END IF;
+    GET DIAGNOSTICS v_changed=ROW_COUNT;
+    IF v_changed <> 1 THEN RETURN false; END IF;
+
+    UPDATE iam.auth_session
+       SET revoked_at=now(), revoked_reason='E2E_PASSWORD_RESET'
+     WHERE principal_kind=p_expected_kind AND user_id=v_user.user_id
+       AND tenant_id IS NOT DISTINCT FROM v_user.tenant_id AND revoked_at IS NULL;
+    RETURN true;
+END
+$$;
+REVOKE ALL ON FUNCTION iam.reset_e2e_account_password(text,text,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION iam.reset_e2e_account_password(text,text,text) TO nvs;
+
 CREATE OR REPLACE FUNCTION iam.prepare_auth_session(
     p_kind text, p_user_id uuid, p_tenant_id uuid, p_session_id uuid,
     p_expires_at timestamptz, p_force_logout boolean, p_client_ip text, p_device text)

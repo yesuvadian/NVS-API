@@ -24,10 +24,13 @@
 // deleted through the API).
 
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:cfms_portal/app.dart';
 import 'package:cfms_portal/services/app_config_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
@@ -47,6 +50,16 @@ const adminUser = String.fromEnvironment('E2E_ADMIN_USER');
 const adminPassword = String.fromEnvironment('E2E_ADMIN_PASSWORD');
 const staffUser = String.fromEnvironment('E2E_STAFF_USER');
 const staffPassword = String.fromEnvironment('E2E_STAFF_PASSWORD');
+const employeeUser = String.fromEnvironment('E2E_EMP_USER');
+const employeePassword = String.fromEnvironment('E2E_EMP_PASSWORD');
+const managerUser = String.fromEnvironment('E2E_MGR_USER');
+const managerPassword = String.fromEnvironment('E2E_MGR_PASSWORD');
+const accountantUser = String.fromEnvironment('E2E_ACC_USER');
+const accountantPassword = String.fromEnvironment('E2E_ACC_PASSWORD');
+const leadershipUser = String.fromEnvironment('E2E_LDR_USER');
+const leadershipPassword = String.fromEnvironment('E2E_LDR_PASSWORD');
+const auditorUser = String.fromEnvironment('E2E_AUD_USER');
+const auditorPassword = String.fromEnvironment('E2E_AUD_PASSWORD');
 
 /// A test runs only when its account has both a user and a password; an
 /// empty value (as in e2e_config.example.json) means "skip".
@@ -117,8 +130,37 @@ Future<void> setModule(String token, String tenantId, bool enabled) async {
 }
 
 Future<void> pumpLiveApp(WidgetTester tester) async {
-  await tester.pumpWidget(CfmsApp(config: config));
+  tester.view.physicalSize = const Size(1400, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    RepaintBoundary(
+      key: const ValueKey('e2e-capture-root'),
+      child: CfmsApp(config: config),
+    ),
+  );
   await tester.pumpAndSettle();
+}
+
+Future<void> captureScreen(WidgetTester tester, String name) async {
+  await tester.pumpAndSettle();
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(const ValueKey('e2e-capture-root')),
+  );
+  final image = await boundary.toImage(pixelRatio: 1);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  final output = Directory('test_artifacts/live_e2e/screenshots');
+  await output.create(recursive: true);
+  await File(
+    '${output.path}/$name.png',
+  ).writeAsBytes(bytes!.buffer.asUint8List());
+  image.dispose();
+}
+
+Future<void> waitFor(WidgetTester tester, Finder finder) async {
+  for (var tick = 0; tick < 150 && finder.evaluate().isEmpty; tick++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 Future<void> uiSignIn(WidgetTester tester, String user, String password) async {
@@ -132,10 +174,27 @@ Future<void> uiSignIn(WidgetTester tester, String user, String password) async {
     await tester.tap(force);
     await tester.pumpAndSettle();
   }
+  final firstLogin = find.text(
+    'For your security, set a new password before continuing.',
+  );
+  if (firstLogin.evaluate().isNotEmpty) {
+    await tester.enterText(find.byType(TextFormField).at(0), 'Welcome@123');
+    await tester.enterText(find.byType(TextFormField).at(1), password);
+    await tester.enterText(find.byType(TextFormField).at(2), password);
+    await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
+    await waitFor(tester, find.byType(NavigationRail));
+    expect(
+      firstLogin,
+      findsNothing,
+      reason: 'first-login password saved for $user',
+    );
+  }
+  await waitFor(tester, find.byType(NavigationRail));
   expect(
     find.byType(NavigationRail),
     findsOneWidget,
-    reason: 'signed in as $user',
+    reason:
+        'signed in as $user; visible UI: ${tester.widgetList<Text>(find.byType(Text)).map((widget) => widget.data).whereType<String>().join(' | ')}',
   );
 }
 
@@ -144,30 +203,78 @@ Finder navItem(String label) => find.descendant(
   matching: find.text(label),
 );
 
+Future<void> setModuleFromSuperAdminUi(
+  WidgetTester tester,
+  String user,
+  String password,
+  String moduleCode,
+  bool enabled,
+) async {
+  await pumpLiveApp(tester);
+  await uiSignIn(tester, user, password);
+  await tester.tap(navItem('Organisations'));
+  await tester.pumpAndSettle();
+  final org = find.text('Flutter E2E $tenantCode');
+  for (var page = 0; page < 20 && org.evaluate().isEmpty; page++) {
+    final more = find.text('Load more');
+    if (more.evaluate().isEmpty) break;
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+  }
+  expect(org, findsOneWidget, reason: 'E2E organisation is listed');
+  await tester.tap(org);
+  await tester.pumpAndSettle();
+  final module = find.byKey(ValueKey('tenant-module-$moduleCode'));
+  final moduleList = find.byType(ListView).last;
+  for (var scroll = 0; scroll < 12 && module.evaluate().isEmpty; scroll++) {
+    await tester.drag(moduleList, const Offset(0, -500));
+    await tester.pumpAndSettle();
+  }
+  expect(module, findsOneWidget, reason: moduleCode);
+  if (tester.widget<SwitchListTile>(module).value != enabled) {
+    await tester.tap(module);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'Live E2E module enablement check',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Module setting saved.'), findsOneWidget);
+    expect(tester.widget<SwitchListTile>(module).value, enabled);
+  }
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   const skip = !live;
 
-  testWidgets('super admin signs in and sees the live platform summary', (
-    tester,
-  ) async {
-    final token = await apiLogin(superUser, superPassword);
-    final summary =
-        jsonDecode(
-              (await http.get(
-                api('/super-admin/summary'),
-                headers: headers(token),
-              )).body,
-            )
-            as Map<String, dynamic>;
-    final total = (summary['organisations'] as Map<String, dynamic>)['total'];
+  testWidgets(
+    'super admin signs in and sees the live platform summary',
+    (tester) async {
+      final token = await apiLogin(superUser, superPassword);
+      final summary =
+          jsonDecode(
+                (await http.get(
+                  api('/super-admin/summary'),
+                  headers: headers(token),
+                )).body,
+              )
+              as Map<String, dynamic>;
+      final total = (summary['organisations'] as Map<String, dynamic>)['total'];
 
-    await pumpLiveApp(tester);
-    await uiSignIn(tester, superUser, superPassword);
-    expect(find.text('Platform overview'), findsOneWidget);
-    expect(find.text('$total'), findsWidgets);
-    expect(navItem('Organisations'), findsOneWidget);
-  }, skip: skip || !hasSuper);
+      await pumpLiveApp(tester);
+      await uiSignIn(tester, superUser, superPassword);
+      expect(find.text('Platform overview'), findsOneWidget);
+      expect(find.text('$total'), findsWidgets);
+      expect(navItem('Organisations'), findsOneWidget);
+      await captureScreen(tester, '01-super-admin-dashboard');
+    },
+    skip: skip || !hasSuper,
+  );
 
   testWidgets('organisation admin sees the overview and menus', (tester) async {
     await pumpLiveApp(tester);
@@ -177,45 +284,154 @@ void main() {
     for (final menu in ['Members', 'Loans', 'Roles & privileges']) {
       expect(navItem(menu), findsOneWidget, reason: menu);
     }
+    await captureScreen(tester, '02-org-admin-overview');
   }, skip: skip || !hasAdmin);
 
-  testWidgets('a module switched off disappears from the menu, then returns', (
-    tester,
-  ) async {
-    final superToken = await apiLogin(superUser, superPassword);
-    final organisations =
-        jsonDecode(
-              (await http.get(
-                api('/super-admin/organisations', {'q': tenantCode}),
-                headers: headers(superToken),
-              )).body,
-            )
-            as List<dynamic>;
-    final tenantId =
-        (organisations.firstWhere((o) => o['code'] == tenantCode) as Map)['id']
-            as String;
-    addTearDown(() => setModule(superToken, tenantId, true)); // always restore
+  testWidgets(
+    'Super Admin module changes control tenant menus',
+    (tester) async {
+      try {
+        await setModuleFromSuperAdminUi(
+          tester,
+          superUser,
+          superPassword,
+          toggleModule,
+          false,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        await pumpLiveApp(tester);
+        await uiSignIn(tester, adminUser, adminPassword);
+        expect(navItem(toggleMenuLabel), findsNothing);
+        await captureScreen(tester, '03-module-disabled-tenant-menu');
+      } finally {
+        // Restore through the same Super Admin UI path even when an assertion
+        // fails, so later tests and the tenant remain in their original state.
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+        await setModuleFromSuperAdminUi(
+          tester,
+          superUser,
+          superPassword,
+          toggleModule,
+          true,
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await pumpLiveApp(tester);
+      await uiSignIn(tester, adminUser, adminPassword);
+      expect(navItem(toggleMenuLabel), findsOneWidget);
+    },
+    skip: skip || !hasSuper || !hasAdmin,
+  );
 
-    await setModule(superToken, tenantId, false);
-    await pumpLiveApp(tester);
-    await uiSignIn(tester, adminUser, adminPassword);
-    expect(navItem(toggleMenuLabel), findsNothing);
-
-    await setModule(superToken, tenantId, true);
-    final adminToken = await apiLogin(adminUser, adminPassword);
-    final capabilities =
-        jsonDecode(
-              (await http.get(
-                api('/auth/tenant-capabilities'),
-                headers: headers(adminToken),
-              )).body,
-            )
-            as Map<String, dynamic>;
-    expect(
-      (capabilities['modules'] as List).map((m) => m['module_code']),
-      contains(toggleModule),
-    );
-  }, skip: skip || !hasSuper || !hasAdmin);
+  testWidgets(
+    'staff roles get only their permitted navigation',
+    (tester) async {
+      final roles =
+          <
+            ({
+              String user,
+              String password,
+              List<String> shown,
+              List<String> hidden,
+            })
+          >[
+            (
+              user: employeeUser,
+              password: employeePassword,
+              shown: ['Members', 'Loans', 'Approvals', 'Collections'],
+              hidden: [
+                'Reports',
+                'Organisation settings',
+                'User management',
+                'Roles & privileges',
+              ],
+            ),
+            (
+              user: managerUser,
+              password: managerPassword,
+              shown: [
+                'Members',
+                'Loans',
+                'Approvals',
+                'Collections',
+                'Reports',
+                'Organisation settings',
+                'User management',
+                'Roles & privileges',
+              ],
+              hidden: [],
+            ),
+            (
+              user: accountantUser,
+              password: accountantPassword,
+              shown: [
+                'Members',
+                'Loans',
+                'Collections',
+                'Reports',
+                'Organisation settings',
+              ],
+              hidden: ['Approvals', 'User management', 'Roles & privileges'],
+            ),
+            (
+              user: leadershipUser,
+              password: leadershipPassword,
+              shown: [
+                'Members',
+                'Loans',
+                'Approvals',
+                'Collections',
+                'Reports',
+                'Organisation settings',
+                'User management',
+                'Roles & privileges',
+              ],
+              hidden: [],
+            ),
+            (
+              user: auditorUser,
+              password: auditorPassword,
+              shown: [
+                'Members',
+                'Loans',
+                'Approvals',
+                'Collections',
+                'Reports',
+                'Organisation settings',
+                'User management',
+                'Roles & privileges',
+              ],
+              hidden: [],
+            ),
+          ];
+      for (final role in roles) {
+        expect(role.user, isNotEmpty);
+        expect(role.password, isNotEmpty);
+        await pumpLiveApp(tester);
+        await uiSignIn(tester, role.user, role.password);
+        for (final menu in role.shown) {
+          expect(navItem(menu), findsOneWidget, reason: '${role.user}: $menu');
+        }
+        for (final menu in role.hidden) {
+          expect(navItem(menu), findsNothing, reason: '${role.user}: $menu');
+        }
+        final roleCode = role.user.split('@').first.toUpperCase();
+        await captureScreen(tester, 'role-$roleCode-navigation');
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      }
+    },
+    skip:
+        skip ||
+        employeeUser.isEmpty ||
+        managerUser.isEmpty ||
+        accountantUser.isEmpty ||
+        leadershipUser.isEmpty ||
+        auditorUser.isEmpty,
+  );
 
   testWidgets('staff creates a uniquely named E2E member', (tester) async {
     final stamp = DateTime.now().millisecondsSinceEpoch;
@@ -245,5 +461,6 @@ void main() {
     );
     await tester.pumpAndSettle(const Duration(milliseconds: 600));
     expect(find.text(name), findsOneWidget);
+    await captureScreen(tester, 'staff-member-created');
   }, skip: skip || !hasStaff);
 }

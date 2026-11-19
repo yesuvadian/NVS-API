@@ -75,6 +75,7 @@ class AppStrings {
       'single_session_enabled': 'Allow one active sign-in per user',
       'single_session_help':
           'When enabled, a new sign-in asks before logging out the other device.',
+      'org_enable_collections': 'Enable loan repayments and Collections',
       'org_created_notice':
           'Organisation created with the selected security settings.',
       'disable_org': 'Disable organisation',
@@ -284,6 +285,7 @@ class AppStrings {
           'ஒரு பயனருக்கு ஒரு செயலில் உள்ள உள்நுழைவு மட்டும்',
       'single_session_help':
           'இயக்கப்பட்டால், புதிய உள்நுழைவு மற்ற சாதனத்தை வெளியேற்றுவதற்கு முன் உறுதிப்படுத்தும்.',
+      'org_enable_collections': 'கடன் திருப்பிச் செலுத்தல் மற்றும் வசூலை இயக்கவும்',
       'org_created_notice':
           'தேர்ந்தெடுத்த பாதுகாப்பு அமைப்புகளுடன் நிறுவனம் உருவாக்கப்பட்டது.',
       'disable_org': 'நிறுவனத்தை முடக்கு',
