@@ -3,9 +3,9 @@
   "E2E_API_URL": "http://127.0.0.1:8000",
   "E2E_TENANT_CODE": "demo",
   "E2E_SUPERADMIN_USER": "superadmin@example.com",
-  "E2E_SUPERADMIN_PASSWORD": "Welcome1234",
+  "E2E_SUPERADMIN_PASSWORD": "",
   "E2E_ADMIN_USER": "admin@demo.example.com",
-  "E2E_ADMIN_PASSWORD": "Welcome1234",
+  "E2E_ADMIN_PASSWORD": "",
   "E2E_STAFF_USER": "emp@demo.example.com",
-  "E2E_STAFF_PASSWORD": "Welcome1234"
+  "E2E_STAFF_PASSWORD": ""
 }
