@@ -188,6 +188,7 @@ class _RolesPrivilegesScreenState extends State<RolesPrivilegesScreen> {
               SizedBox(
                 width: 320,
                 child: DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: role.id,
                   decoration: InputDecoration(
                     labelText: strings.text('select_role'),

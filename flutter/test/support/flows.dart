@@ -24,10 +24,30 @@ Future<void> pumpApp(
 }
 
 Future<void> signIn(WidgetTester tester, String login, String password) async {
-  await tester.enterText(find.byType(TextFormField).at(0), login);
-  await tester.enterText(find.byType(TextFormField).at(1), password);
-  await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+  await typeInto(tester, find.byType(TextFormField).at(0), login);
+  await typeInto(tester, find.byType(TextFormField).at(1), password);
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Sign in'));
+}
+
+/// Scrolls [finder] into view (real device windows can be smaller than the
+/// test view), taps it and waits for the UI to settle.
+Future<void> tapOn(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
+/// Scrolls a text field into view before typing, so focus lands on it.
+Future<void> typeInto(WidgetTester tester, Finder finder, String text) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  // Focus first: on a device the field may still hold focus from before,
+  // and enterText alone does not always reconnect the text input.
+  await tester.tap(finder);
+  await tester.pump();
+  await tester.enterText(finder, text);
+  await tester.pump();
 }
 
 Finder navItem(String label) => find.descendant(
@@ -36,8 +56,7 @@ Finder navItem(String label) => find.descendant(
 );
 
 Future<void> openNav(WidgetTester tester, String label) async {
-  await tester.tap(navItem(label));
-  await tester.pumpAndSettle();
+  await tapOn(tester, navItem(label));
 }
 
 Finder field(String label) => find.widgetWithText(TextField, label);
@@ -49,8 +68,7 @@ Future<void> loginValidationAndWrongPassword(WidgetTester tester) async {
   final api = FakeCfmsApi();
   await pumpApp(tester, api);
 
-  await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
-  await tester.pumpAndSettle();
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Sign in'));
   expect(find.text('Enter your user ID'), findsOneWidget);
   expect(find.text('Enter your password'), findsOneWidget);
   expect(api.count('POST', '/auth/login'), 0);
@@ -83,19 +101,25 @@ Future<void> firstLoginChangesPasswordThenShowsTenantOverview(
     findsOneWidget,
   );
   final fields = find.byType(TextFormField);
-  await tester.enterText(fields.at(0), 'Welcome@123');
-  await tester.enterText(fields.at(1), 'Welcome@12345');
-  await tester.enterText(fields.at(2), 'Different@123');
-  await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
-  await tester.pumpAndSettle();
+  await typeInto(tester, fields.at(0), 'Welcome@123');
+  await typeInto(tester, fields.at(1), 'Welcome@12345');
+  await typeInto(tester, fields.at(2), 'Different@123');
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Save password'));
   expect(find.text('The passwords do not match.'), findsOneWidget);
   expect(api.count('POST', '/auth/change-initial-password'), 0);
 
-  await tester.enterText(fields.at(2), 'Welcome@12345');
-  await tester.tap(find.widgetWithText(FilledButton, 'Save password'));
-  await tester.pumpAndSettle();
+  await typeInto(tester, fields.at(2), 'Welcome@12345');
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Save password'));
 
-  expect(api.users[1].mustChangePassword, isFalse);
+  expect(
+    api.users[1].mustChangePassword,
+    isFalse,
+    reason: [
+      'requests: ${api.requests.map((r) => '${r.method} ${r.url.path} ${r.body}').join(' | ')}',
+      'fields: ${tester.widgetList<EditableText>(find.byType(EditableText)).map((e) => e.controller.text).join(', ')}',
+      'texts: ${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).whereType<String>().join(' / ')}',
+    ].join('; '),
+  );
   expect(find.text('Organisation overview'), findsOneWidget);
   expect(find.text('Active users'), findsOneWidget);
   expect(navItem('Roles & privileges'), findsOneWidget);
@@ -140,24 +164,21 @@ Future<void> membersListCreateDuplicateAndStaleEdit(WidgetTester tester) async {
   expect(find.text('Anbu Selvan'), findsOneWidget);
   expect(find.text('Kavitha R'), findsOneWidget);
   expect(find.text('Murugan K'), findsNothing);
-  await tester.tap(find.text('Load more'));
-  await tester.pumpAndSettle();
+  await tapOn(tester, find.text('Load more'));
   expect(find.text('Murugan K'), findsOneWidget);
 
   // Create with a duplicate mobile: confirm with a reason.
-  await tester.tap(find.text('New member'));
-  await tester.pumpAndSettle();
-  await tester.enterText(field('Full name'), 'Selvi Anbu');
-  await tester.enterText(field('Mobile'), '9000000001');
-  await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-  await tester.pumpAndSettle();
+  await tapOn(tester, find.text('New member'));
+  await typeInto(tester, field('Full name'), 'Selvi Anbu');
+  await typeInto(tester, field('Mobile'), '9000000001');
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Save'));
   expect(find.text('Possible duplicate member'), findsOneWidget);
-  await tester.enterText(
+  await typeInto(
+    tester,
     field('Why is this a different person? (3-500 characters)'),
     'Daughter, shares the family phone',
   );
-  await tester.tap(find.widgetWithText(FilledButton, 'Confirm and save'));
-  await tester.pumpAndSettle();
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Confirm and save'));
   expect(api.members.last.fields['full_name'], 'Selvi Anbu');
   final creates = api.requests
       .where((r) => r.method == 'POST' && r.url.path.endsWith('/members'))
@@ -170,19 +191,15 @@ Future<void> membersListCreateDuplicateAndStaleEdit(WidgetTester tester) async {
   );
 
   // Edit a member someone else changed meanwhile: reload and save again.
-  await tester.tap(find.text('Kavitha R'));
-  await tester.pumpAndSettle();
+  await tapOn(tester, find.text('Kavitha R'));
   api.touchMember('m-2', city: 'Trichy');
-  await tester.enterText(field('City'), 'Coimbatore');
-  await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-  await tester.pumpAndSettle();
+  await typeInto(tester, field('City'), 'Coimbatore');
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Save'));
   expect(find.text('Record changed'), findsOneWidget);
-  await tester.tap(find.widgetWithText(FilledButton, 'Reload'));
-  await tester.pumpAndSettle();
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Reload'));
   expect(find.widgetWithText(TextField, 'Trichy'), findsOneWidget);
-  await tester.enterText(field('City'), 'Coimbatore');
-  await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-  await tester.pumpAndSettle();
+  await typeInto(tester, field('City'), 'Coimbatore');
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Save'));
   expect(api.members[1].fields['city'], 'Coimbatore');
   final patches = api.requests.where((r) => r.method == 'PATCH').toList();
   expect(patches.map((r) => r.headers['X-Expected-Row-Version']), ['1', '2']);
@@ -191,17 +208,16 @@ Future<void> membersListCreateDuplicateAndStaleEdit(WidgetTester tester) async {
 Future<void> tamilSwitchDoesNotCrash(WidgetTester tester) async {
   final api = FakeCfmsApi();
   await pumpApp(tester, api);
-  await tester.tap(find.text('தமிழ்'));
-  await tester.pumpAndSettle();
+  await tapOn(tester, find.text('தமிழ்'));
   expect(tester.takeException(), isNull);
 
-  await tester.enterText(
+  await typeInto(
+    tester,
     find.byType(TextFormField).at(0),
     'emp@demo.example.com',
   );
-  await tester.enterText(find.byType(TextFormField).at(1), 'Staff@12345');
-  await tester.tap(find.byType(FilledButton));
-  await tester.pumpAndSettle();
+  await typeInto(tester, find.byType(TextFormField).at(1), 'Staff@12345');
+  await tapOn(tester, find.byType(FilledButton));
   expect(tester.takeException(), isNull);
   expect(find.byType(NavigationRail), findsOneWidget);
   expect(navItem('உறுப்பினர்கள்'), findsOneWidget);
