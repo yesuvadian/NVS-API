@@ -3,6 +3,8 @@ import '../../providers/locale_provider.dart';
 import '../../providers/organisation_provider.dart';
 import '../../services/localization_service.dart';
 import '../../services/organisation_service.dart';
+import '../../services/access_control_service.dart';
+import 'organisation_modules_screen.dart';
 
 class OrganisationsScreen extends StatefulWidget {
   const OrganisationsScreen({
@@ -12,6 +14,7 @@ class OrganisationsScreen extends StatefulWidget {
     required this.service,
     required this.canCreate,
     required this.canEdit,
+    this.moduleService,
     this.onSessionExpired,
   });
   final String token;
@@ -19,6 +22,9 @@ class OrganisationsScreen extends StatefulWidget {
   final OrganisationService service;
   final bool canCreate;
   final bool canEdit;
+
+  /// Opens an organisation's Modules screen when set.
+  final ModuleAccessService? moduleService;
   final void Function(String message, String code)? onSessionExpired;
   @override
   State<OrganisationsScreen> createState() => _OrganisationsScreenState();
@@ -244,6 +250,22 @@ class _OrganisationsScreenState extends State<OrganisationsScreen> {
                     final org = _provider.organisations[index];
                     final active = org.status == 'ACTIVE';
                     return ListTile(
+                      onTap: widget.moduleService == null
+                          ? null
+                          : () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => OrganisationModulesScreen(
+                                  service: widget.moduleService!,
+                                  token: widget.token,
+                                  language: () =>
+                                      widget.locale.locale.languageCode,
+                                  tenantId: org.id,
+                                  organisationName: org.name,
+                                  canEdit: widget.canEdit,
+                                  onSessionExpired: widget.onSessionExpired,
+                                ),
+                              ),
+                            ),
                       leading: const CircleAvatar(child: Icon(Icons.apartment)),
                       title: Text(org.name),
                       subtitle: Text(

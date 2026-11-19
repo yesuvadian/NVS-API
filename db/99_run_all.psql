@@ -29,6 +29,7 @@
 \ir 31_functions_api_queries.sql
 \ir 31a_auth_tenant_context.sql
 \ir 31b_dashboard_summaries.sql
+\ir 31c_access_control.sql
 \ir 32_functions_loan_servicing.sql
 \ir 33_functions_loan_repayment.sql
 \ir 34_functions_loan_notifications.sql

@@ -1,15 +1,17 @@
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Path, Query, status
 from psycopg import AsyncConnection
 
 from app.core.permissions import require_platform_permission
 from app.core.security import PlatformPrincipal
 from app.db.dependencies import get_platform_db
+from app.schemas.access_control import ModuleToggle, TenantModuleOut
 from app.schemas.dashboard import PlatformSummaryOut
 from app.schemas.organisations import OrganisationCreate, OrganisationOut, OrganisationStatusChange
 from app.schemas.translations import TranslationEntryUpdate, TranslationPackOut
+from app.services.access_control import AccessControlService
 from app.services.dashboard import DashboardService
 from app.services.organisations import OrganisationService
 from app.services.translations import TranslationService
@@ -71,6 +73,34 @@ async def set_organisation_status(
 ):
     return await _org_service(conn).set_enabled(
         tenant_id, payload.enabled, payload.reason
+    )
+
+
+@router.get("/organisations/{tenant_id}/modules", response_model=list[TenantModuleOut])
+async def list_organisation_modules(
+    tenant_id: UUID,
+    conn: AsyncConnection = Depends(get_platform_db),
+    _permission: PlatformPrincipal = Depends(require_platform_permission("tenants:can_view")),
+):
+    """Menu modules with the organisation's enabled flag."""
+    return await AccessControlService(conn).list_modules(tenant_id)
+
+
+@router.put("/organisations/{tenant_id}/modules/{module_code}", response_model=TenantModuleOut)
+async def set_organisation_module(
+    tenant_id: UUID,
+    payload: ModuleToggle,
+    module_code: str = Path(pattern=r"^[A-Za-z_]+$", max_length=40),
+    expected_version: int | None = Header(default=None, alias="X-Expected-Row-Version", ge=1),
+    conn: AsyncConnection = Depends(get_platform_db),
+    _permission: PlatformPrincipal = Depends(require_platform_permission("tenants:can_edit")),
+):
+    """Enable or disable one module. Send X-Expected-Row-Version (the module's
+    row_version) to refuse the change with STALE_RECORD if someone else changed
+    it first. Core modules cannot be disabled, nor modules with open items."""
+    return await AccessControlService(conn).set_module(
+        tenant_id, module_code, enabled=payload.enabled, reason=payload.reason,
+        expected_version=expected_version, legal_warning_ack=payload.legal_warning_ack,
     )
 
 

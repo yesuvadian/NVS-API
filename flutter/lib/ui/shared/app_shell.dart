@@ -13,8 +13,97 @@ import '../tenant/user_management_screen.dart';
 import '../super_admin/organisations_screen.dart';
 import '../../services/organisation_service.dart';
 import '../../services/dashboard_service.dart';
+import '../../services/access_control_service.dart';
+import '../tenant/roles_privileges_screen.dart';
 import '../../services/tenant_settings_service.dart';
 import '../tenant/organisation_settings_screen.dart';
+
+/// Whether the session's privileges and enabled modules allow a menu item.
+bool navItemAllowed(AuthSession session, NavItem item) =>
+    (item.permission == null ||
+        session.permissions.contains(item.permission)) &&
+    (item.module == null || session.modules.contains(item.module));
+
+/// The side menu for a session: an item shows only when the user's role holds
+/// its privilege and the module is enabled for the organisation.
+List<NavItem> navItemsFor(AuthSession session) {
+  final dashboards = session.modules
+      .where((m) => m.startsWith('DASH_'))
+      .toList();
+  final dashboard = dashboards.isEmpty ? null : dashboards.first;
+  final all = session.role == WorkspaceRole.superAdmin
+      ? const [
+          NavItem('nav_overview', Icons.space_dashboard_outlined),
+          NavItem(
+            'nav_organisations',
+            Icons.apartment_outlined,
+            permission: 'tenants:can_view',
+          ),
+          NavItem(
+            'nav_languages',
+            Icons.translate_outlined,
+            permission: 'language_packs:can_view',
+          ),
+        ]
+      : [
+          if (dashboard != null)
+            NavItem(
+              'nav_overview',
+              Icons.space_dashboard_outlined,
+              module: dashboard,
+            ),
+          NavItem(
+            'nav_members',
+            Icons.groups_outlined,
+            module: 'MEMBER',
+            permission: 'member.view',
+          ),
+          NavItem(
+            'nav_loans',
+            Icons.account_balance_wallet_outlined,
+            module: 'LOAN',
+            permission: 'loan.view',
+          ),
+          NavItem(
+            'nav_approvals',
+            Icons.approval_outlined,
+            module: 'APPROVAL',
+            permission: 'approval.view',
+          ),
+          NavItem(
+            'nav_collections',
+            Icons.payments_outlined,
+            module: 'LOAN_REPAY',
+            permission: 'loan_repay.view',
+          ),
+          NavItem(
+            'nav_reports',
+            Icons.insert_chart_outlined,
+            module: 'FIN_REPORT',
+            permission: 'fin_report.view',
+          ),
+          NavItem(
+            'nav_settings',
+            Icons.settings_outlined,
+            module: 'ORG',
+            permission: 'org.view',
+          ),
+          NavItem('nav_my_settings', Icons.manage_accounts_outlined),
+          NavItem(
+            'user_management',
+            Icons.people_alt_outlined,
+            module: 'USER_ROLE',
+            permission: 'user_role.view',
+          ),
+          NavItem(
+            'nav_roles',
+            Icons.admin_panel_settings_outlined,
+            module: 'USER_ROLE',
+            permission: 'user_role.view',
+          ),
+        ];
+  return all.where((item) => navItemAllowed(session, item)).toList();
+}
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -38,83 +127,9 @@ class _AppShellState extends State<AppShell> {
 
   bool get _isSuperAdmin => widget.session.role == WorkspaceRole.superAdmin;
 
-  bool _allowed(_NavItem item) =>
-      (item.permission == null ||
-          widget.session.permissions.contains(item.permission)) &&
-      (item.module == null || widget.session.modules.contains(item.module));
+  bool _allowed(NavItem item) => navItemAllowed(widget.session, item);
 
-  List<_NavItem> _items() {
-    final dashboards = widget.session.modules
-        .where((m) => m.startsWith('DASH_'))
-        .toList();
-    final dashboard = dashboards.isEmpty ? null : dashboards.first;
-    final all = _isSuperAdmin
-        ? const [
-            _NavItem('nav_overview', Icons.space_dashboard_outlined),
-            _NavItem(
-              'nav_organisations',
-              Icons.apartment_outlined,
-              permission: 'tenants:can_view',
-            ),
-            _NavItem(
-              'nav_languages',
-              Icons.translate_outlined,
-              permission: 'language_packs:can_view',
-            ),
-          ]
-        : [
-            if (dashboard != null)
-              _NavItem(
-                'nav_overview',
-                Icons.space_dashboard_outlined,
-                module: dashboard,
-              ),
-            _NavItem(
-              'nav_members',
-              Icons.groups_outlined,
-              module: 'MEMBER',
-              permission: 'member.view',
-            ),
-            _NavItem(
-              'nav_loans',
-              Icons.account_balance_wallet_outlined,
-              module: 'LOAN',
-              permission: 'loan.view',
-            ),
-            _NavItem(
-              'nav_approvals',
-              Icons.approval_outlined,
-              module: 'APPROVAL',
-              permission: 'approval.view',
-            ),
-            _NavItem(
-              'nav_collections',
-              Icons.payments_outlined,
-              module: 'LOAN_REPAY',
-              permission: 'loan_repay.view',
-            ),
-            _NavItem(
-              'nav_reports',
-              Icons.insert_chart_outlined,
-              module: 'FIN_REPORT',
-              permission: 'fin_report.view',
-            ),
-            _NavItem(
-              'nav_settings',
-              Icons.settings_outlined,
-              module: 'ORG',
-              permission: 'org.view',
-            ),
-            _NavItem('nav_my_settings', Icons.manage_accounts_outlined),
-            _NavItem(
-              'user_management',
-              Icons.people_alt_outlined,
-              module: 'USER_ROLE',
-              permission: 'user_role.view',
-            ),
-          ];
-    return all.where(_allowed).toList();
-  }
+  List<NavItem> _items() => navItemsFor(widget.session);
 
   @override
   Widget build(BuildContext context) {
@@ -136,8 +151,19 @@ class _AppShellState extends State<AppShell> {
             service: OrganisationService(widget.config),
             canCreate: widget.session.permissions.contains('tenants:can_add'),
             canEdit: widget.session.permissions.contains('tenants:can_edit'),
+            moduleService: ModuleAccessService(widget.config),
             onSessionExpired: (message, code) =>
                 widget.auth.expireSession(message, code: code),
+          )
+        : selectedItem.key == 'nav_roles'
+        ? RolesPrivilegesScreen(
+            service: RolePrivilegeService(widget.config),
+            token: widget.session.accessToken,
+            language: () => widget.locale.locale.languageCode,
+            onSessionExpired: (message, code) =>
+                widget.auth.expireSession(message, code: code),
+            onSaved: () =>
+                widget.auth.verifySession(widget.locale.locale.languageCode),
           )
         : selectedItem.key == 'user_management'
         ? UserManagementScreen(
@@ -296,8 +322,8 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-class _NavItem {
-  const _NavItem(this.key, this.icon, {this.module, this.permission});
+class NavItem {
+  const NavItem(this.key, this.icon, {this.module, this.permission});
   final String key;
   final IconData icon;
   final String? module;

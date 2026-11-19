@@ -1001,7 +1001,28 @@ END
 $$;
 
 -- Enable / disable a module for a tenant (Super Admin only, Section 3.9.1).
+-- Owner/provisioning entry point: sets a Super Admin context for the tenant,
+-- then applies the change. The API uses platform.set_tenant_module (31c),
+-- which runs platform.apply_module_enabled under a signed context instead.
 CREATE OR REPLACE FUNCTION platform.set_module_enabled(
+    p_tenant_id uuid, p_module_code text, p_enabled boolean, p_reason text,
+    p_platform_user_id uuid DEFAULT NULL, p_legal_warning_ack boolean DEFAULT false)
+RETURNS void LANGUAGE plpgsql AS
+$$
+BEGIN
+    PERFORM set_config('app.scope', 'platform', true);
+    PERFORM set_config('app.tenant_id', p_tenant_id::text, true);
+    PERFORM set_config('app.channel', 'SUPER_ADMIN', true);
+    PERFORM set_config('app.platform_user_id', coalesce(p_platform_user_id::text, ''), true);
+    PERFORM set_config('app.reason', p_reason, true);
+
+    PERFORM platform.apply_module_enabled(p_tenant_id, p_module_code, p_enabled, p_reason,
+                                          p_platform_user_id, p_legal_warning_ack);
+END
+$$;
+
+-- The module change itself, under whatever (valid) context the caller set.
+CREATE OR REPLACE FUNCTION platform.apply_module_enabled(
     p_tenant_id uuid, p_module_code text, p_enabled boolean, p_reason text,
     p_platform_user_id uuid DEFAULT NULL, p_legal_warning_ack boolean DEFAULT false)
 RETURNS void LANGUAGE plpgsql AS
@@ -1021,12 +1042,6 @@ BEGIN
     IF p_enabled AND v_mod.is_optional_legal AND NOT p_legal_warning_ack THEN
         PERFORM app.fail('LEGAL_WARNING', 'The legal warning must be acknowledged before enabling ' || p_module_code);
     END IF;
-
-    PERFORM set_config('app.scope', 'platform', true);
-    PERFORM set_config('app.tenant_id', p_tenant_id::text, true);
-    PERFORM set_config('app.channel', 'SUPER_ADMIN', true);
-    PERFORM set_config('app.platform_user_id', coalesce(p_platform_user_id::text, ''), true);
-    PERFORM set_config('app.reason', p_reason, true);
 
     IF NOT p_enabled THEN
         v_open := CASE p_module_code

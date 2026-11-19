@@ -20,7 +20,17 @@ class Transaction:
 
 
 class FakeConnection:
+    """Answers the USER_ROLE privilege check: only the ADM role holds it here."""
+    allowed = True
     def transaction(self): return Transaction()
+    async def execute(self, query, params=None):
+        assert "has_privilege" in query, query
+        return PrivilegeResult(self.allowed)
+
+
+class PrivilegeResult:
+    def __init__(self, allowed): self.allowed = allowed
+    async def fetchone(self): return {"allowed": self.allowed}
 
 
 class LoginRepository:
@@ -130,7 +140,9 @@ def _user_client(monkeypatch, role="ADM"):
     )
     app = FastAPI()
     app.include_router(users_router, prefix="/api/v1")
-    async def fake_db(): yield FakeConnection()
+    connection = FakeConnection()
+    connection.allowed = role == "ADM"
+    async def fake_db(): yield connection
     app.dependency_overrides[get_tenant_db] = fake_db
     app.dependency_overrides[require_tenant_user] = lambda: principal
     app.dependency_overrides[get_settings] = lambda: settings

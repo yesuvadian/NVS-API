@@ -17,7 +17,8 @@ from app.core.config import get_settings
 from app.core.errors import install_error_handlers, localisation
 from app.db.pool import Database
 from app.routers import (
-    auth, dashboard, health, loan_reports, loan_servicing, loans, members, super_admin, tenant_settings, users,
+    auth, dashboard, health, loan_reports, loan_servicing, loans, members, roles, super_admin, tenant_settings,
+    users,
 )
 
 
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     application.include_router(loan_servicing.router, prefix=settings.api_prefix)
     application.include_router(loan_reports.router, prefix=settings.api_prefix)
     application.include_router(dashboard.router, prefix=settings.api_prefix)
+    application.include_router(roles.router, prefix=settings.api_prefix)
     return application
 
 

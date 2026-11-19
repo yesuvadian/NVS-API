@@ -8,8 +8,25 @@ from app.db.dependencies import get_tenant_db
 from app.routers.tenant_settings import router
 
 
+# Standard role privileges for the organisation-settings checks.
+ROLE_PRIVILEGES = {'ADM': {'org.view', 'org.edit'}, 'LDR': {'org.view', 'org.approve'}, 'EMP': set()}
+
+
 class FakeConnection:
-    pass
+    def __init__(self, role_code):
+        self.role_code = role_code
+
+    async def execute(self, query, params=None):
+        assert 'has_privilege' in query, query
+        return PrivilegeResult(params[1] in ROLE_PRIVILEGES.get(self.role_code, set()))
+
+
+class PrivilegeResult:
+    def __init__(self, allowed):
+        self.allowed = allowed
+
+    async def fetchone(self):
+        return {'allowed': self.allowed}
 
 
 class SettingsServiceFake:
@@ -18,7 +35,8 @@ class SettingsServiceFake:
     def __init__(self, _conn):
         pass
 
-    async def page_size(self):
+    async def page_size(self, *, include_pending=True):
+        self.calls.append(('page_size', include_pending))
         return {
             'page_size': 15,
             'pending_setting_id': None,
@@ -42,7 +60,7 @@ def _client(monkeypatch, role_code):
     )
 
     async def fake_db():
-        yield FakeConnection()
+        yield FakeConnection(role_code)
 
     app.dependency_overrides[get_tenant_db] = fake_db
     app.dependency_overrides[require_tenant_user] = lambda: principal
@@ -81,3 +99,15 @@ def test_leadership_can_decide_a_pending_page_size_change(monkeypatch):
     )
     assert response.status_code == 204
     assert SettingsServiceFake.calls == [('decide', setting_id, True, 'Approved')]
+
+
+def test_any_tenant_user_can_read_page_size_without_pending_details(monkeypatch):
+    employee = _client(monkeypatch, 'EMP')
+    response = employee.get('/api/v1/tenant-settings/page-size')
+    assert response.status_code == 200, response.text
+    assert response.json()['page_size'] == 15
+    assert SettingsServiceFake.calls == [('page_size', False)]
+
+    admin = _client(monkeypatch, 'ADM')
+    assert admin.get('/api/v1/tenant-settings/page-size').status_code == 200
+    assert SettingsServiceFake.calls == [('page_size', True)]

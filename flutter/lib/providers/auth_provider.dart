@@ -124,10 +124,19 @@ class AuthProvider extends ChangeNotifier {
     final current = session;
     if (current == null || current.mustChangePassword || isLoading) return;
     try {
-      await _authService.capabilities(
+      final capabilities = await _authService.capabilities(
         session: current,
         languageCode: languageCode,
       );
+      // Privileges or modules changed by an administrator take effect in the
+      // menu here, without signing in again.
+      final refreshed = current.withCapabilities(capabilities);
+      if (identical(session, current) &&
+          (!setEquals(refreshed.permissions, current.permissions) ||
+              !setEquals(refreshed.modules, current.modules))) {
+        session = refreshed;
+        notifyListeners();
+      }
     } on AuthException catch (error) {
       if ({
         'SESSION_EXPIRED',

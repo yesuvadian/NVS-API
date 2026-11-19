@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from psycopg import AsyncConnection
 
-from app.core.errors import AppError
+from app.core.permissions import require_tenant_permission
 from app.core.tenant_security import TenantPrincipal, require_tenant_user
 from app.db.dependencies import get_tenant_db
 from app.schemas.tenant_settings import PageSizeDecision, PageSizeOut, PageSizeUpdate
@@ -17,19 +17,19 @@ async def get_page_size(
     principal: TenantPrincipal = Depends(require_tenant_user),
     conn: AsyncConnection = Depends(get_tenant_db),
 ):
-    if principal.role_code not in {'ADM', 'LDR'}:
-        raise AppError('NO_PRIVILEGE', params={'privilege': 'org.view'})
-    return await TenantSettingsService(conn).page_size()
+    # Every signed-in user needs the rows-per-page setting for lists; only
+    # Org Admin and Leadership see a pending change awaiting approval.
+    return await TenantSettingsService(conn).page_size(
+        include_pending=principal.role_code in {'ADM', 'LDR'}
+    )
 
 
 @router.put('/page-size', response_model=PageSizeOut)
 async def request_page_size(
     payload: PageSizeUpdate,
-    principal: TenantPrincipal = Depends(require_tenant_user),
     conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission('org.edit')),
 ):
-    if principal.role_code != 'ADM':
-        raise AppError('NO_PRIVILEGE', params={'privilege': 'org.edit'})
     result = await TenantSettingsService(conn).request_page_size(payload.page_size)
     return {
         'page_size': result['page_size'],
@@ -43,9 +43,7 @@ async def request_page_size(
 async def decide_page_size(
     setting_id: UUID,
     payload: PageSizeDecision,
-    principal: TenantPrincipal = Depends(require_tenant_user),
     conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission('org.approve')),
 ):
-    if principal.role_code != 'LDR':
-        raise AppError('NO_PRIVILEGE', params={'privilege': 'org.approve'})
     await TenantSettingsService(conn).decide_page_size(setting_id, payload.approve, payload.reason)
