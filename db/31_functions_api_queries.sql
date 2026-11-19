@@ -639,7 +639,7 @@ SET search_path = pg_catalog, iam, app AS
 $$
 DECLARE v_changed integer;
 BEGIN
-    IF NOT app.context_is_valid() OR app.tenant_id() IS NULL OR app.user_id() IS NULL THEN
+    IF app.context_is_valid() IS NOT TRUE OR app.tenant_id() IS NULL OR app.user_id() IS NULL THEN
         RAISE EXCEPTION 'Signed tenant context required' USING ERRCODE = '42501';
     END IF;
     INSERT INTO iam.password_history(tenant_id, user_id, password_hash)
@@ -664,7 +664,7 @@ SET search_path = pg_catalog, iam, app AS
 $$
 DECLARE v_changed integer;
 BEGIN
-    IF NOT app.context_is_valid() OR app.role_code() IS DISTINCT FROM 'ADM' THEN
+    IF app.context_is_valid() IS NOT TRUE OR app.role_code() IS DISTINCT FROM 'ADM' THEN
         RAISE EXCEPTION 'No privilege' USING ERRCODE = '42501';
     END IF;
     INSERT INTO iam.password_history(tenant_id, user_id, password_hash)
@@ -737,7 +737,7 @@ SET search_path = pg_catalog, iam, app AS
 $$
 DECLARE v_role_id uuid; v_user_id uuid;
 BEGIN
-    IF NOT app.context_is_valid() OR app.role_code() IS DISTINCT FROM 'ADM' THEN
+    IF app.context_is_valid() IS NOT TRUE OR app.role_code() IS DISTINCT FROM 'ADM' THEN
         RAISE EXCEPTION 'No privilege' USING ERRCODE = '42501';
     END IF;
     IF nullif(btrim(p_full_name),'') IS NULL OR
@@ -796,7 +796,7 @@ SET search_path = pg_catalog, cfg, app AS
 $$
 DECLARE v_id uuid; v_current integer;
 BEGIN
-    IF NOT app.context_is_valid() OR app.role_code() IS DISTINCT FROM 'ADM' THEN
+    IF app.context_is_valid() IS NOT TRUE OR app.role_code() IS DISTINCT FROM 'ADM' THEN
         RAISE EXCEPTION 'No privilege' USING ERRCODE = '42501';
     END IF;
     IF p_page_size IS NULL OR p_page_size < 1 OR p_page_size > 100 THEN
@@ -839,7 +839,7 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, cfg, app AS
 $$
 BEGIN
-    IF NOT app.context_is_valid() OR app.role_code() IS DISTINCT FROM 'LDR' THEN
+    IF app.context_is_valid() IS NOT TRUE OR app.role_code() IS DISTINCT FROM 'LDR' THEN
         RAISE EXCEPTION 'No privilege' USING ERRCODE = '42501';
     END IF;
     PERFORM cfg.approve_tenant_setting(p_setting_id,p_approve,p_reason);
@@ -906,7 +906,7 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, platform, cfg, app AS
 $$
 BEGIN
-    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+    IF app.context_is_valid() IS NOT TRUE OR app.is_platform_scope() IS NOT TRUE
        OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
         PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can set password history policy');
     END IF;
@@ -934,7 +934,7 @@ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, platform, iam, app AS
 $$
 BEGIN
-    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+    IF app.context_is_valid() IS NOT TRUE OR app.is_platform_scope() IS NOT TRUE
        OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
         PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can enable or disable an organisation');
     END IF;
@@ -963,7 +963,7 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, platform, cfg, app AS
 $$
 BEGIN
-    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+    IF app.context_is_valid() IS NOT TRUE OR app.is_platform_scope() IS NOT TRUE
        OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
         PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can set single-session policy');
     END IF;
@@ -989,7 +989,7 @@ SET search_path = pg_catalog, platform, app AS
 $$
 DECLARE v_version integer;
 BEGIN
-    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+    IF app.context_is_valid() IS NOT TRUE OR app.is_platform_scope() IS NOT TRUE
        OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
         PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can view organisation setup options');
     END IF;
@@ -1055,7 +1055,7 @@ SET search_path = pg_catalog, platform, app AS
 $$
 DECLARE v_zone text; v_currency text; v_region text;
 BEGIN
-    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+    IF app.context_is_valid() IS NOT TRUE OR app.is_platform_scope() IS NOT TRUE
        OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
         PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can configure organisation profile defaults');
     END IF;
@@ -1093,7 +1093,7 @@ SET search_path = pg_catalog, platform, cfg, app AS
 $$
 DECLARE v_item record; v_count integer := 0; v_kind text; v_number numeric;
 BEGIN
-    IF NOT app.context_is_valid() OR NOT app.is_platform_scope()
+    IF app.context_is_valid() IS NOT TRUE OR app.is_platform_scope() IS NOT TRUE
        OR app.role_code() IS DISTINCT FROM 'SUPER_ADMIN' THEN
         PERFORM app.fail('SUPER_ADMIN_REQUIRED', 'Only a Super Administrator can configure organisation settings');
     END IF;

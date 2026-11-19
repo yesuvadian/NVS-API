@@ -686,7 +686,7 @@ DECLARE
     c_signature text := current_setting('app.context_signature', true);
 BEGIN
     IF session_user <> 'nvs' AND
-       (NOT app.context_is_valid() OR NOT app.is_platform_scope() OR
+       (app.context_is_valid() IS NOT TRUE OR app.is_platform_scope() IS NOT TRUE OR
         app.platform_user_id() IS DISTINCT FROM p_platform_user_id OR
         app.role_code() <> 'SUPER_ADMIN') THEN
         PERFORM app.fail('PLATFORM_CONTEXT_REQUIRED', 'Tenant provisioning requires an authenticated Super Administrator context');
