@@ -15,6 +15,8 @@ import '../../services/organisation_service.dart';
 import '../../services/dashboard_service.dart';
 import '../../services/access_control_service.dart';
 import '../tenant/roles_privileges_screen.dart';
+import '../tenant/members_screen.dart';
+import '../../services/member_service.dart';
 import '../../services/tenant_settings_service.dart';
 import '../tenant/organisation_settings_screen.dart';
 
@@ -152,6 +154,22 @@ class _AppShellState extends State<AppShell> {
             canCreate: widget.session.permissions.contains('tenants:can_add'),
             canEdit: widget.session.permissions.contains('tenants:can_edit'),
             moduleService: ModuleAccessService(widget.config),
+            onSessionExpired: (message, code) =>
+                widget.auth.expireSession(message, code: code),
+          )
+        : selectedItem.key == 'nav_members'
+        ? MembersScreen(
+            service: MemberService(widget.config),
+            token: widget.session.accessToken,
+            language: () => widget.locale.locale.languageCode,
+            canCreate: widget.session.permissions.contains('member.create'),
+            canEdit: widget.session.permissions.contains('member.edit'),
+            defaultPageSize: widget.config.defaultPageSize,
+            loadPageSize: () async =>
+                (await TenantSettingsService(widget.config).getPageSize(
+                  widget.session,
+                  widget.locale.locale.languageCode,
+                )).pageSize,
             onSessionExpired: (message, code) =>
                 widget.auth.expireSession(message, code: code),
           )
