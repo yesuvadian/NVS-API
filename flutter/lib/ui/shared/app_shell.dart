@@ -12,6 +12,7 @@ import '../auth/password_change_screen.dart';
 import '../tenant/user_management_screen.dart';
 import '../super_admin/organisations_screen.dart';
 import '../../services/organisation_service.dart';
+import '../../services/dashboard_service.dart';
 import '../../services/tenant_settings_service.dart';
 import '../tenant/organisation_settings_screen.dart';
 
@@ -157,6 +158,11 @@ class _AppShellState extends State<AppShell> {
         : selectedItem.key == 'nav_overview'
         ? (_isSuperAdmin
               ? SuperAdminDashboard(
+                  service: DashboardService(widget.config),
+                  token: widget.session.accessToken,
+                  language: () => widget.locale.locale.languageCode,
+                  onSessionExpired: (message, code) =>
+                      widget.auth.expireSession(message, code: code),
                   onCreateOrganisation:
                       widget.session.permissions.contains('tenants:can_add')
                       ? () {
@@ -169,7 +175,13 @@ class _AppShellState extends State<AppShell> {
                         }
                       : null,
                 )
-              : const TenantDashboard())
+              : TenantDashboard(
+                  service: DashboardService(widget.config),
+                  token: widget.session.accessToken,
+                  language: () => widget.locale.locale.languageCode,
+                  onSessionExpired: (message, code) =>
+                      widget.auth.expireSession(message, code: code),
+                ))
         : selectedItem.key == 'nav_languages'
         ? _ModulePlaceholder(title: title)
         : _ModulePlaceholder(title: title);

@@ -16,7 +16,9 @@ if sys.platform == "win32":
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers, localisation
 from app.db.pool import Database
-from app.routers import auth, health, loan_reports, loan_servicing, loans, members, super_admin, tenant_settings, users
+from app.routers import (
+    auth, dashboard, health, loan_reports, loan_servicing, loans, members, super_admin, tenant_settings, users,
+)
 
 
 @asynccontextmanager
@@ -66,6 +68,7 @@ def create_app() -> FastAPI:
     application.include_router(loans.router, prefix=settings.api_prefix)
     application.include_router(loan_servicing.router, prefix=settings.api_prefix)
     application.include_router(loan_reports.router, prefix=settings.api_prefix)
+    application.include_router(dashboard.router, prefix=settings.api_prefix)
     return application
 
 

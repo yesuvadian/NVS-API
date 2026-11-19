@@ -7,8 +7,10 @@ from psycopg import AsyncConnection
 from app.core.permissions import require_platform_permission
 from app.core.security import PlatformPrincipal
 from app.db.dependencies import get_platform_db
+from app.schemas.dashboard import PlatformSummaryOut
 from app.schemas.organisations import OrganisationCreate, OrganisationOut, OrganisationStatusChange
 from app.schemas.translations import TranslationEntryUpdate, TranslationPackOut
+from app.services.dashboard import DashboardService
 from app.services.organisations import OrganisationService
 from app.services.translations import TranslationService
 
@@ -17,6 +19,15 @@ router = APIRouter(prefix="/super-admin", tags=["super-admin"])
 
 def _org_service(conn: AsyncConnection) -> OrganisationService:
     return OrganisationService(conn)
+
+
+@router.get("/summary", response_model=PlatformSummaryOut)
+async def platform_summary(
+    conn: AsyncConnection = Depends(get_platform_db),
+    _permission: PlatformPrincipal = Depends(require_platform_permission("tenants:can_view")),
+):
+    """Organisation counts by status and the five newest organisations."""
+    return await DashboardService(conn).platform_summary()
 
 
 @router.get("/organisations", response_model=list[OrganisationOut])
