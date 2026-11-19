@@ -91,7 +91,7 @@ class _AppShellState extends State<AppShell> {
               'nav_collections',
               Icons.payments_outlined,
               module: 'LOAN_REPAY',
-              permission: 'loan_repay.create',
+              permission: 'loan_repay.view',
             ),
             _NavItem(
               'nav_reports',

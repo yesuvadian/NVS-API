@@ -181,3 +181,23 @@ def test_org_admin_gets_administration_section(api) -> None:
     assert response.json() == {"working_date": "2026-11-19", "sections": ["administration"],
                                "administration": admin}
     assert connection.calls[1][1] == (["administration"],)
+
+
+def test_org_admin_with_menu_views_gets_member_loan_and_collection_sections(api) -> None:
+    client, connection, _ = api
+    connection.script(
+        {"capabilities": {"role_code": "ADM", "privileges": [
+            "approval.view", "fin_report.view", "loan.view", "loan_repay.view", "member.view",
+            "org.view", "user_role.view"]}},
+        {"summary": {"working_date": "2026-11-19", "members": {"total": 2, "active": 2},
+                     "loans": {"open_applications": 0},
+                     "collections": {"date": "2026-11-19", "count": 0, "amount": 0},
+                     "administration": {"active_users": 1, "locked_users": 0, "must_change_password": 0,
+                                        "pending_setting_approvals": 0}}},
+    )
+
+    body = client.get("/api/v1/tenant/summary").json()
+
+    # loan.approve stays off for ADM, so no approvals section.
+    assert body["sections"] == ["members", "loans", "collections", "administration"]
+    assert body["members"] == {"total": 2, "active": 2}

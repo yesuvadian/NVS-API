@@ -44,6 +44,7 @@
 \ir 44_seed_error_codes.sql
 \ir 46_seed_loan_gaps.sql
 \ir 47_seed_concurrency_controls.sql
+\ir 48_seed_adm_menu_views.sql
 \ir 45_indexes_and_search.sql
 -- optional demo organisation for local development:
 -- \ir 50_seed_demo_tenant.sql

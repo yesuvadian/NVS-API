@@ -146,13 +146,15 @@ ON CONFLICT (role_code) DO UPDATE SET role_name = EXCLUDED.role_name, descriptio
     is_read_only = EXCLUDED.is_read_only, sort_order = EXCLUDED.sort_order;
 
 -- Matrix rows: module | EMP | MGR | ACC | LDR | AUD | ADM   ('-' = no access)
+-- ADM views every tenant menu module (Members, Loans, Collections, Reports) but
+-- has no create/edit/approve there: maker-checker separation stays. See 48.
 WITH matrix(module_code, emp, mgr, acc, ldr, aud, adm) AS (VALUES
  ('ORG','-','V','V','VA','V','VCED'),
  ('USER_ROLE','-','V','-','VA','V','VCED'),
- ('MEMBER','VCE','VEAD','V','V','V','-'),
- ('LOAN','VCE','VA','V','V','V','-'),
+ ('MEMBER','VCE','VEAD','V','V','V','V'),
+ ('LOAN','VCE','VA','V','V','V','V'),
  ('LOAN_FEE','VC','VAD','V','V','V','-'),
- ('LOAN_REPAY','VC','VAD','V','V','V','-'),
+ ('LOAN_REPAY','VC','VAD','V','V','V','V'),
  ('LOAN_SETTLE','VC','VA','V','V','V','-'),
  ('LOAN_DEFAULT','VC','VEA','V','V','V','-'),
  ('NOMINEE','VCE','VA','-','V','V','-'),
@@ -175,7 +177,7 @@ WITH matrix(module_code, emp, mgr, acc, ldr, aud, adm) AS (VALUES
  ('FIN_STMT','-','V','V','V','V','-'),
  ('CASH_RECON','-','VA','VCE','V','V','-'),
  ('FIN_PERIOD','-','V','VCE','VA','V','-'),
- ('FIN_REPORT','-','V','V','V','V','-'),
+ ('FIN_REPORT','-','V','V','V','V','V'),
  ('MGMT_REPORT','-','V','V','V','V','-'),
  ('WORKFLOW','-','V','-','V','V','V'),
  ('RULES','-','V','V','V','V','V'),
