@@ -122,10 +122,10 @@ RETURNS TABLE (
     nominee_mandatory_first_loan boolean, block_if_overdue_dues boolean)
 LANGUAGE sql STABLE AS
 $$
-    SELECT coalesce((cfg.get_setting('loans.min_membership_months') #>> '{}')::integer, 6),
-           coalesce((cfg.get_setting('loans.max_concurrent_loans') #>> '{}')::integer, 1),
-           coalesce((cfg.get_setting('loans.nominee_mandatory_first_loan') #>> '{}')::boolean, true),
-           coalesce((cfg.get_setting('loans.block_if_overdue_dues') #>> '{}')::boolean, true)
+    SELECT cfg.require_setting_int('loans.min_membership_months'),
+           cfg.require_setting_int('loans.max_concurrent_loans'),
+           cfg.require_setting_bool('loans.nominee_mandatory_first_loan'),
+           cfg.require_setting_bool('loans.block_if_overdue_dues')
 $$;
 
 -- Loan application detail. p_lock = true takes a row lock on the loan for the

@@ -236,7 +236,7 @@ BEGIN
     SELECT * INTO v_r FROM loan.guarantor_replacement WHERE tenant_id = app.tenant_id() AND id = p_id FOR UPDATE;
     IF NOT FOUND THEN PERFORM app.fail('REPLACEMENT_NOT_FOUND', 'The replacement request was not found.'); END IF;
     IF v_r.status <> 'PENDING' THEN PERFORM app.fail('REQUEST_CLOSED', 'The request is no longer pending'); END IF;
-    PERFORM loan.assert_approver('MGR,LDR', v_r.requested_by);
+    PERFORM loan.assert_approver_setting('loans.guarantor_replacement_approver_roles', v_r.requested_by);
     IF NOT p_approve AND coalesce(btrim(p_remarks), '') = '' THEN
         PERFORM app.fail('APPROVAL_REASON_REQUIRED', 'A reason is required to reject the request.');
     END IF;

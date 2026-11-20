@@ -193,15 +193,19 @@ def test_cooling_off_override_decision_passes_valid_until(api):
 
 def test_offline_decision_body_is_sent_as_json(api):
     client, connection = api
-    connection.results.extend([FakeResult(one={"allowed": True}), FakeResult(one={"result": {"decision": "APPROVED"}})])
+    # The decision runs through the workflow engine; with no loan found for the
+    # request a REJECT goes straight to SQL, which gives the precise error.
+    connection.results.extend([FakeResult(one={"allowed": True}), FakeResult(one={"loan_id": None}),
+                               FakeResult(one={"result": {"decision": "REJECTED"}})])
     response = client.post(f"/api/v1/loan-approvals/{ID}/offline-decision",
-                           json={"decision": "APPROVED", "approved_by": str(OTHER), "evidence_type": "MEETING",
-                                 "decision_date": "2026-11-10", "approved_amount": "10000.00"})
+                           json={"decision": "REJECTED", "approved_by": str(OTHER), "evidence_type": "MEETING",
+                                 "decision_date": "2026-11-10", "reason": "Committee said no"})
     assert response.status_code == 201
-    sql, params = connection.calls[1]
+    assert "loan.loan_for_approval_request" in connection.calls[1][0]
+    sql, params = connection.calls[2]
     assert "loan.record_offline_approval" in sql
-    assert params[1].obj == {"decision": "APPROVED", "approved_by": str(OTHER), "evidence_type": "MEETING",
-                             "decision_date": "2026-11-10", "approved_amount": "10000.00"}
+    assert json.loads(params[1]) == {"decision": "REJECTED", "approved_by": str(OTHER), "evidence_type": "MEETING",
+                                     "decision_date": "2026-11-10", "reason": "Committee said no"}
 
 
 def test_reversal_request_and_decision(api):

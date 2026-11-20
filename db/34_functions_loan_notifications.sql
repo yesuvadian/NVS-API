@@ -202,18 +202,22 @@ CREATE OR REPLACE FUNCTION loan.send_due_reminders(p_on date)
 RETURNS integer LANGUAGE plpgsql AS
 $$
 DECLARE
-    v_cfg jsonb := coalesce(cfg.get_setting('notifications.loan_reminder_schedule'),
-                            '{"before":[7,3,1],"onDueDate":true,"overdueAfter":1,"repeatEveryDays":7}'::jsonb);
+    v_cfg jsonb := cfg.require_setting('notifications.loan_reminder_schedule');
     v_before integer[];
-    v_after integer := greatest(coalesce((v_cfg->>'overdueAfter')::integer, 1), 1);
-    v_every integer := greatest(coalesce((v_cfg->>'repeatEveryDays')::integer, 7), 1);
+    v_after integer := greatest((v_cfg->>'overdueAfter')::integer, 1);
+    v_every integer := greatest((v_cfg->>'repeatEveryDays')::integer, 1);
     v_row record;
     v_code text;
     v_days integer;
     v_count integer := 0;
 BEGIN
-    SELECT coalesce(array_agg(value::integer), ARRAY[7,3,1]) INTO v_before
-      FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(v_cfg->'before') = 'array' THEN v_cfg->'before' ELSE '[7,3,1]'::jsonb END);
+    IF jsonb_typeof(v_cfg->'before') IS DISTINCT FROM 'array' OR v_after IS NULL OR v_every IS NULL
+       OR jsonb_typeof(v_cfg->'onDueDate') IS DISTINCT FROM 'boolean' THEN
+        PERFORM app.fail('SETTING_MISSING',
+            'Setting notifications.loan_reminder_schedule needs before, onDueDate, overdueAfter and repeatEveryDays.');
+    END IF;
+    SELECT coalesce(array_agg(value::integer), '{}') INTO v_before
+      FROM jsonb_array_elements_text(v_cfg->'before');
     FOR v_row IN
         SELECT l.id AS loan_id, l.member_id, i.id AS instalment_id, i.due_date,
                i.principal_due - i.principal_paid + i.interest_due - i.interest_paid AS open_amount
@@ -229,7 +233,7 @@ BEGIN
         v_days := v_row.due_date - p_on;
         v_code := CASE
             WHEN v_days > 0 AND v_days = ANY (v_before) THEN 'LOAN_DUE_REMINDER'
-            WHEN v_days = 0 AND coalesce((v_cfg->>'onDueDate')::boolean, true) THEN 'LOAN_DUE_REMINDER'
+            WHEN v_days = 0 AND (v_cfg->>'onDueDate')::boolean THEN 'LOAN_DUE_REMINDER'
             WHEN v_days < 0 AND -v_days >= v_after AND (-v_days - v_after) % v_every = 0 THEN 'LOAN_OVERDUE'
             END;
         CONTINUE WHEN v_code IS NULL;

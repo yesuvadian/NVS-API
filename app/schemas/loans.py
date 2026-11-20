@@ -10,16 +10,16 @@ class LoanApplicationCreate(BaseModel):
     member_id: UUID
     loan_type_id: UUID
     requested_amount: Decimal = Field(gt=0, decimal_places=2, max_digits=18)
-    requested_tenure_months: int = Field(gt=0, le=600)
+    requested_tenure_months: int = Field(gt=0, )
     purpose: str = Field(min_length=3, max_length=1000)
-    nominee_ids: list[UUID] = Field(default_factory=list, max_length=10)
+    nominee_ids: list[UUID] = Field(default_factory=list)
 
 
 class LoanApplicationUpdate(BaseModel):
     requested_amount: Decimal | None = Field(default=None, gt=0, decimal_places=2, max_digits=18)
-    requested_tenure_months: int | None = Field(default=None, gt=0, le=600)
+    requested_tenure_months: int | None = Field(default=None, gt=0, )
     purpose: str | None = Field(default=None, min_length=3, max_length=1000)
-    nominee_ids: list[UUID] | None = Field(default=None, max_length=10)
+    nominee_ids: list[UUID] | None = Field(default=None)
     expected_version: int | None = Field(default=None, ge=1)
 
 
@@ -27,7 +27,7 @@ class LoanEligibilityRequest(BaseModel):
     member_id: UUID
     loan_type_id: UUID
     requested_amount: Decimal = Field(gt=0, decimal_places=2, max_digits=18)
-    requested_tenure_months: int = Field(gt=0, le=600)
+    requested_tenure_months: int = Field(gt=0, )
 
 
 class LoanFeePayment(BaseModel):
@@ -39,14 +39,14 @@ class LoanDecision(BaseModel):
     decision: Literal["APPROVED", "REJECTED", "RETURNED"]
     reason: str | None = Field(default=None, max_length=1000)
     approved_amount: Decimal | None = Field(default=None, gt=0, decimal_places=2, max_digits=18)
-    tenure_months: int | None = Field(default=None, gt=0, le=600)
+    tenure_months: int | None = Field(default=None, gt=0, )
     # Approver holding loan.nominee_override: approve although the NOMINEE rule
     # is not met (reason stored and audited; the rule must allow overrides).
     nominee_override_reason: str | None = Field(default=None, max_length=500)
 
 
 class LoanNomineesUpdate(BaseModel):
-    nominee_ids: list[UUID] = Field(default_factory=list, max_length=10)
+    nominee_ids: list[UUID] = Field(default_factory=list)
 
 
 class LoanNomineeOverride(BaseModel):

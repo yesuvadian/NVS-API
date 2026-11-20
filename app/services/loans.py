@@ -7,10 +7,16 @@ from psycopg import AsyncConnection
 
 from app.core.errors import AppError
 from app.repositories.loans import LoanRepository
-from app.services.loan_rules import assert_rule_checks, build_criteria, stage_of_checks, transition_rule_outcomes
+from app.repositories.workflow import WorkflowRepository
+from app.services.loan_rules import (assert_rule_checks, build_criteria, failing_checks, interest_terms, required_field,
+                                     required_rule, stage_of_checks, transition_rule_outcomes)
+from app.workflow.engine import TransitionContext, WorkflowEngine, route_rules
 from app.repositories.loan_lifecycle import LoanLifecycleRepository
 
 CENT = Decimal("0.01")
+
+# Approval decisions and the workflow transition each one runs.
+DECISION_EVENTS = {"APPROVED": "APPROVE", "REJECTED": "REJECT", "RETURNED": "RETURN"}
 
 
 def _decimal(value: Any, default: str = "0") -> Decimal:
@@ -146,6 +152,25 @@ class LoanService:
     def __init__(self, conn: AsyncConnection) -> None:
         self.repository = LoanRepository(conn)
         self.lifecycle = LoanLifecycleRepository(conn)
+        self.workflow = WorkflowRepository(conn)
+
+    def _engine(self, handlers) -> WorkflowEngine:
+        return WorkflowEngine(self.workflow, handlers)
+
+    async def _run(self, ctx: TransitionContext, handlers, *, evaluate, default_actions, from_stage):
+        """Run a loan transition; statuses come from the workflow JSON."""
+        loan_id = ctx.entity["id"]
+
+        async def entity_state(_ctx):
+            return await self.workflow.loan_state(loan_id)
+
+        async def apply_status(c, change):
+            return await self.workflow.apply_loan_status(loan_id, change, c.workflow_instance_id)
+
+        await self._engine(handlers).run_transition(
+            ctx, evaluate_rules=evaluate, default_actions=default_actions, from_stage=from_stage,
+            entity_state=entity_state, apply_status=apply_status)
+        return ctx
 
     @staticmethod
     def _type_out(row: dict[str, Any]) -> dict[str, Any]:
@@ -187,10 +212,11 @@ class LoanService:
             raise AppError("MEMBER_NOT_FOUND")
 
         definition = product["definition"]
-        amount_limits = _rule(definition, "AMOUNT_LIMITS")
-        tenure_limits = _rule(definition, "TENURE_LIMITS")
-        interest = _rule(definition, "INTEREST")
-        fee_rule = _rule(definition, "APPLICATION_FEE")
+        # Limits, interest and fee come from the rules; a missing rule refuses.
+        amount_limits = required_rule(definition, "AMOUNT_LIMITS")
+        tenure_limits = required_rule(definition, "TENURE_LIMITS")
+        interest = required_rule(definition, "INTEREST")
+        fee_rule = required_rule(definition, "APPLICATION_FEE")
         nominee_rule = _rule(definition, "NOMINEE")
         settings = await self.repository.loan_settings()
         reasons: list[str] = []
@@ -220,10 +246,10 @@ class LoanService:
         )
         reasons.extend(extra)
 
-        min_amount = _decimal(amount_limits.get("min"))
-        max_amount = _decimal(amount_limits.get("max"), "999999999999")
-        min_tenure = int(tenure_limits.get("minMonths", 1))
-        max_tenure = int(tenure_limits.get("maxMonths", 600))
+        min_amount = _decimal(required_field(amount_limits, "AMOUNT_LIMITS", "min"))
+        max_amount = _decimal(required_field(amount_limits, "AMOUNT_LIMITS", "max"))
+        min_tenure = int(required_field(tenure_limits, "TENURE_LIMITS", "minMonths"))
+        max_tenure = int(required_field(tenure_limits, "TENURE_LIMITS", "maxMonths"))
         if requested_amount < min_amount or requested_amount > max_amount:
             reasons.append("AMOUNT_OUTSIDE_LOAN_TYPE_LIMITS")
         if requested_tenure_months < min_tenure or requested_tenure_months > max_tenure:
@@ -241,24 +267,22 @@ class LoanService:
             past_default_loan_no=past_default,
         )
         nominee_required = bool(nominee_why)
-        fee_enabled = bool(fee_rule.get("enabled", False))
+        fee_enabled = bool(required_field(fee_rule, "APPLICATION_FEE", "enabled"))
         fee_amount = Decimal("0")
         fee_timing = None
         if fee_enabled:
-            fee_type = str(fee_rule.get("type", "fixed")).lower()
-            fee_rate = _decimal(fee_rule.get("amount"))
+            fee_type = str(required_field(fee_rule, "APPLICATION_FEE", "type")).lower()
+            fee_rate = _decimal(required_field(fee_rule, "APPLICATION_FEE", "amount"))
             fee_amount = _money(
                 requested_amount * fee_rate / Decimal("100")
                 if fee_type == "percent"
                 else fee_rate
             )
-            fee_timing = str(fee_rule.get("timing", "BEFORE_SUBMISSION")).upper()
+            fee_timing = str(required_field(fee_rule, "APPLICATION_FEE", "timing")).upper()
 
-        method = str(interest.get("method", product["interest_method"])).upper()
-        annual_rate = _decimal(interest.get("annualRatePercent")) if method == "FLAT" else Decimal("0")
-        total_interest = _money(
-            requested_amount * annual_rate * Decimal(requested_tenure_months) / Decimal("1200")
-        )
+        terms = interest_terms(interest, requested_amount, requested_tenure_months)
+        method, annual_rate = terms["method"], terms["rate"]
+        total_interest = _money(terms["total"])
         total_repayable = requested_amount + total_interest
         instalment_amount = _money(total_repayable / requested_tenure_months)
 
@@ -332,19 +356,61 @@ class LoanService:
         return result
 
     async def decide(self, request_id: UUID, values: dict[str, Any]):
-        if values.get("decision") == "APPROVED":
-            loan_id = await self.repository.loan_for_approval_request(request_id)
-            loan = await self.repository.get_application(loan_id) if loan_id else None
-            if loan is None:
+        """Online approval decision through the workflow engine (APPROVE /
+        REJECT / RETURN transition: rule checks, then RECORD_APPROVAL_DECISION)."""
+        async def record(_ctx, _params):
+            return await self.lifecycle.decide(request_id, values)
+
+        return await self._run_decision(request_id, values, record)
+
+    async def record_offline_decision(self, request_id: UUID, details: dict[str, Any]):
+        """Offline decision recorded on the approver's behalf: the same
+        transition, rule checks and log as an online decision."""
+        async def record(_ctx, _params):
+            return await self.lifecycle.record_offline_approval(request_id, details)
+
+        values = {**details, "decision": str(details.get("decision", "")).upper()}
+        return await self._run_decision(request_id, values, record)
+
+    async def _run_decision(self, request_id: UUID, values: dict[str, Any], record):
+        event = DECISION_EVENTS.get(values.get("decision"))
+        loan_id = await self.repository.loan_for_approval_request(request_id)
+        loan = await self.repository.get_application(loan_id) if loan_id else None
+        if loan is None and event == "APPROVE":
+            raise AppError("APPROVAL_REQUEST_NOT_FOUND")
+        if loan is None or event is None:
+            result = await record(None, {})          # refused by SQL with the precise error
+            if result is None:
                 raise AppError("APPROVAL_REQUEST_NOT_FOUND")
+            return result
+        workflow = await self.repository.workflow_version(loan["workflow_version_id"])
+
+        async def evaluate(_ctx):
+            if event != "APPROVE":
+                return {"event": event, "checks": {}, "routes": []}
             approved = {**loan, "approved_amount": values.get("approved_amount") or loan.get("approved_amount"),
                         "tenure_months": values.get("tenure_months") or loan.get("tenure_months")}
-            await self.enforce_transition(approved, "APPROVE",
-                                          nominee_override_reason=values.get("nominee_override_reason"))
-        result = await self.lifecycle.decide(request_id, values)
-        if result is None:
-            raise AppError("APPROVAL_REQUEST_NOT_FOUND")
-        return result
+            return await self.enforce_transition(approved, "APPROVE", workflow=workflow,
+                                                 nominee_override_reason=values.get("nominee_override_reason"),
+                                                 approval_request_id=request_id)
+
+        async def handler(ctx, params):
+            if ctx.routes:
+                # A ROUTE_TO_ROLE check failed: the request moves to those roles
+                # and their approver decides; nothing is decided now.
+                return {"approval_request_id": request_id, "loan_id": loan["id"], "decision": "ROUTED",
+                        "routed_to": sorted({r for route in ctx.routes for r in route["roles"]}),
+                        "checks": [route["check"] for route in ctx.routes]}
+            result = await record(ctx, params)
+            if result is None:
+                raise AppError("APPROVAL_REQUEST_NOT_FOUND")
+            return result
+
+        ctx = TransitionContext(event, {**loan, "approval_request_id": request_id},
+                                (workflow or {}).get("definition"))
+        await self._run(ctx, {"RECORD_APPROVAL_DECISION": handler}, evaluate=evaluate,
+                        default_actions=["RECORD_APPROVAL_DECISION"], from_stage="MANAGER_APPROVAL")
+        return ctx.results["RECORD_APPROVAL_DECISION"]
 
     async def prepare_disbursement(self, loan_id: UUID, amount: Decimal, payment_mode: str = "CASH",
                                    payment_reference: str | None = None):
@@ -354,13 +420,26 @@ class LoanService:
         return result
 
     async def release_disbursement(self, loan_id: UUID, disbursement_id: UUID, ack_type: str):
+        """DISBURSE transition: rule checks, then RELEASE_DISBURSEMENT (the SQL
+        release posts the journal, receipt and SMS exactly as before)."""
+        async def release(_ctx, _params):
+            result = await self.lifecycle.release_disbursement(loan_id, disbursement_id, ack_type)
+            if result is None:
+                raise AppError("DISBURSEMENT_NOT_FOUND")
+            return result
+
         loan = await self.repository.get_application(loan_id)
-        if loan is not None:
-            await self.enforce_transition(loan, "DISBURSE")
-        result = await self.lifecycle.release_disbursement(loan_id, disbursement_id, ack_type)
-        if result is None:
-            raise AppError("DISBURSEMENT_NOT_FOUND")
-        return result
+        if loan is None:
+            return await release(None, {})
+        workflow = await self.repository.workflow_version(loan["workflow_version_id"])
+        ctx = TransitionContext("DISBURSE", loan, (workflow or {}).get("definition"))
+
+        async def evaluate(_ctx):
+            return await self.enforce_transition(loan, "DISBURSE", workflow=workflow)
+
+        await self._run(ctx, {"RELEASE_DISBURSEMENT": release}, evaluate=evaluate,
+                        default_actions=["RELEASE_DISBURSEMENT"], from_stage="APPROVED")
+        return ctx.results["RELEASE_DISBURSEMENT"]
 
     async def collect_repayment(self, loan_id: UUID, **values):
         result = await self.lifecycle.collect_repayment(loan_id, **values)
@@ -462,33 +541,51 @@ class LoanService:
             raise AppError("LOAN_NOT_SUBMITTABLE")
 
         workflow = await self.repository.workflow_version(loan["workflow_version_id"])
-        await self.enforce_transition(loan, "SUBMIT", workflow=workflow)
-        missing = await self.lifecycle.missing_documents(loan_id)
-        if missing:
-            raise AppError("DOCUMENTS_REQUIRED", params={"missing": ", ".join(missing)}, details={"missing": missing})
-        fee = await self.repository.application_fee(loan_id)
-        if fee and fee["collect_timing"] != "DEDUCT_FROM_DISBURSEMENT" and fee["status"] not in {"PAID", "WAIVED"}:
-            raise AppError("FEE_UNPAID")
-        if workflow is None:
-            raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
-        submitted = await self.repository.submit_application(loan, workflow)
-        if submitted is None:
-            raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
-        return submitted
+
+        async def create_approval_request(ctx, _params):
+            missing = await self.lifecycle.missing_documents(loan_id)
+            if missing:
+                raise AppError("DOCUMENTS_REQUIRED", params={"missing": ", ".join(missing)},
+                               details={"missing": missing})
+            fee = await self.repository.application_fee(loan_id)
+            if fee and fee["collect_timing"] != "DEDUCT_FROM_DISBURSEMENT" and fee["status"] not in {"PAID", "WAIVED"}:
+                raise AppError("FEE_UNPAID")
+            if workflow is None:
+                raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
+            # SQL creates the request with the approval stage's roles, minimum
+            # approvals, amount band and offline settings from the workflow.
+            submitted = await self.repository.submit_application(loan, workflow)
+            if submitted is None:
+                raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
+            ctx.results["approval_request_id"] = submitted.get("approval_request_id")
+            ctx.workflow_instance_id = submitted.get("workflow_instance_id")
+            return submitted
+
+        async def evaluate(_ctx):
+            return await self.enforce_transition(loan, "SUBMIT", workflow=workflow)
+
+        # A returned loan resubmits into a new approval request and instance.
+        ctx = TransitionContext("SUBMIT", {**loan, "approval_request_id": None, "workflow_instance_id": None},
+                                (workflow or {}).get("definition"))
+        await self._run(ctx, {"CREATE_APPROVAL_REQUEST": create_approval_request}, evaluate=evaluate,
+                        default_actions=["CREATE_APPROVAL_REQUEST"], from_stage="DRAFT")
+        return ctx.results["CREATE_APPROVAL_REQUEST"]
 
     async def enforce_transition(
         self, loan: dict[str, Any], event: str, *, workflow: dict[str, Any] | None = None,
-        nominee_override_reason: str | None = None,
-    ) -> None:
+        nominee_override_reason: str | None = None, approval_request_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Evaluate the rule checks the loan's workflow version attaches to a
         transition (SUBMIT, APPROVE, DISBURSE). An unmet NOMINEE rule can be
         overridden at that point by a holder of loan.nominee_override with a
         reason (stored, audited, shown to the approver)."""
         if workflow is None:
             workflow = await self.repository.workflow_version(loan["workflow_version_id"])
-        checks = transition_rule_outcomes((workflow or {}).get("definition"), event)
+        definition = (workflow or {}).get("definition")
+        checks = transition_rule_outcomes(definition, event)
+        outcome: dict[str, Any] = {"event": event, "checks": checks, "routes": [], "nominee_override": False}
         if not checks:
-            return
+            return outcome
         needs_eligibility = any(c not in {"NOMINEE"} for c in checks)
         eligibility = await self.eligibility(
             member_id=loan["member_id"], loan_type_id=loan["loan_type_id"],
@@ -501,13 +598,31 @@ class LoanService:
             active_guarantors = len([g for g in await self.lifecycle.guarantors(loan["id"]) or []
                                      if g["status"] == "ACTIVE"])
         nominee_status = await self.repository.nominee_status(loan["id"]) if "NOMINEE" in checks else None
-        if assert_rule_checks(checks, eligibility=eligibility, active_guarantors=active_guarantors,
+
+        # ROUTE_TO_ROLE: a failing check hands the approval request to its
+        # roles once (an already-routed check is satisfied by that routing).
+        route_codes = [code for code, on_fail in checks.items() if on_fail == "ROUTE_TO_ROLE"]
+        if route_codes:
+            routed: set[str] = set()
+            request_id = approval_request_id or loan.get("approval_request_id")
+            if request_id and event != "SUBMIT":
+                state = await self.workflow.approval_request_state(request_id)
+                routed = set((state or {}).get("routed_checks") or [])
+            roles = route_rules(definition, event)
+            for code in failing_checks(route_codes, eligibility=eligibility, active_guarantors=active_guarantors,
+                                       nominee_status=nominee_status):
+                if code not in routed:
+                    outcome["routes"].append({"check": code, "roles": roles.get(code) or []})
+        blocking = {code: on_fail for code, on_fail in checks.items() if on_fail != "ROUTE_TO_ROLE"}
+        if assert_rule_checks(blocking, eligibility=eligibility, active_guarantors=active_guarantors,
                               nominee_status=nominee_status):
             reason = (nominee_override_reason or "").strip()
             if not reason:
                 raise AppError("NOMINEE_REQUIRED")
             # Privilege, allowOverride and reason length are checked in SQL.
             await self.repository.record_nominee_override(loan["id"], reason)
+            outcome["nominee_override"] = True
+        return outcome
 
     async def eligibility_view(self, **values) -> dict[str, Any]:
         """Eligibility plus the criteria list, grouped by the transition of the
@@ -520,6 +635,12 @@ class LoanService:
     async def set_nominees(self, loan_id: UUID, nominee_ids: list[UUID], expected_version: int | None):
         if expected_version is None:
             raise AppError("ROW_VERSION_REQUIRED")
+        loan = await self.repository.get_application(loan_id)
+        if loan is None:
+            raise AppError("LOAN_APPLICATION_NOT_FOUND")
+        # Draft/returned: the maker (loan.create) or loan.edit; afterwards loan.edit.
+        if loan["status"] not in {"DRAFT", "RETURNED"} and not await self.repository.has_privilege("loan.edit"):
+            raise AppError("NO_PRIVILEGE", params={"privilege": "loan.edit"})
         return await self.repository.set_application_nominees(loan_id, nominee_ids, expected_version)
 
     async def record_nominee_override(self, loan_id: UUID, reason: str):

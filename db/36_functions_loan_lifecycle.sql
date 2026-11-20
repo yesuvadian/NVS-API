@@ -78,6 +78,8 @@ DECLARE
     v_channel text := CASE WHEN p_offline IS NULL THEN 'ONLINE' ELSE 'OFFLINE' END;
     v_approval_method text := 'ONLINE';
     v_decision_date date := app.working_date();
+    v_terms jsonb;
+    v_approvals jsonb;
 BEGIN
     IF p_decision NOT IN ('APPROVED','REJECTED','RETURNED') THEN
         PERFORM app.fail('INVALID_APPROVAL_DECISION','Decision must be APPROVED, REJECTED, or RETURNED');
@@ -86,6 +88,7 @@ BEGIN
         PERFORM app.fail('APPROVAL_REASON_REQUIRED','A reason is required to reject or return an application');
     END IF;
     SELECT ar.id,ar.status,ar.round_no,ar.workflow_instance_id,ar.required_role_id,ar.requested_at,
+           ar.approver_roles,ar.min_approvals,ar.requested_by,
            l.id loan_id,l.requested_amount,l.requested_tenure_months,l.rule_snapshot
       INTO v_req
       FROM wf.approval_request ar
@@ -99,6 +102,15 @@ BEGIN
         SELECT id INTO v_role_id FROM iam.role
          WHERE tenant_id=app.tenant_id() AND role_code=app.role_code() AND status='ACTIVE' LIMIT 1;
         IF v_role_id IS NULL THEN PERFORM app.fail('APPROVER_ROLE_REQUIRED','An active approver role is required'); END IF;
+        -- Maker-checker before the role check (the requester never decides).
+        IF v_req.requested_by = app.user_id() THEN
+            PERFORM app.fail('SOD_SELF_APPROVAL', 'The approver must be a different person from the requester');
+        END IF;
+        -- Roles from the workflow stage (configured on the request).
+        IF v_req.approver_roles IS NOT NULL AND NOT app.role_code() = ANY (v_req.approver_roles) THEN
+            PERFORM app.fail('APPROVER_ROLE_REQUIRED',
+                format('Only %s can decide this approval.', array_to_string(v_req.approver_roles, ', ')));
+        END IF;
     ELSE
         v_approver := (p_offline->>'approved_by')::uuid;
         v_role_id := (p_offline->>'approver_role_id')::uuid;
@@ -111,6 +123,21 @@ BEGIN
     IF p_decision='APPROVED' AND (v_amount <= 0 OR v_amount > v_req.requested_amount
        OR v_tenure <= 0 OR v_tenure > v_req.requested_tenure_months) THEN
         PERFORM app.fail('APPROVED_TERMS_OUT_OF_RANGE','Approved amount and term must not exceed the request');
+    END IF;
+
+    -- minApprovals: each approval is a distinct person (never the requester);
+    -- the request is decided when the minimum is reached.
+    IF p_decision = 'APPROVED' AND v_req.approver_roles IS NOT NULL THEN
+        v_approvals := wf.add_approval(p_request_id,
+            CASE WHEN p_offline IS NULL THEN app.role_code() ELSE p_offline->>'approver_role_code' END, v_approver);
+        IF jsonb_array_length(v_approvals) < v_req.min_approvals THEN
+            PERFORM app.set_audit_reason(format('Approval %s of %s recorded', jsonb_array_length(v_approvals),
+                                                v_req.min_approvals), 'APPROVAL', p_request_id::text);
+            RETURN jsonb_build_object('approval_request_id', p_request_id, 'loan_id', v_req.loan_id,
+                'decision', 'APPROVAL_RECORDED', 'approval_channel', v_channel, 'approved_by', v_approver,
+                'approvals', v_approvals, 'min_approvals', v_req.min_approvals,
+                'approvals_needed', v_req.min_approvals - jsonb_array_length(v_approvals));
+        END IF;
     END IF;
 
     INSERT INTO wf.approval_decision (
@@ -127,19 +154,16 @@ BEGIN
 
     IF p_decision='APPROVED' THEN
         PERFORM loan.assert_concurrent_loan_limit(v_req.loan_id);
-        SELECT upper(coalesce(r->'value'->>'method','FLAT')),
-               coalesce((r->'value'->>'annualRatePercent')::numeric,0)
-          INTO v_method,v_rate
-          FROM jsonb_array_elements(coalesce(v_req.rule_snapshot->'rules','[]'::jsonb)) r
-         WHERE r->>'code'='INTEREST' LIMIT 1;
-        v_method := coalesce(v_method,'FLAT');
-        v_rate := CASE WHEN v_method='FLAT' THEN coalesce(v_rate,0) ELSE 0 END;
-        v_interest := round(v_amount*v_rate*v_tenure/1200,2);
+        -- Interest by the INTEREST rule's method (refuses if the rule is missing).
+        v_terms := loan.interest_terms(v_req.rule_snapshot, v_amount, v_tenure);
+        v_method := v_terms->>'method';
+        v_rate := (v_terms->>'rate')::numeric;
+        v_interest := (v_terms->>'total')::numeric;
         UPDATE loan.loan SET status='APPROVED',status_date=app.working_date(),
             approved_amount=v_amount,tenure_months=v_tenure,interest_rate_annual=v_rate,
             interest_method=v_method,total_interest=v_interest,
             instalment_amount=round((v_amount+v_interest)/v_tenure,2),
-            approved_at=now(),approved_by=v_approver,approval_expires_on=app.working_date()+30,
+            approved_at=now(),approved_by=v_approver,approval_expires_on=app.working_date()+cfg.require_setting_int('loans.disbursement_window_days'),
             updated_at=now(),updated_by=app.user_id(),row_version=row_version+1
          WHERE tenant_id=app.tenant_id() AND id=v_req.loan_id;
         v_new_stage := 'APPROVED';
@@ -215,7 +239,13 @@ BEGIN
      WHERE tenant_id = app.tenant_id() AND id = p_request_id AND entity_type = 'loan.loan';
     IF NOT FOUND THEN PERFORM app.fail('APPROVAL_REQUEST_NOT_FOUND','Loan approval request was not found'); END IF;
     v_policy := loan.request_policy(p_request_id);
-    IF v_policy.id IS NOT NULL AND NOT v_policy.allow_offline THEN
+    -- Engine-configured requests follow the workflow stage (allowOfflineRecording);
+    -- older requests follow the approval policy.
+    IF v_req.approver_roles IS NOT NULL THEN
+        IF v_req.allow_offline IS NOT TRUE THEN
+            PERFORM app.fail('OFFLINE_NOT_ALLOWED', 'Offline decisions are not allowed for this approval.');
+        END IF;
+    ELSIF v_policy.id IS NOT NULL AND NOT v_policy.allow_offline THEN
         PERFORM app.fail('OFFLINE_NOT_ALLOWED', 'Offline decisions are not allowed for this approval.');
     END IF;
     IF v_approver IS NULL THEN
@@ -228,7 +258,9 @@ BEGIN
            AND (ur.effective_to IS NULL OR ur.effective_to >= app.working_date())
       JOIN iam.role r ON r.tenant_id = ur.tenant_id AND r.id = ur.role_id AND r.status = 'ACTIVE'
      WHERE u.tenant_id = app.tenant_id() AND u.id = v_approver AND u.status = 'ACTIVE'
-       AND r.id = coalesce(v_req.required_role_id, v_policy.approver_role_id)
+       AND CASE WHEN v_req.approver_roles IS NOT NULL THEN r.role_code = ANY (v_req.approver_roles)
+                ELSE r.id = coalesce(v_req.required_role_id, v_policy.approver_role_id) END
+     ORDER BY (r.id = v_req.required_role_id) DESC
      LIMIT 1;
     IF NOT FOUND THEN
         PERFORM app.fail('APPROVER_ROLE_REQUIRED', 'The person who decided does not hold the approval role.');
@@ -301,6 +333,11 @@ BEGIN
     IF v_loan.status NOT IN ('DRAFT','RETURNED') THEN
         PERFORM app.fail('APPLICATION_NOT_EDITABLE', 'Only a draft or returned application can be changed.');
     END IF;
+    -- Draft and returned applications: loan.edit or loan.create (the maker).
+    IF app.user_id() IS NOT NULL AND NOT iam.has_privilege(app.user_id(), 'loan.edit')
+       AND NOT iam.has_privilege(app.user_id(), 'loan.create') THEN
+        PERFORM app.fail('NO_PRIVILEGE', 'Changing a loan application needs loan.edit or loan.create');
+    END IF;
     IF p_expected_version IS NOT NULL AND p_expected_version <> v_loan.row_version THEN
         PERFORM app.fail('STALE_RECORD', 'The application was changed by someone else. Refresh and try again.');
     END IF;
@@ -316,11 +353,11 @@ BEGIN
       FROM loan.loan l
      WHERE f.tenant_id = app.tenant_id() AND f.loan_id = p_loan_id AND l.tenant_id = f.tenant_id AND l.id = f.loan_id
        AND f.fee_basis = 'PERCENT' AND f.status = 'PENDING' AND f.fee_rate IS NOT NULL;
+    -- Nominees go through the one nominee function (loan.edit, count limit,
+    -- active-nominee and stage checks, audit) like PUT /loans/{id}/nominees.
     IF jsonb_typeof(p_values->'nominee_ids') = 'array' THEN
-        DELETE FROM loan.loan_nominee WHERE tenant_id = app.tenant_id() AND loan_id = p_loan_id;
-        FOR v_nominee IN SELECT value::uuid FROM jsonb_array_elements_text(p_values->'nominee_ids') LOOP
-            INSERT INTO loan.loan_nominee (loan_id, nominee_id) VALUES (p_loan_id, v_nominee);
-        END LOOP;
+        PERFORM loan.link_application_nominees(p_loan_id,
+            ARRAY(SELECT value::uuid FROM jsonb_array_elements_text(p_values->'nominee_ids')));
     END IF;
     RETURN (SELECT to_jsonb(a) FROM loan.get_application(p_loan_id, false) a);
 END
@@ -405,7 +442,7 @@ BEGIN
     SELECT * INTO v_c FROM loan.loan_cancellation WHERE tenant_id = app.tenant_id() AND id = p_id FOR UPDATE;
     IF NOT FOUND THEN PERFORM app.fail('CANCELLATION_NOT_FOUND', 'The cancellation request was not found.'); END IF;
     IF v_c.status <> 'PENDING' THEN PERFORM app.fail('REQUEST_CLOSED', 'The request is no longer pending'); END IF;
-    PERFORM loan.assert_approver('MGR,LDR', v_c.requested_by);
+    PERFORM loan.assert_approver_setting('loans.cancellation_approver_roles', v_c.requested_by);
     IF NOT p_approve AND coalesce(btrim(p_remarks), '') = '' THEN
         PERFORM app.fail('APPROVAL_REASON_REQUIRED', 'A reason is required to reject the request.');
     END IF;
@@ -505,12 +542,9 @@ BEGIN
                            WHERE d.tenant_id = app.tenant_id() AND d.cash_account_id = v_receipt.cash_account_id
                              AND d.business_date = v_receipt.value_date AND d.status = 'CLOSED');
     IF v_after THEN
-        SELECT coalesce(array_agg(upper(value)), ARRAY['MGR','ACC'])
-          INTO v_roles FROM jsonb_array_elements_text(
-               CASE WHEN jsonb_typeof(cfg.get_setting('cash.receipt_cancel_after_close_approvers')) = 'array'
-                    THEN cfg.get_setting('cash.receipt_cancel_after_close_approvers') ELSE '["MGR","ACC"]'::jsonb END);
+        v_roles := cfg.setting_roles('cash.receipt_cancel_after_close_approvers');
     ELSE
-        v_roles := ARRAY[upper(coalesce(cfg.get_setting('cash.receipt_cancel_same_day_approver') #>> '{}', 'MGR'))];
+        v_roles := cfg.setting_roles('cash.receipt_cancel_same_day_approver');
     END IF;
     INSERT INTO loan.repayment_reversal (loan_id, loan_repayment_id, cash_receipt_id, reason, after_day_close, required_roles)
     VALUES (v_rep.loan_id, v_rep.id, v_rep.cash_receipt_id, p_reason, v_after, v_roles)

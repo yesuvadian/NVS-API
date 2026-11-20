@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfms.local/schemas/rule_set.schema.json",
+  "title": "CFMS rule set",
+  "description": "Versioned rule-set document (cfg.rule_set_version.definition). Loans snapshot it at creation. Rules the loan engine needs are required fields: a missing rule or field refuses with LOAN_RULE_MISSING instead of using a default in code. The database validates on publish (cfg.validate_rule_set).",
+  "type": "object",
+  "required": ["ruleSet", "version", "schemaVersion", "rules"],
+  "properties": {
+    "ruleSet": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+    "version": {"type": "integer", "minimum": 1},
+    "schemaVersion": {"type": "string"},
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code"],
+        "properties": {"code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}},
+        "allOf": [
+          {"if": {"properties": {"code": {"const": "INTEREST"}}},
+           "then": {"properties": {"value": {"$ref": "#/$defs/interest"}}, "required": ["value"]}},
+          {"if": {"properties": {"code": {"const": "AMOUNT_LIMITS"}}},
+           "then": {"properties": {"value": {"$ref": "#/$defs/amountLimits"}}, "required": ["value"]}},
+          {"if": {"properties": {"code": {"const": "TENURE_LIMITS"}}},
+           "then": {"properties": {"value": {"$ref": "#/$defs/tenureLimits"}}, "required": ["value"]}},
+          {"if": {"properties": {"code": {"const": "APPLICATION_FEE"}}},
+           "then": {"properties": {"value": {"$ref": "#/$defs/applicationFee"}}, "required": ["value"]}},
+          {"if": {"properties": {"code": {"const": "NOMINEE"}}},
+           "then": {"properties": {"value": {"$ref": "#/$defs/nominee"}}, "required": ["value"]}}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "interest": {
+      "type": "object",
+      "required": ["method"],
+      "properties": {
+        "method": {"enum": ["FLAT", "NONE"]},
+        "annualRatePercent": {"type": "number", "minimum": 0}
+      },
+      "if": {"properties": {"method": {"const": "FLAT"}}},
+      "then": {"required": ["annualRatePercent"]}
+    },
+    "amountLimits": {
+      "type": "object",
+      "required": ["min", "max"],
+      "properties": {"min": {"type": "number", "minimum": 0}, "max": {"type": "number", "exclusiveMinimum": 0}}
+    },
+    "tenureLimits": {
+      "type": "object",
+      "required": ["minMonths", "maxMonths"],
+      "properties": {"minMonths": {"type": "integer", "minimum": 1}, "maxMonths": {"type": "integer", "minimum": 1}}
+    },
+    "applicationFee": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "type": {"enum": ["fixed", "percent"]},
+        "amount": {"type": "number", "minimum": 0},
+        "timing": {"enum": ["BEFORE_SUBMISSION", "AFTER_SUBMISSION", "DEDUCT_FROM_DISBURSEMENT"]},
+        "waiverAllowed": {"type": "boolean"},
+        "refundable": {"type": "boolean"}
+      },
+      "if": {"properties": {"enabled": {"const": true}}},
+      "then": {"required": ["type", "amount", "timing"]}
+    },
+    "nominee": {
+      "type": "object",
+      "properties": {
+        "everyLoan": {"type": "boolean"},
+        "allowOverride": {"type": "boolean"},
+        "conditions": {
+          "type": "object",
+          "properties": {
+            "firstLoan": {"type": "boolean"},
+            "thresholdAmount": {"type": ["number", "null"], "minimum": 0},
+            "defaulter": {
+              "type": "object",
+              "properties": {"enabled": {"type": "boolean"}, "lookbackMonths": {"type": "integer", "minimum": 1}}
+            }
+          }
+        }
+      }
+    }
+  }
+}

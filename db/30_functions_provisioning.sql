@@ -38,7 +38,7 @@ CREATE OR REPLACE FUNCTION loan.default_after_months(p_snapshot jsonb)
 RETURNS integer LANGUAGE sql STABLE AS
 $$
     SELECT greatest(coalesce((loan.rule(p_snapshot, 'DEFAULT_AFTER_MONTHS')->>'value')::integer,
-                             (cfg.get_setting('loans.default_after_months') #>> '{}')::integer, 2), 1)
+                             cfg.require_setting_int('loans.default_after_months')), 1)
 $$;
 
 -- Rounds an amount with a rounding setting such as {"mode":"NEAREST","precision":1}.
@@ -422,7 +422,7 @@ RETURNS uuid LANGUAGE plpgsql AS
 $$
 DECLARE
     v_loan record; v_workflow record; v_role_id uuid; v_policy_id uuid;
-    v_request_no text; v_instance_id uuid; v_approval_id uuid;
+    v_request_no text; v_instance_id uuid; v_approval_id uuid; v_config jsonb;
 BEGIN
     SELECT l.id,l.loan_no,l.member_id,l.loan_type_id,l.requested_amount,l.rule_set_version_id,
            l.workflow_version_id,l.status,m.full_name,rs.code rule_code
@@ -439,7 +439,10 @@ BEGIN
      WHERE v.tenant_id=app.tenant_id() AND v.id=v_loan.workflow_version_id
        AND v.status IN ('PUBLISHED','RETIRED') AND d.code='LOAN_APPLICATION';
     IF NOT FOUND THEN RETURN NULL; END IF;
-    SELECT id INTO v_role_id FROM iam.role WHERE tenant_id=app.tenant_id() AND role_code='MGR' AND status='ACTIVE' LIMIT 1;
+    -- Approver roles come from the workflow's approval stage (no role in code).
+    v_config := wf.stage_approval_config(v_loan.workflow_version_id, 'MANAGER_APPROVAL', v_loan.requested_amount);
+    SELECT id INTO v_role_id FROM iam.role WHERE tenant_id=app.tenant_id()
+       AND role_code=v_config->'roles'->>0 AND status='ACTIVE' LIMIT 1;
     IF v_role_id IS NULL THEN RETURN NULL; END IF;
     SELECT id INTO v_policy_id FROM wf.approval_policy
      WHERE tenant_id=app.tenant_id() AND workflow_code='LOAN_APPLICATION'
@@ -456,6 +459,10 @@ BEGIN
     VALUES (v_request_no,v_policy_id,v_instance_id,'MANAGER_APPROVAL','loan.loan',v_loan.id,
         v_loan.loan_no,'Loan application '||v_loan.loan_no||' for '||v_loan.full_name,
         v_loan.requested_amount,app.user_id(),v_role_id) RETURNING id INTO v_approval_id;
+    PERFORM wf.configure_approval_request(v_approval_id,
+        ARRAY(SELECT jsonb_array_elements_text(v_config->'roles')), (v_config->>'minApprovals')::integer,
+        (v_config->>'allowOffline')::boolean,
+        ARRAY(SELECT jsonb_array_elements_text(coalesce(v_config->'offlineRecorderRoles', '[]'::jsonb))));
     INSERT INTO wf.task (task_type,title,entity_type,entity_id,business_ref,workflow_instance_id,
         approval_request_id,assigned_role_id,priority)
     VALUES ('APPROVAL','Review loan application '||v_loan.loan_no,'loan.loan',v_loan.id,

@@ -226,6 +226,8 @@ def test_submit_creates_manager_approval_request_and_task(loan_api):
             FakeResult(one={"approval_request_id": approval_request_id}),
             FakeResult(one=loan_row(status="UNDER_APPROVAL", member_id=loan["member_id"], loan_type_id=loan["loan_type_id"])),
             FakeResult(many=[]),                                    # loan.get_nominee_overrides
+            FakeResult(one={"status": "UNDER_APPROVAL", "workflow_instance_id": None,   # engine: state after actions
+                            "approval_request_id": approval_request_id, "stage": None}),
         ]
     )
 
@@ -284,7 +286,7 @@ OTHER_ID = "22222222-2222-2222-2222-222222222222"
         ("get", f"/api/v1/loans/{LOAN_ID}/repayments", None, "loan_repay.view"),
         ("get", f"/api/v1/members/{LOAN_ID}/loan-statement", None, "loan.view"),
         ("post", f"/api/v1/loans/{LOAN_ID}/settlement-quote", None, "loan_settle.create"),
-        ("patch", f"/api/v1/loan-applications/{LOAN_ID}", {"purpose": "School fees"}, "loan.edit"),
+        ("patch", f"/api/v1/loan-applications/{LOAN_ID}", {"purpose": "School fees"}, ["loan.edit", "loan.create"]),
         ("get", f"/api/v1/loans/{LOAN_ID}/settlements", None, "loan_settle.view"),
         ("get", f"/api/v1/loan-settlements/{LOAN_ID}", None, "loan_settle.view"),
         ("post", f"/api/v1/loan-settlements/{LOAN_ID}/approve", {}, "loan_settle.approve"),

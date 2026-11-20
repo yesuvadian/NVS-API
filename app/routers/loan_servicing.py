@@ -38,6 +38,7 @@ from app.schemas.loan_servicing import (
     WrittenOffRecovery,
 )
 from app.services.loan_servicing import LoanServicingService
+from app.services.loans import LoanService
 from app.services.sanction_letter import render_sanction_letter
 
 router = APIRouter(tags=["loan servicing"])
@@ -255,7 +256,9 @@ async def record_offline_decision(
     # recorder role and that requester, approver and recorder are different people.
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan.create")),
 ):
-    return await _service(conn).record_offline_decision(request_id, payload.model_dump(mode="json", exclude_none=True))
+    # Runs the APPROVE/REJECT/RETURN transition (rule checks, log) like an online decision.
+    return await LoanService(conn).record_offline_decision(
+        request_id, payload.model_dump(mode="json", exclude_none=True))
 
 
 @router.post("/loan-approvals/{request_id}/verification")

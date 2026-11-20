@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfms.local/schemas/workflow.schema.json",
+  "title": "CFMS workflow definition",
+  "description": "Versioned workflow document (cfg.workflow_version.definition): stages -> rule checks -> actions. The database validates the same rules on publish (cfg.validate_workflow), including references to roles, privileges, registered actions and entity statuses, which a static schema cannot check.",
+  "type": "object",
+  "required": ["workflow", "version", "schemaVersion", "startStage", "stages", "transitions"],
+  "properties": {
+    "workflow": {"$ref": "#/$defs/code"},
+    "version": {"type": "integer", "minimum": 1},
+    "schemaVersion": {"type": "string"},
+    "startStage": {"$ref": "#/$defs/code"},
+    "stages": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/stage"}},
+    "transitions": {"type": "array", "items": {"$ref": "#/$defs/transition"}}
+  },
+  "$defs": {
+    "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+    "roleList": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/code"}},
+    "label": {
+      "type": "object",
+      "required": ["en"],
+      "properties": {"en": {"type": "string", "minLength": 1}, "ta": {"type": "string"}},
+      "additionalProperties": {"type": "string"}
+    },
+    "stage": {
+      "type": "object",
+      "required": ["code", "name"],
+      "properties": {
+        "code": {"$ref": "#/$defs/code"},
+        "name": {"type": "string", "minLength": 1},
+        "end": {"type": "boolean"},
+        "role": {"$ref": "#/$defs/code", "description": "Legacy: the acting role. Maker stages use actorPrivilege; approval stages use approval.roles."},
+        "actorPrivilege": {"type": "string", "pattern": "^[a-z_]+\\.[a-z_]+$"},
+        "approval": {"$ref": "#/$defs/approval"},
+        "statuses": {"$ref": "#/$defs/statuses"},
+        "actions": {"type": "array", "items": {"type": "object", "required": ["action"]}}
+      }
+    },
+    "approval": {
+      "type": "object",
+      "required": ["roles", "minApprovals"],
+      "properties": {
+        "roles": {"$ref": "#/$defs/roleList"},
+        "minApprovals": {"type": "integer", "minimum": 1},
+        "allowOfflineRecording": {"type": "boolean"},
+        "offlineRecorderRoles": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/code"}},
+        "methods": {"type": "array", "items": {"enum": ["online", "offline"]}},
+        "amountBands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["minAmount", "roles"],
+            "properties": {
+              "minAmount": {"type": "number", "minimum": 0},
+              "roles": {"$ref": "#/$defs/roleList"},
+              "minApprovals": {"type": "integer", "minimum": 1}
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    "statuses": {
+      "type": "object",
+      "required": ["stageStatuses", "initial"],
+      "properties": {
+        "entityStatus": {"$ref": "#/$defs/code", "description": "Entity status set when the stage is entered; one of the entity's fixed statuses (checked on publish)."},
+        "initial": {"$ref": "#/$defs/code"},
+        "onPartialApproval": {"$ref": "#/$defs/code"},
+        "onRouted": {"$ref": "#/$defs/code"},
+        "stageStatuses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["code"],
+            "properties": {"code": {"$ref": "#/$defs/code"}, "label": {"$ref": "#/$defs/label"}},
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ruleCheck": {
+      "oneOf": [
+        {"$ref": "#/$defs/code"},
+        {
+          "type": "object",
+          "required": ["code"],
+          "properties": {
+            "code": {"$ref": "#/$defs/code"},
+            "onFail": {"enum": ["BLOCK", "REQUIRE_OVERRIDE", "ROUTE_TO_ROLE", "WARN"]},
+            "roles": {"$ref": "#/$defs/roleList"}
+          },
+          "additionalProperties": false,
+          "if": {"properties": {"onFail": {"const": "ROUTE_TO_ROLE"}}, "required": ["onFail"]},
+          "then": {"required": ["roles"]}
+        }
+      ]
+    },
+    "transition": {
+      "type": "object",
+      "required": ["from", "to", "on"],
+      "properties": {
+        "from": {"$ref": "#/$defs/code"},
+        "to": {"$ref": "#/$defs/code"},
+        "on": {"$ref": "#/$defs/code"},
+        "when": {"type": "object"},
+        "ruleChecks": {"type": "array", "items": {"$ref": "#/$defs/ruleCheck"}},
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["action"],
+            "properties": {"action": {"$ref": "#/$defs/code"}, "params": {"type": "object"}},
+            "additionalProperties": false
+          }
+        },
+        "stageStatus": {"$ref": "#/$defs/code", "description": "Stage status the transition records in its source stage."},
+        "entityStatus": {"$ref": "#/$defs/code", "description": "Entity status the transition sets instead of the target stage's."}
+      }
+    }
+  }
+}

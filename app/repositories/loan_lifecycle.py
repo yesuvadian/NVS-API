@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -88,6 +89,13 @@ class LoanLifecycleRepository:
             """SELECT loan.record_approval_decision(%s,%s,%s,%s,%s) AS result""",
             (request_id,values["decision"],values.get("reason"),
              values.get("approved_amount"),values.get("tenure_months")),
+        )).fetchone()
+        return row["result"] if row else None
+
+    async def record_offline_approval(self, request_id: UUID, details: dict[str, Any]) -> dict[str, Any] | None:
+        row = await (await self.conn.execute(
+            "SELECT loan.record_offline_approval(%s,%s::jsonb) AS result",
+            (request_id, json.dumps(details, default=str)),
         )).fetchone()
         return row["result"] if row else None
 

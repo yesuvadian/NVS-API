@@ -5,7 +5,7 @@ from psycopg import AsyncConnection
 
 from app.core.errors import AppError
 from app.core.idempotency import IDEMPOTENCY_HEADER, run_idempotent, validate_key
-from app.core.permissions import require_tenant_permission
+from app.core.permissions import require_any_tenant_permission, require_tenant_permission
 from app.core.tenant_security import TenantPrincipal
 from app.db.dependencies import get_tenant_db
 from app.schemas.loans import (
@@ -124,10 +124,12 @@ async def set_loan_nominees(
     payload: LoanNomineesUpdate,
     expected_version: int | None = Header(default=None, alias="X-Expected-Row-Version", ge=1),
     conn: AsyncConnection = Depends(get_tenant_db),
-    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.edit")),
+    _principal: TenantPrincipal = Depends(require_any_tenant_permission("loan.edit", "loan.create")),
 ):
     """Link (or unlink) nominees on an application before approval, or after
-    approval until the first disbursement. Returns the nominee rule state."""
+    approval until the first disbursement. Returns the nominee rule state.
+
+    Draft or returned: loan.create or loan.edit. After submission: loan.edit."""
     return await _service(conn).set_nominees(loan_id, payload.nominee_ids, expected_version)
 
 
@@ -245,9 +247,12 @@ async def update_loan_application(
     loan_id: UUID, payload: LoanApplicationUpdate,
     header_version: int | None = Header(default=None, alias="X-Expected-Row-Version", ge=1),
     conn: AsyncConnection = Depends(get_tenant_db),
-    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.edit")),
+    _principal: TenantPrincipal = Depends(require_any_tenant_permission("loan.edit", "loan.create")),
 ):
     """Change the amount, tenure, purpose or nominees of a draft or returned application.
+
+    Holders of loan.edit or loan.create may edit (the maker who can create an
+    application can correct it after a return); the database checks the same.
 
     The row version of the application as the user opened it is required (body
     ``expected_version`` or the X-Expected-Row-Version header), so a save never

@@ -55,3 +55,24 @@ def require_tenant_permission(
 
     return permission_checker
 
+
+
+def require_any_tenant_permission(
+    *permission_codes: str,
+) -> Callable[..., Awaitable[TenantPrincipal]]:
+    """The user holds at least one of the privileges (e.g. editing a draft
+    loan: loan.edit or loan.create)."""
+    async def permission_checker(
+        principal: TenantPrincipal = Depends(require_tenant_user),
+        conn: AsyncConnection = Depends(get_tenant_db),
+    ) -> TenantPrincipal:
+        result = await conn.execute(
+            "SELECT bool_or(iam.has_privilege(%s, p)) AS allowed FROM unnest(%s::text[]) p",
+            (principal.user_id, list(permission_codes)),
+        )
+        row = await result.fetchone()
+        if row is None or not row["allowed"]:
+            raise AppError("NO_PRIVILEGE", params={"privilege": " / ".join(permission_codes)})
+        return principal
+
+    return permission_checker

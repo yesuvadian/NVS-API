@@ -33,6 +33,9 @@ DECLARE
     v_errors text[] := '{}';
     v_start  text := p_definition ->> 'startStage';
     r        record;
+    v_entity  text;
+    v_allowed text[];
+    v_key     text;
 BEGIN
     IF jsonb_typeof(p_definition -> 'stages') IS DISTINCT FROM 'array'
        OR jsonb_array_length(p_definition -> 'stages') = 0 THEN
@@ -147,6 +150,145 @@ BEGIN
         END IF;
     END LOOP;
 
+    -- stage statuses: entityStatus is one of the entity's statuses (the fixed
+    -- domain set in its status CHECK); stage status codes unique; initial,
+    -- onPartialApproval and onRouted name one of them
+    v_entity := (SELECT d.entity_type FROM cfg.workflow_definition d
+                  WHERE d.tenant_id = p_tenant_id AND d.code = p_definition ->> 'workflow' LIMIT 1);
+    v_allowed := cfg.entity_statuses(coalesce(v_entity, 'loan.loan'));
+    FOR r IN SELECT s ->> 'code' AS code, s -> 'statuses' AS st
+               FROM jsonb_array_elements(p_definition -> 'stages') s WHERE s ? 'statuses' LOOP
+        IF jsonb_typeof(r.st) <> 'object' THEN
+            v_errors := v_errors || format('stage %s: statuses must be an object', r.code);
+            CONTINUE;
+        END IF;
+        IF r.st ? 'entityStatus' AND NOT (r.st ->> 'entityStatus') = ANY (coalesce(v_allowed, '{}')) THEN
+            v_errors := v_errors || format('stage %s: entityStatus %s is not a status of %s',
+                                           r.code, r.st ->> 'entityStatus', coalesce(v_entity, 'loan.loan'));
+        END IF;
+        IF jsonb_typeof(r.st -> 'stageStatuses') IS DISTINCT FROM 'array' OR jsonb_array_length(r.st -> 'stageStatuses') = 0 THEN
+            v_errors := v_errors || format('stage %s: stageStatuses must be a non-empty array', r.code);
+            CONTINUE;
+        END IF;
+        IF EXISTS (SELECT 1 FROM jsonb_array_elements(r.st -> 'stageStatuses') x
+                    GROUP BY x ->> 'code' HAVING count(*) > 1 OR x ->> 'code' IS NULL) THEN
+            v_errors := v_errors || format('stage %s: stage status codes must be present and unique', r.code);
+        END IF;
+        IF EXISTS (SELECT 1 FROM jsonb_array_elements(r.st -> 'stageStatuses') x
+                    WHERE (x ->> 'code') !~ '^[A-Z][A-Z0-9_]*$') THEN
+            v_errors := v_errors || format('stage %s: stage status codes must be UPPER_SNAKE_CASE', r.code);
+        END IF;
+        FOR v_key IN SELECT k FROM unnest(ARRAY['initial', 'onPartialApproval', 'onRouted']) k LOOP
+            IF r.st ? v_key AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(r.st -> 'stageStatuses') x
+                                             WHERE x ->> 'code' = r.st ->> v_key) THEN
+                v_errors := v_errors || format('stage %s: %s %s is not one of its stage statuses',
+                                               r.code, v_key, r.st ->> v_key);
+            END IF;
+        END LOOP;
+    END LOOP;
+    -- transitions: stageStatus is a status of the source stage; entityStatus allowed
+    FOR r IN SELECT t ->> 'on' AS ev, t ->> 'from' AS f, t ->> 'stageStatus' AS ss, t ->> 'entityStatus' AS es
+               FROM jsonb_array_elements(p_definition -> 'transitions') t
+              WHERE t ? 'stageStatus' OR t ? 'entityStatus' LOOP
+        IF r.ss IS NOT NULL AND NOT EXISTS (
+               SELECT 1 FROM jsonb_array_elements(p_definition -> 'stages') s,
+                             jsonb_array_elements(coalesce(s -> 'statuses' -> 'stageStatuses', '[]'::jsonb)) x
+                WHERE s ->> 'code' = r.f AND x ->> 'code' = r.ss) THEN
+            v_errors := v_errors || format('transition %s from %s: stageStatus %s is not a status of stage %s',
+                                           r.ev, r.f, r.ss, r.f);
+        END IF;
+        IF r.es IS NOT NULL AND NOT r.es = ANY (coalesce(v_allowed, '{}')) THEN
+            v_errors := v_errors || format('transition %s from %s: entityStatus %s is not a status of %s',
+                                           r.ev, r.f, r.es, coalesce(v_entity, 'loan.loan'));
+        END IF;
+    END LOOP;
+
+    -- engine: maker stages name an existing privilege
+    FOR r IN SELECT s ->> 'code' AS code, s ->> 'actorPrivilege' AS priv
+               FROM jsonb_array_elements(p_definition -> 'stages') s
+              WHERE s ? 'actorPrivilege' LOOP
+        IF NOT EXISTS (SELECT 1 FROM platform.privilege p WHERE p.privilege_code = r.priv AND p.is_active) THEN
+            v_errors := v_errors || format('stage %s: actorPrivilege %s is not a known privilege', r.code, r.priv);
+        END IF;
+    END LOOP;
+
+    -- engine: transition actions are registered, approved and enabled actions
+    FOR r IN SELECT t ->> 'on' AS ev, a
+               FROM jsonb_array_elements(p_definition -> 'transitions') t,
+                    jsonb_array_elements(CASE jsonb_typeof(t -> 'actions') WHEN 'array' THEN t -> 'actions'
+                                              ELSE '[]'::jsonb END) a LOOP
+        IF jsonb_typeof(r.a) <> 'object' OR r.a ->> 'action' IS NULL THEN
+            v_errors := v_errors || format('transition %s: each action needs an "action" code', r.ev);
+        ELSIF NOT EXISTS (SELECT 1 FROM platform.action_definition d
+                           WHERE d.action_code = r.a ->> 'action' AND d.status = 'APPROVED') THEN
+            v_errors := v_errors || format('transition %s: action %s is not a registered, approved action',
+                                           r.ev, r.a ->> 'action');
+        ELSIF p_tenant_id IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM cfg.tenant_action ta
+                 WHERE ta.tenant_id = p_tenant_id AND ta.action_code = r.a ->> 'action' AND ta.is_enabled) THEN
+            v_errors := v_errors || format('transition %s: action %s is not enabled for this organisation',
+                                           r.ev, r.a ->> 'action');
+        ELSIF r.a ? 'params' AND jsonb_typeof(r.a -> 'params') <> 'object' THEN
+            v_errors := v_errors || format('transition %s: params of %s must be an object', r.ev, r.a ->> 'action');
+        END IF;
+    END LOOP;
+
+    -- engine: role lists (approval roles, offline recorders, amount bands,
+    -- ROUTE_TO_ROLE) name active roles of the organisation
+    FOR r IN
+        SELECT DISTINCT x.where_, x.role_code
+          FROM (
+            SELECT 'stage ' || (s ->> 'code') || ' approval' AS where_, rc AS role_code
+              FROM jsonb_array_elements(p_definition -> 'stages') s,
+                   jsonb_array_elements_text(coalesce(s -> 'approval' -> 'roles', '[]'::jsonb)
+                                             || coalesce(s -> 'approval' -> 'offlineRecorderRoles', '[]'::jsonb)) rc
+            UNION ALL
+            SELECT 'stage ' || (s ->> 'code') || ' amount band', rc
+              FROM jsonb_array_elements(p_definition -> 'stages') s,
+                   jsonb_array_elements(coalesce(s -> 'approval' -> 'amountBands', '[]'::jsonb)) b,
+                   jsonb_array_elements_text(coalesce(b -> 'roles', '[]'::jsonb)) rc
+            UNION ALL
+            SELECT 'transition ' || (t ->> 'on') || ' ROUTE_TO_ROLE', rc
+              FROM jsonb_array_elements(p_definition -> 'transitions') t,
+                   jsonb_array_elements(CASE jsonb_typeof(t -> 'ruleChecks') WHEN 'array' THEN t -> 'ruleChecks'
+                                             ELSE '[]'::jsonb END) c,
+                   jsonb_array_elements_text(CASE WHEN jsonb_typeof(c) = 'object' THEN coalesce(c -> 'roles', '[]'::jsonb)
+                                                  ELSE '[]'::jsonb END) rc
+          ) x
+    LOOP
+        IF p_tenant_id IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM iam.role ro
+                 WHERE ro.tenant_id = p_tenant_id AND ro.role_code = r.role_code AND ro.status = 'ACTIVE') THEN
+            v_errors := v_errors || format('%s: role %s does not exist or is inactive', r.where_, r.role_code);
+        END IF;
+    END LOOP;
+
+    -- engine: approval settings are well formed
+    FOR r IN SELECT s ->> 'code' AS code, s -> 'approval' AS ap
+               FROM jsonb_array_elements(p_definition -> 'stages') s
+              WHERE jsonb_typeof(s -> 'approval') = 'object' AND (s -> 'approval') ? 'roles' LOOP
+        IF jsonb_typeof(r.ap -> 'roles') <> 'array' OR jsonb_array_length(r.ap -> 'roles') = 0 THEN
+            v_errors := v_errors || format('stage %s: approval roles must be a non-empty array', r.code);
+        END IF;
+        IF r.ap ? 'minApprovals' AND (jsonb_typeof(r.ap -> 'minApprovals') <> 'number'
+                                      OR (r.ap ->> 'minApprovals')::numeric < 1) THEN
+            v_errors := v_errors || format('stage %s: minApprovals must be a number of at least 1', r.code);
+        END IF;
+        IF r.ap ? 'amountBands' AND (jsonb_typeof(r.ap -> 'amountBands') <> 'array' OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements(r.ap -> 'amountBands') b
+                 WHERE jsonb_typeof(b -> 'minAmount') <> 'number' OR (b ->> 'minAmount')::numeric < 0
+                    OR jsonb_typeof(b -> 'roles') <> 'array' OR jsonb_array_length(b -> 'roles') = 0)) THEN
+            v_errors := v_errors || format('stage %s: each amount band needs minAmount (>= 0) and roles', r.code);
+        END IF;
+    END LOOP;
+    IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_definition -> 'transitions') t,
+                             jsonb_array_elements(CASE jsonb_typeof(t -> 'ruleChecks') WHEN 'array'
+                                                  THEN t -> 'ruleChecks' ELSE '[]'::jsonb END) c
+                WHERE jsonb_typeof(c) = 'object' AND c ->> 'onFail' = 'ROUTE_TO_ROLE'
+                  AND (jsonb_typeof(c -> 'roles') IS DISTINCT FROM 'array' OR jsonb_array_length(c -> 'roles') = 0)) THEN
+        v_errors := v_errors || 'ROUTE_TO_ROLE needs a non-empty "roles" list'::text;
+    END IF;
+
     RETURN v_errors;
 END
 $$;
@@ -190,7 +332,7 @@ DECLARE
     v_why       text[] := '{}';
     v_default   text;
     v_active    integer;
-    v_setting   boolean := coalesce((cfg.get_setting('loans.nominee_mandatory_first_loan') #>> '{}')::boolean, true);
+    v_setting   boolean := cfg.require_setting_bool('loans.nominee_mandatory_first_loan');
 BEGIN
     SELECT * INTO v_loan FROM loan.loan l WHERE l.tenant_id = app.tenant_id() AND l.id = p_loan_id;
     IF NOT FOUND THEN
@@ -250,9 +392,11 @@ BEGIN
 END
 $$;
 
-CREATE OR REPLACE FUNCTION loan.set_application_nominees(
-    p_loan_id uuid, p_nominee_ids uuid[], p_expected_version integer)
-RETURNS jsonb LANGUAGE plpgsql AS
+-- Checks and links nominees of a loan without touching the loan row (the
+-- caller updates it once): stage, privilege by stage, count limit, active
+-- nominees of the member, audit reason.
+CREATE OR REPLACE FUNCTION loan.link_application_nominees(p_loan_id uuid, p_nominee_ids uuid[])
+RETURNS uuid[] LANGUAGE plpgsql AS
 $$
 DECLARE
     v_loan loan.loan%ROWTYPE;
@@ -262,14 +406,16 @@ BEGIN
     IF NOT FOUND THEN
         PERFORM app.fail('LOAN_APPLICATION_NOT_FOUND', 'Loan application not found');
     END IF;
-    IF p_expected_version IS NULL THEN
-        PERFORM app.fail('ROW_VERSION_REQUIRED', 'Send the row version of the loan you opened');
-    END IF;
-    IF v_loan.row_version <> p_expected_version THEN
-        PERFORM app.fail('STALE_RECORD', 'The loan was changed after it was opened');
-    END IF;
     PERFORM loan.assert_nominee_changeable(v_loan);
-    IF cardinality(v_ids) > 10 THEN
+    -- Draft/returned: the maker (loan.create) or loan.edit; after submission
+    -- until the first disbursement: loan.edit.
+    IF app.user_id() IS NOT NULL AND NOT iam.has_privilege(app.user_id(), 'loan.edit')
+       AND NOT (v_loan.status IN ('DRAFT', 'RETURNED') AND iam.has_privilege(app.user_id(), 'loan.create')) THEN
+        PERFORM app.fail('NO_PRIVILEGE', CASE WHEN v_loan.status IN ('DRAFT', 'RETURNED')
+            THEN 'Linking loan nominees needs loan.edit or loan.create'
+            ELSE 'Linking nominees after submission needs loan.edit' END);
+    END IF;
+    IF cardinality(v_ids) > cfg.require_setting_int('loans.max_nominees_per_loan') THEN
         PERFORM app.fail('INVALID_DATA', 'nominee_ids');
     END IF;
     IF cardinality(v_ids) > 0 AND NOT loan.validate_nominees(v_loan.member_id, v_ids) THEN
@@ -281,6 +427,29 @@ BEGIN
     INSERT INTO loan.loan_nominee (loan_id, nominee_id)
     SELECT p_loan_id, n FROM unnest(v_ids) n
     ON CONFLICT (tenant_id, loan_id, nominee_id) DO NOTHING;
+    RETURN v_ids;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION loan.set_application_nominees(
+    p_loan_id uuid, p_nominee_ids uuid[], p_expected_version integer)
+RETURNS jsonb LANGUAGE plpgsql AS
+$$
+DECLARE
+    v_loan loan.loan%ROWTYPE;
+    v_ids  uuid[];
+BEGIN
+    SELECT * INTO v_loan FROM loan.loan l WHERE l.tenant_id = app.tenant_id() AND l.id = p_loan_id FOR UPDATE;
+    IF NOT FOUND THEN
+        PERFORM app.fail('LOAN_APPLICATION_NOT_FOUND', 'Loan application not found');
+    END IF;
+    IF p_expected_version IS NULL THEN
+        PERFORM app.fail('ROW_VERSION_REQUIRED', 'Send the row version of the loan you opened');
+    END IF;
+    IF v_loan.row_version <> p_expected_version THEN
+        PERFORM app.fail('STALE_RECORD', 'The loan was changed after it was opened');
+    END IF;
+    v_ids := loan.link_application_nominees(p_loan_id, p_nominee_ids);
     UPDATE loan.loan SET updated_at = now() WHERE tenant_id = app.tenant_id() AND id = p_loan_id;
     RETURN loan.nominee_status(p_loan_id) || jsonb_build_object(
         'row_version', (SELECT row_version FROM loan.loan WHERE tenant_id = app.tenant_id() AND id = p_loan_id),
@@ -323,10 +492,10 @@ $$
 $$;
 
 REVOKE ALL ON FUNCTION cfg.rule_check_codes(), loan.nominee_status(uuid), loan.member_past_default(uuid, integer, uuid), loan.assert_nominee_changeable(loan.loan),
-    loan.set_application_nominees(uuid, uuid[], integer), loan.record_nominee_override(uuid, text),
+    loan.set_application_nominees(uuid, uuid[], integer), loan.link_application_nominees(uuid, uuid[]), loan.record_nominee_override(uuid, text),
     loan.loan_for_approval_request(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION cfg.rule_check_codes(), loan.nominee_status(uuid), loan.member_past_default(uuid, integer, uuid), loan.assert_nominee_changeable(loan.loan),
-    loan.set_application_nominees(uuid, uuid[], integer), loan.record_nominee_override(uuid, text),
+    loan.set_application_nominees(uuid, uuid[], integer), loan.link_application_nominees(uuid, uuid[]), loan.record_nominee_override(uuid, text),
     loan.loan_for_approval_request(uuid) TO nvs_app;
 
 -- LOAN_APPLICATION workflow v2 with rule checks -------------------------------
@@ -344,45 +513,5 @@ $$
           FROM jsonb_array_elements(p_definition -> 'transitions') WITH ORDINALITY x(t, ord)))
 $$;
 
-SET app.channel TO 'MIGRATION';
-SET app.reason TO 'Loan workflow v2: rules linked to transitions; nominee checked at approval';
-
-INSERT INTO platform.config_template_version (template_id, version_no, status, definition, json_schema_id, reason, published_at)
-SELECT t.id, 2, 'PUBLISHED',
-       jsonb_set(platform.loan_workflow_with_rule_checks(v.definition), '{version}', '2'),
-       v.json_schema_id, 'Rules linked to transitions; nominee checked at approval and disbursement', now()
-  FROM platform.config_template t
-  JOIN platform.config_template_version v ON v.template_id = t.id AND v.version_no = 1
- WHERE t.template_kind = 'WORKFLOW' AND t.code = 'LOAN_APPLICATION'
-ON CONFLICT (template_id, version_no) DO NOTHING;
-
-DO $$
-DECLARE
-    t      record;
-    w      record;
-    v_next integer;
-BEGIN
-    FOR t IN SELECT id FROM platform.tenant ORDER BY created_at LOOP
-        PERFORM app.set_context(t.id, NULL, NULL, 'MIGRATION', NULL, NULL, NULL, true, NULL);
-        SELECT d.id AS definition_id, v.definition, v.json_schema_id INTO w
-          FROM cfg.workflow_definition d
-          JOIN cfg.workflow_version v ON v.id = cfg.workflow_version_at('LOAN_APPLICATION', app.tenant_today(t.id), t.id)
-         WHERE d.tenant_id = t.id AND d.code = 'LOAN_APPLICATION';
-        IF w.definition_id IS NULL
-           OR EXISTS (SELECT 1 FROM jsonb_array_elements(w.definition -> 'transitions') x WHERE x ? 'ruleChecks') THEN
-            CONTINUE;
-        END IF;
-        SELECT coalesce(max(version_no), 0) + 1 INTO v_next FROM cfg.workflow_version WHERE workflow_definition_id = w.definition_id;
-        INSERT INTO cfg.workflow_version (tenant_id, workflow_definition_id, version_no, status, definition,
-                                          json_schema_id, effective_from, reason, source)
-        VALUES (t.id, w.definition_id, v_next, 'PUBLISHED',
-                jsonb_set(platform.loan_workflow_with_rule_checks(w.definition), '{version}', to_jsonb(v_next)),
-                w.json_schema_id, app.tenant_today(t.id),
-                'Rules linked to transitions; nominee checked at approval and disbursement', 'TEMPLATE');
-    END LOOP;
-    PERFORM app.clear_context();
-END
-$$;
-
-RESET app.reason;
-RESET app.channel;
+-- Template and organisation seeding: db/49c_seed_workflow_engine.sql (runs after
+-- the platform templates exist, so a fresh build gets it too).

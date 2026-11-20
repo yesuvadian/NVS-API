@@ -28,8 +28,8 @@ ELIGIBILITY_CHECKS: dict[str, tuple[str, ...]] = {
 }
 RULE_CHECK_CODES: tuple[str, ...] = (*ELIGIBILITY_CHECKS, "GUARANTORS", "NOMINEE")
 
-# What happens when a rule check fails. ROUTE_TO_ROLE comes with the workflow
-# engine; until then it blocks like BLOCK.
+# What happens when a rule check fails. ROUTE_TO_ROLE hands the open approval
+# request to the check's "roles" (app/workflow/engine.py) instead of blocking.
 ON_FAIL = ("BLOCK", "REQUIRE_OVERRIDE", "ROUTE_TO_ROLE", "WARN")
 
 
@@ -117,6 +117,26 @@ def assert_rule_checks(
     return None
 
 
+def failing_checks(
+    codes: list[str] | tuple[str, ...], *, eligibility: dict[str, Any] | None,
+    active_guarantors: int | None, nominee_status: dict[str, Any] | None,
+) -> list[str]:
+    """Which of the given rule checks fail (without raising)."""
+    failing: list[str] = []
+    for code in codes:
+        if code in ELIGIBILITY_CHECKS:
+            if eligibility is not None and failed_eligibility(eligibility, (code,)):
+                failing.append(code)
+        elif code == "GUARANTORS":
+            required = int((eligibility or {}).get("guarantors_required") or 0)
+            if required and (active_guarantors or 0) < required:
+                failing.append(code)
+        elif code == "NOMINEE":
+            if nominee_status is not None and not nominee_status.get("satisfied", True):
+                failing.append(code)
+    return failing
+
+
 def build_criteria(
     eligibility: dict[str, Any], *, stages: dict[str, str],
     nominee_status: dict[str, Any] | None = None, active_guarantors: int | None = None,
@@ -160,3 +180,42 @@ def build_criteria(
         "detail": detail, "stage": stages.get("NOMINEE"),
     })
     return criteria
+
+
+# ---------------------------------------------------------------------------
+# Required rule values (no business defaults in code)
+# ---------------------------------------------------------------------------
+def required_rule(definition: dict[str, Any], code: str) -> dict[str, Any]:
+    """The value of a rule in a rule-set definition; refuses when absent."""
+    for item in (definition or {}).get("rules", []):
+        if item.get("code") == code:
+            value = item.get("value")
+            if value is None:
+                break
+            return value if isinstance(value, dict) else {"value": value}
+    raise AppError("LOAN_RULE_MISSING", params={"rule": code}, details={"rule": code})
+
+
+def required_field(rule: dict[str, Any], code: str, key: str) -> Any:
+    """A field of a rule value; refuses when absent or null."""
+    value = rule.get(key)
+    if value is None:
+        raise AppError("LOAN_RULE_MISSING", params={"rule": f"{code}.{key}"}, details={"rule": code, "field": key})
+    return value
+
+
+def interest_terms(rule: dict[str, Any], amount: Any, tenure_months: int) -> dict[str, Any]:
+    """Interest by the INTEREST rule's method, the same formula as the
+    database (loan.interest_terms): FLAT = amount x rate% x months / 12 / 100;
+    NONE = no interest. An unknown method is refused."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    method = str(required_field(rule, "INTEREST", "method")).strip().upper()
+    if method == "NONE":
+        return {"method": "NONE", "rate": Decimal("0"), "total": Decimal("0.00")}
+    if method == "FLAT":
+        rate = Decimal(str(required_field(rule, "INTEREST", "annualRatePercent")))
+        total = (Decimal(str(amount)) * rate * Decimal(tenure_months) / Decimal(12) / Decimal(100)).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return {"method": "FLAT", "rate": rate, "total": total}
+    raise AppError("INTEREST_METHOD_UNSUPPORTED", params={"method": method}, details={"method": method})

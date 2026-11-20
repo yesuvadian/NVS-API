@@ -109,8 +109,33 @@ class FakeRepository:
         return self.submitted
 
 
-def service_with(repository=None, lifecycle=None) -> LoanService:
+class FakeWorkflow:
+    """Engine persistence fake: records log rows, routes and status changes."""
+
+    def __init__(self, state=None):
+        self.executions, self.routes, self.statuses = [], [], []
+        self.state = state or {}
+
+    async def record_executions(self, instance, rows):
+        self.executions.append((instance, rows))
+
+    async def route_approval_request(self, request_id, roles, check):
+        self.routes.append((request_id, roles, check))
+
+    async def loan_state(self, _loan_id):
+        return self.state
+
+    async def apply_loan_status(self, _loan_id, change, instance):
+        self.statuses.append((change, instance))
+        return change
+
+    async def approval_request_state(self, _request_id):
+        return {"routed_checks": []}
+
+
+def service_with(repository=None, lifecycle=None, workflow=None) -> LoanService:
     service = LoanService(conn=None)
+    service.workflow = workflow or FakeWorkflow()
     if repository is not None:
         service.repository = repository
     if lifecycle is not None:
@@ -165,9 +190,40 @@ def test_eligibility_interest_free_and_fees():
     result = eligibility(service_with(FakeRepository(product=free, member=member(), settings=SETTINGS)))
     assert result["estimated_total_interest"] == Decimal("0.00") and result["interest_rate_annual"] == 0
     assert result["application_fee"] == Decimal("180.00") and result["fee_timing"] == "AFTER_SUBMISSION"
-    fixed = product(APPLICATION_FEE={"enabled": True, "type": "fixed", "amount": 200})
+    fixed = product(APPLICATION_FEE={"enabled": True, "type": "fixed", "amount": 200, "timing": "BEFORE_SUBMISSION"})
     result = eligibility(service_with(FakeRepository(product=fixed, member=member(), settings=SETTINGS)))
     assert result["application_fee"] == Decimal("200.00") and result["fee_timing"] == "BEFORE_SUBMISSION"
+
+
+@pytest.mark.parametrize(("rule", "value", "missing"), [
+    ("APPLICATION_FEE", {"enabled": True, "type": "fixed", "amount": 200}, "APPLICATION_FEE.timing"),
+    ("APPLICATION_FEE", {"type": "fixed", "amount": 200}, "APPLICATION_FEE.enabled"),
+    ("AMOUNT_LIMITS", {"min": 5000}, "AMOUNT_LIMITS.max"),
+    ("TENURE_LIMITS", {"minMonths": 6}, "TENURE_LIMITS.maxMonths"),
+    ("INTEREST", {"annualRatePercent": 12}, "INTEREST.method"),
+    ("INTEREST", {"method": "FLAT"}, "INTEREST.annualRatePercent"),
+])
+def test_eligibility_refuses_missing_rule_fields(rule, value, missing):
+    """No business defaults in code: a missing rule field refuses clearly."""
+    from app.core.errors import AppError
+
+    with pytest.raises(AppError) as error:
+        eligibility(service_with(FakeRepository(product=product(**{rule: value}), member=member(), settings=SETTINGS)))
+    assert error.value.short_code == "LOAN_RULE_MISSING" and error.value.params["rule"] == missing
+
+
+def test_eligibility_refuses_missing_rule_and_unknown_interest_method():
+    from app.core.errors import AppError
+
+    no_limits = product()
+    no_limits["definition"]["rules"] = [r for r in no_limits["definition"]["rules"] if r["code"] != "AMOUNT_LIMITS"]
+    with pytest.raises(AppError) as error:
+        eligibility(service_with(FakeRepository(product=no_limits, member=member(), settings=SETTINGS)))
+    assert error.value.short_code == "LOAN_RULE_MISSING" and error.value.params["rule"] == "AMOUNT_LIMITS"
+    reducing = product(INTEREST={"method": "REDUCING", "annualRatePercent": 12})
+    with pytest.raises(AppError) as error:
+        eligibility(service_with(FakeRepository(product=reducing, member=member(), settings=SETTINGS)))
+    assert error.value.short_code == "INTEREST_METHOD_UNSUPPORTED"
 
 
 @pytest.mark.parametrize(

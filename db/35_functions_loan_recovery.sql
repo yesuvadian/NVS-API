@@ -92,7 +92,7 @@ BEGIN
     VALUES (acct.next_number('RECOVERY_CASE', app.working_date()), p_loan_id, v_loan.member_id, p_default_id,
             'PENDING', (SELECT u.id FROM iam.app_user u WHERE u.tenant_id = app.tenant_id()
                          AND u.id = v_loan.created_by_employee AND u.status = 'ACTIVE'),
-            'EMPLOYEE', app.working_date(), app.working_date() + 3)
+            'EMPLOYEE', app.working_date(), app.working_date() + cfg.require_setting_int('recovery.first_follow_up_days'))
     RETURNING id INTO v_id;
     RETURN v_id;
 END
@@ -202,7 +202,7 @@ BEGIN
     UPDATE loan.recovery_case
        SET status = CASE WHEN v_promise IS NOT NULL THEN 'PROMISE_TO_PAY'
                          WHEN status = 'PENDING' THEN 'CONTACTED' ELSE status END,
-           next_follow_up = coalesce(v_next, v_promise, app.working_date() + 7),
+           next_follow_up = coalesce(v_next, v_promise, app.working_date() + cfg.require_setting_int('recovery.follow_up_interval_days')),
            updated_at = now(), updated_by = app.user_id(), row_version = row_version + 1
      WHERE tenant_id = app.tenant_id() AND id = p_case_id;
     IF upper(coalesce(p_details->>'person_type', '')) = 'GUARANTOR' THEN
@@ -223,8 +223,8 @@ BEGIN
     IF p_status NOT IN ('CONTACTED','PROMISE_TO_PAY','LEGAL_NOTICE','SETTLEMENT_AGREED','EXCEPTION_APPROVED') THEN
         PERFORM app.fail('INVALID_RECOVERY_STATUS', format('Recovery status %s cannot be set by hand.', p_status));
     END IF;
-    IF p_status = 'EXCEPTION_APPROVED' AND coalesce(app.role_code(), '') NOT IN ('MGR','LDR') THEN
-        PERFORM app.fail('APPROVER_ROLE_REQUIRED', 'Only MGR,LDR can approve this request.');
+    IF p_status = 'EXCEPTION_APPROVED' THEN
+        PERFORM loan.assert_approver_setting('recovery.exception_approver_roles', NULL);
     END IF;
     IF coalesce(p_remarks, '') = '' THEN
         PERFORM app.fail('REASON_REQUIRED', 'A reason is required for this change.');
@@ -251,14 +251,16 @@ CREATE OR REPLACE FUNCTION loan.escalate_recovery_cases(p_on date)
 RETURNS integer LANGUAGE plpgsql AS
 $$
 DECLARE
-    v_mgr integer := greatest(coalesce((cfg.get_setting('recovery.escalate_to_manager_days') #>> '{}')::integer, 30), 1);
-    v_ldr integer := greatest(coalesce((cfg.get_setting('recovery.escalate_to_leadership_days') #>> '{}')::integer, 30), 1);
+    v_mgr integer := greatest(cfg.require_setting_int('recovery.escalate_to_manager_days'), 1);
+    v_ldr integer := greatest(cfg.require_setting_int('recovery.escalate_to_leadership_days'), 1);
+    v_mgr_role text := (cfg.setting_roles('recovery.escalate_to_manager_role'))[1];
+    v_ldr_role text := (cfg.setting_roles('recovery.escalate_to_leadership_role'))[1];
     v_count integer;
     v_more integer;
 BEGIN
     UPDATE loan.recovery_case c SET escalation_level = 'MANAGER', escalated_at = now(),
            assigned_to = coalesce((SELECT u.id FROM iam.app_user u JOIN iam.role r ON r.tenant_id = u.tenant_id AND r.id = u.primary_role_id
-                                    WHERE u.tenant_id = c.tenant_id AND r.role_code = 'MGR' AND u.status = 'ACTIVE'
+                                    WHERE u.tenant_id = c.tenant_id AND r.role_code = v_mgr_role AND u.status = 'ACTIVE'
                                     ORDER BY u.created_at LIMIT 1), c.assigned_to),
            updated_at = now(), updated_by = app.user_id(), row_version = row_version + 1
      WHERE c.tenant_id = app.tenant_id() AND c.closed_on IS NULL AND c.escalation_level = 'EMPLOYEE'
@@ -267,7 +269,7 @@ BEGIN
     GET DIAGNOSTICS v_count = ROW_COUNT;
     UPDATE loan.recovery_case c SET escalation_level = 'LEADERSHIP', escalated_at = now(),
            assigned_to = coalesce((SELECT u.id FROM iam.app_user u JOIN iam.role r ON r.tenant_id = u.tenant_id AND r.id = u.primary_role_id
-                                    WHERE u.tenant_id = c.tenant_id AND r.role_code = 'LDR' AND u.status = 'ACTIVE'
+                                    WHERE u.tenant_id = c.tenant_id AND r.role_code = v_ldr_role AND u.status = 'ACTIVE'
                                     ORDER BY u.created_at LIMIT 1), c.assigned_to),
            updated_at = now(), updated_by = app.user_id(), row_version = row_version + 1
      WHERE c.tenant_id = app.tenant_id() AND c.closed_on IS NULL AND c.escalation_level = 'MANAGER'
@@ -367,7 +369,7 @@ BEGIN
     IF v_w.status <> 'PENDING' THEN
         PERFORM app.fail('REQUEST_CLOSED', format('The request is already %s.', v_w.status));
     END IF;
-    PERFORM loan.assert_approver('MGR', v_w.created_by);
+    PERFORM loan.assert_approver_setting('loans.waiver_approver_roles', v_w.created_by);
     IF NOT p_approve AND coalesce(p_remarks, '') = '' THEN
         PERFORM app.fail('APPROVAL_REASON_REQUIRED', 'A reason is required to reject.');
     END IF;
@@ -460,7 +462,7 @@ BEGIN
     IF v_o.status <> 'PENDING' THEN
         PERFORM app.fail('REQUEST_CLOSED', format('The request is already %s.', v_o.status));
     END IF;
-    PERFORM loan.assert_approver('MGR', coalesce(v_o.requested_by, v_o.created_by));
+    PERFORM loan.assert_approver_setting('loans.cooling_off_override_approver_roles', coalesce(v_o.requested_by, v_o.created_by));
     IF NOT p_approve AND coalesce(p_remarks, '') = '' THEN
         PERFORM app.fail('APPROVAL_REASON_REQUIRED', 'A reason is required to reject.');
     END IF;
@@ -469,7 +471,7 @@ BEGIN
         PERFORM app.fail('OPEN_DEFAULT_EXISTS', 'The member still has an unsettled defaulted loan.');
     END IF;
     UPDATE loan.cooling_off_override SET status = CASE WHEN p_approve THEN 'APPROVED' ELSE 'REJECTED' END,
-           valid_until = CASE WHEN p_approve THEN coalesce(p_valid_until, app.working_date() + 30) END,
+           valid_until = CASE WHEN p_approve THEN coalesce(p_valid_until, app.working_date() + cfg.require_setting_int('loans.cooling_off_override_valid_days')) END,
            decided_by = app.user_id(), decided_on = app.working_date(), decision_remarks = p_remarks,
            updated_at = now(), updated_by = app.user_id(), row_version = row_version + 1
      WHERE tenant_id = app.tenant_id() AND id = p_id;
@@ -539,7 +541,7 @@ BEGIN
     IF v_w.status <> 'PROPOSED' THEN
         PERFORM app.fail('REQUEST_CLOSED', format('The request is already %s.', v_w.status));
     END IF;
-    PERFORM loan.assert_approver(coalesce(cfg.get_setting('loans.write_off_approver_role') #>> '{}', 'LDR'), v_w.created_by);
+    PERFORM loan.assert_approver_setting('loans.write_off_approver_role', v_w.created_by);
     IF NOT p_approve THEN
         IF coalesce(p_remarks, '') = '' THEN
             PERFORM app.fail('APPROVAL_REASON_REQUIRED', 'A reason is required to reject.');

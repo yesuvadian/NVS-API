@@ -144,7 +144,11 @@ DECLARE
     v_until date;
 BEGIN
     SELECT member_id INTO v_member FROM loan.loan WHERE tenant_id = app.tenant_id() AND id = p_loan_id;
-    v_months := greatest(coalesce((cfg.get_setting('loans.cooling_off')->>'months')::integer, 6), 0);
+    v_months := (cfg.require_setting('loans.cooling_off')->>'months')::integer;
+    IF v_months IS NULL THEN
+        PERFORM app.fail('SETTING_MISSING', 'Setting loans.cooling_off has no months.');
+    END IF;
+    v_months := greatest(v_months, 0);
     v_until := CASE WHEN v_months > 0 THEN (v_on + make_interval(months => v_months))::date END;
     UPDATE loan.loan_default SET status = 'SETTLED', settled_on = v_on, cooling_off_until = v_until,
            loan_settlement_id = coalesce(p_settlement_id, loan_settlement_id),

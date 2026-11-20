@@ -152,7 +152,10 @@ BEGIN
     IF NOT loan.cash_limit_needs_approval(v_d.payment_mode, v_d.amount) THEN
         PERFORM app.fail('CASH_LIMIT_APPROVAL_NOT_NEEDED', 'This disbursement is within the cash limit.');
     END IF;
-    PERFORM loan.assert_approver(coalesce(cfg.get_setting('cash.disbursement_limit')->>'approverRole', 'LDR'),
+    IF nullif(cfg.require_setting('cash.disbursement_limit')->>'approverRole', '') IS NULL THEN
+        PERFORM app.fail('SETTING_MISSING', 'Setting cash.disbursement_limit has no approverRole.');
+    END IF;
+    PERFORM loan.assert_approver(cfg.require_setting('cash.disbursement_limit')->>'approverRole',
                                  coalesce(v_d.prepared_by, v_d.created_by));
     UPDATE loan.loan_disbursement SET cash_limit_approved_by = app.user_id(), cash_limit_approved_at = now(),
            cash_limit_remarks = p_remarks, updated_at = now(), updated_by = app.user_id(), row_version = row_version + 1
@@ -309,7 +312,7 @@ RETURNS jsonb LANGUAGE plpgsql AS
 $$
 DECLARE
     v_loan record;
-    v_cfg jsonb := coalesce(cfg.get_setting('loans.restructuring'), '{"allowed":true,"maxPerLoan":1,"maxMoratoriumMonths":3}'::jsonb);
+    v_cfg jsonb := cfg.require_setting('loans.restructuring');
     v_option text := upper(coalesce(p_details->>'option', ''));
     v_moratorium integer := coalesce(nullif(p_details->>'moratorium_months', '')::integer, 0);
     v_open integer;
@@ -322,16 +325,20 @@ BEGIN
     SELECT id, status, restructure_count, rule_set_version_id INTO v_loan FROM loan.loan
      WHERE tenant_id = app.tenant_id() AND id = p_loan_id AND NOT is_deleted FOR UPDATE;
     IF NOT FOUND THEN PERFORM app.fail('LOAN_NOT_FOUND', 'Loan was not found'); END IF;
-    IF NOT coalesce((v_cfg->>'allowed')::boolean, true) OR v_loan.status NOT IN ('ACTIVE','OVERDUE','RESTRUCTURED') THEN
+    IF jsonb_typeof(v_cfg->'allowed') IS DISTINCT FROM 'boolean' OR (v_cfg->>'maxPerLoan') IS NULL
+       OR (v_cfg->>'maxMoratoriumMonths') IS NULL THEN
+        PERFORM app.fail('SETTING_MISSING', 'Setting loans.restructuring needs allowed, maxPerLoan and maxMoratoriumMonths.');
+    END IF;
+    IF NOT (v_cfg->>'allowed')::boolean OR v_loan.status NOT IN ('ACTIVE','OVERDUE','RESTRUCTURED') THEN
         PERFORM app.fail('RESTRUCTURE_NOT_ALLOWED', 'This loan cannot be restructured.');
     END IF;
-    IF v_loan.restructure_count >= coalesce((v_cfg->>'maxPerLoan')::integer, 1) THEN
+    IF v_loan.restructure_count >= (v_cfg->>'maxPerLoan')::integer THEN
         PERFORM app.fail('RESTRUCTURE_LIMIT_REACHED', 'The loan has been restructured the maximum number of times.');
     END IF;
     IF v_option NOT IN ('EXTEND_TENURE','REDUCE_INSTALMENT','MORATORIUM','CAPITALISE_OVERDUE','COMBINATION') THEN
         PERFORM app.fail('INVALID_RESTRUCTURE_TERMS', 'Choose a restructuring option.');
     END IF;
-    IF v_moratorium < 0 OR v_moratorium > coalesce((v_cfg->>'maxMoratoriumMonths')::integer, 3)
+    IF v_moratorium < 0 OR v_moratorium > (v_cfg->>'maxMoratoriumMonths')::integer
        OR (v_option = 'MORATORIUM' AND v_moratorium = 0) THEN
         PERFORM app.fail('INVALID_RESTRUCTURE_TERMS', 'The moratorium is outside the allowed months.');
     END IF;
@@ -456,7 +463,7 @@ BEGIN
     SELECT * INTO v_r FROM loan.loan_restructure WHERE tenant_id = app.tenant_id() AND id = p_id FOR UPDATE;
     IF NOT FOUND THEN PERFORM app.fail('RESTRUCTURE_NOT_FOUND', 'The restructure request was not found.'); END IF;
     IF v_r.status <> 'REQUESTED' THEN PERFORM app.fail('REQUEST_CLOSED', 'The request is no longer pending'); END IF;
-    PERFORM loan.assert_approver('MGR,LDR', coalesce(v_r.requested_by, v_r.created_by));
+    PERFORM loan.assert_approver_setting('loans.restructure_approver_roles', coalesce(v_r.requested_by, v_r.created_by));
     IF NOT p_approve AND coalesce(btrim(p_remarks), '') = '' THEN
         PERFORM app.fail('APPROVAL_REASON_REQUIRED', 'A reason is required to reject the request.');
     END IF;
@@ -486,7 +493,7 @@ DECLARE
     v_principal numeric(18,2);
     v_write_off jsonb;
 BEGIN
-    PERFORM loan.assert_approver('MGR,LDR', NULL);
+    PERFORM loan.assert_approver_setting('loans.deceased_decision_approver_roles', NULL);
     SELECT l.id, l.status, l.member_id, l.interest_stopped_from INTO v_loan FROM loan.loan l
      WHERE l.tenant_id = app.tenant_id() AND l.id = p_loan_id AND NOT l.is_deleted FOR UPDATE;
     IF NOT FOUND THEN PERFORM app.fail('LOAN_NOT_FOUND', 'Loan was not found'); END IF;
@@ -626,7 +633,7 @@ BEGIN
     IF NOT FOUND OR v_requested_by IS NULL THEN
         PERFORM app.fail('TRANSFER_NOT_FOUND', 'No proposed transfer was found for this loan.');
     END IF;
-    PERFORM loan.assert_approver('MGR,LDR', v_requested_by);
+    PERFORM loan.assert_approver_setting('loans.transfer_approver_roles', v_requested_by);
     IF NOT p_approve THEN
         IF coalesce(btrim(p_remarks), '') = '' THEN
             PERFORM app.fail('APPROVAL_REASON_REQUIRED', 'A reason is required to reject the request.');
@@ -714,7 +721,7 @@ RETURNS jsonb LANGUAGE plpgsql AS
 $$
 DECLARE v_status text;
 BEGIN
-    PERFORM loan.assert_approver('MGR,LDR', NULL);
+    PERFORM loan.assert_approver_setting('loans.migration_review_approver_roles', NULL);
     IF coalesce(btrim(p_remarks), '') = '' THEN
         PERFORM app.fail('REASON_REQUIRED', 'Enter the reason for the decision.');
     END IF;
