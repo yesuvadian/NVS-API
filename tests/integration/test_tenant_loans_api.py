@@ -205,7 +205,15 @@ def test_submit_creates_manager_approval_request_and_task(loan_api):
     member = member_context()
     member["id"] = loan["member_id"]
     member["is_first_loan"] = False
-    workflow = {"workflow_definition_id": uuid4(), "workflow_version_id": loan["workflow_version_id"]}
+    workflow = {"workflow_definition_id": uuid4(), "workflow_version_id": loan["workflow_version_id"],
+                "definition": {"startStage": "DRAFT", "stages": [
+                    {"code": "DRAFT", "statuses": {"initial": "DRAFT", "entityStatus": "DRAFT",
+                     "stageStatuses": [{"code": "DRAFT"}]}},
+                    {"code": "MANAGER_APPROVAL", "approval": {"roles": ["MGR"], "minApprovals": 1},
+                     "statuses": {"initial": "PENDING", "entityStatus": "UNDER_APPROVAL",
+                      "stageStatuses": [{"code": "PENDING"}]}}],
+                    "transitions": [{"from": "DRAFT", "to": "MANAGER_APPROVAL", "on": "SUBMIT",
+                                     "ruleChecks": ["MEMBER_STATUS", "AMOUNT_LIMITS", "NOMINEE"]}]}}
     workflow_instance_id = uuid4()
     approval_request_id = uuid4()
 
@@ -215,6 +223,10 @@ def test_submit_creates_manager_approval_request_and_task(loan_api):
             FakeResult(one=loan),
             FakeResult(many=[]),                                    # loan.get_nominee_overrides
             FakeResult(one=workflow),                               # loan's workflow version (legacy)
+            FakeResult(one={"status": "DRAFT", "workflow_instance_id": workflow_instance_id,
+                            "approval_request_id": None, "row_version": 1, "stage": "DRAFT",
+                            "stage_status": "DRAFT", "instance_status": "RUNNING"}),  # workflow init state
+            FakeResult(one=None),                                   # loan.get_application_fee
             FakeResult(one=product),
             FakeResult(one=member),
             FakeResult(one=default_settings()),
@@ -227,6 +239,8 @@ def test_submit_creates_manager_approval_request_and_task(loan_api):
             FakeResult(many=[]),                                    # loan.get_nominee_overrides
             FakeResult(one={"status": "UNDER_APPROVAL", "workflow_instance_id": None,   # engine: state after actions
                             "approval_request_id": approval_request_id, "stage": None}),
+            FakeResult(one={"result": {"status": "UNDER_APPROVAL"}}), # workflow.apply_loan_status
+            FakeResult(), FakeResult(), FakeResult(),                 # execution log: rule, action, status
         ]
     )
 

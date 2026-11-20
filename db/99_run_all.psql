@@ -36,6 +36,8 @@
 \ir 31g_workflow_rule_checks.sql
 \ir 31h_workflow_engine.sql
 \ir 31i_config_value_helpers.sql
+\ir 31j_workflow_actions_buttons.sql
+\ir 31k_super_admin_configuration.sql
 \ir 32_functions_loan_servicing.sql
 \ir 33_functions_loan_repayment.sql
 \ir 34_functions_loan_notifications.sql
@@ -57,6 +59,9 @@
 \ir 49b_seed_nominee_conditions.sql
 \ir 49c_seed_workflow_engine.sql
 \ir 49d_seed_org_nominee_rule.sql
+\ir 49e_seed_workflow_buttons.sql
+\ir 49f_seed_workflow_init_status.sql
+\ir 49g_seed_language_catalogue.sql
 \ir 45_indexes_and_search.sql
 -- optional demo organisation for local development:
 -- \ir 50_seed_demo_tenant.sql

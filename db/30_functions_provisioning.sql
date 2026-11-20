@@ -208,8 +208,11 @@ BEGIN
      WHERE l.tenant_id=app.tenant_id() AND l.id=p_loan_id
      FOR UPDATE OF l,f;
     IF NOT FOUND THEN PERFORM app.fail('LOAN_FEE_NOT_FOUND','Loan application fee was not found'); END IF;
-    IF v_loan.status NOT IN ('DRAFT','RETURNED') THEN
-        PERFORM app.fail('LOAN_FEE_STATE','Fees can only be collected for draft or returned applications');
+    IF NOT (
+        (v_loan.collect_timing IN ('BEFORE_SUBMISSION','AFTER_SUBMISSION') AND v_loan.status IN ('DRAFT','RETURNED','FEE_PENDING','SUBMITTED','UNDER_APPROVAL'))
+        OR (v_loan.collect_timing='AFTER_APPROVAL' AND v_loan.status='APPROVED')
+    ) THEN
+        PERFORM app.fail('LOAN_FEE_STATE','The fee can only be collected at its configured application stage');
     END IF;
     IF v_loan.fee_status <> 'PENDING' OR v_loan.fee_amount <= 0 THEN
         PERFORM app.fail('LOAN_FEE_STATE','Fee is not pending collection');
@@ -385,7 +388,10 @@ CREATE OR REPLACE FUNCTION loan.create_application(
 )
 RETURNS uuid LANGUAGE plpgsql AS
 $$
-DECLARE v_loan_id uuid; v_nominee_id uuid; v_open text;
+DECLARE
+    v_loan_id uuid; v_nominee_id uuid; v_open text; v_loan_no text;
+    v_workflow_definition_id uuid; v_definition jsonb; v_start_stage text; v_stage jsonb;
+    v_entity_status text; v_stage_status text; v_instance_id uuid; v_rule_code text;
 BEGIN
     -- One open application per member and loan type. The member row lock
     -- serialises concurrent creates (a double-click) for the same member.
@@ -398,13 +404,37 @@ BEGIN
         PERFORM app.fail('LOAN_APPLICATION_ALREADY_OPEN',
             format('Application %s of this member for the same loan type is still open. Continue that application, or withdraw it first.', v_open));
     END IF;
+    SELECT d.id,v.definition INTO v_workflow_definition_id,v_definition
+      FROM cfg.workflow_version v JOIN cfg.workflow_definition d
+        ON d.tenant_id=v.tenant_id AND d.id=v.workflow_definition_id
+     WHERE v.tenant_id=app.tenant_id() AND v.id=p_workflow_version_id AND v.status IN ('PUBLISHED','RETIRED')
+       AND d.status='ACTIVE';
+    IF NOT FOUND THEN PERFORM app.fail('LOAN_WORKFLOW_NOT_CONFIGURED','Published loan workflow was not found'); END IF;
+    v_start_stage:=v_definition->>'startStage';
+    SELECT s INTO v_stage FROM jsonb_array_elements(v_definition->'stages') s WHERE s->>'code'=v_start_stage;
+    v_entity_status:=v_stage->'statuses'->>'entityStatus';
+    v_stage_status:=v_stage->'statuses'->>'initial';
+    IF v_start_stage IS NULL OR v_entity_status IS NULL OR v_stage_status IS NULL THEN
+        PERFORM app.fail('INVALID_DOCUMENT','The workflow start stage must define initial stage and entity statuses');
+    END IF;
+    SELECT rs.code INTO v_rule_code FROM cfg.rule_set_version rv
+      JOIN cfg.rule_set rs ON rs.tenant_id=rv.tenant_id AND rs.id=rv.rule_set_id
+     WHERE rv.tenant_id=app.tenant_id() AND rv.id=p_rule_set_version_id;
     INSERT INTO loan.loan (loan_no,member_id,loan_type_id,purpose,requested_amount,
         requested_tenure_months,application_date,status,status_date,is_first_loan,
         rule_set_version_id,rule_snapshot,workflow_version_id,created_by_employee)
     VALUES (acct.next_number('LOAN',app.working_date(),app.tenant_id()),p_member_id,p_loan_type_id,
-        p_purpose,p_requested_amount,p_tenure_months,app.working_date(),'DRAFT',app.working_date(),
+        p_purpose,p_requested_amount,p_tenure_months,app.working_date(),v_entity_status,app.working_date(),
         p_is_first_loan,p_rule_set_version_id,p_rule_snapshot,p_workflow_version_id,app.user_id())
-    RETURNING id INTO v_loan_id;
+    RETURNING id,loan_no INTO v_loan_id,v_loan_no;
+    INSERT INTO wf.workflow_instance (workflow_definition_id,workflow_version_id,entity_type,entity_id,
+        business_ref,current_stage_code,current_stage_status,status,rule_set_versions,working_date,started_by)
+    VALUES (v_workflow_definition_id,p_workflow_version_id,'loan.loan',v_loan_id,v_loan_no,
+        v_start_stage,v_stage_status,'RUNNING',jsonb_build_object(v_rule_code,p_rule_set_version_id::text),
+        app.working_date(),app.user_id()) RETURNING id INTO v_instance_id;
+    UPDATE loan.loan SET workflow_instance_id=v_instance_id WHERE tenant_id=app.tenant_id() AND id=v_loan_id;
+    INSERT INTO wf.workflow_history (workflow_instance_id,to_stage_code,trigger_event,acted_by,acted_role_code,working_date,remarks)
+    VALUES (v_instance_id,v_start_stage,'INIT',app.user_id(),app.role_code(),app.working_date(),'Application created; workflow initialized');
     IF p_fee IS NOT NULL THEN
         INSERT INTO loan.loan_application_fee (loan_id,fee_basis,fee_rate,fee_amount,collect_timing,status,rule_set_version_id)
         VALUES (v_loan_id,p_fee->>'fee_basis',(p_fee->>'fee_rate')::numeric,
@@ -417,46 +447,60 @@ BEGIN
 END
 $$;
 
-CREATE OR REPLACE FUNCTION loan.submit_application(p_loan_id uuid)
+DROP FUNCTION IF EXISTS loan.submit_application(uuid);
+DROP FUNCTION IF EXISTS loan.submit_application(uuid,text);
+CREATE OR REPLACE FUNCTION loan.submit_application(p_loan_id uuid,p_from_stage_code text,p_approval_stage_code text)
 RETURNS uuid LANGUAGE plpgsql AS
 $$
 DECLARE
     v_loan record; v_workflow record; v_role_id uuid; v_policy_id uuid;
-    v_request_no text; v_instance_id uuid; v_approval_id uuid; v_config jsonb;
+    v_request_no text; v_instance_id uuid; v_approval_id uuid; v_config jsonb; v_entity_status text;
 BEGIN
     SELECT l.id,l.loan_no,l.member_id,l.loan_type_id,l.requested_amount,l.rule_set_version_id,
-           l.workflow_version_id,l.status,m.full_name,rs.code rule_code
+           l.workflow_version_id,l.workflow_instance_id,l.status,m.full_name,rs.code rule_code,
+           wi.current_stage_code
       INTO v_loan FROM loan.loan l
       JOIN mbr.member m ON m.tenant_id=l.tenant_id AND m.id=l.member_id
       JOIN loan.loan_type lt ON lt.tenant_id=l.tenant_id AND lt.id=l.loan_type_id
       JOIN cfg.rule_set rs ON rs.tenant_id=lt.tenant_id AND rs.id=lt.rule_set_id
+      LEFT JOIN wf.workflow_instance wi ON wi.tenant_id=l.tenant_id AND wi.id=l.workflow_instance_id
      WHERE l.tenant_id=app.tenant_id() AND l.id=p_loan_id AND l.is_deleted=false FOR UPDATE OF l;
     IF NOT FOUND THEN RETURN NULL; END IF;
-    IF v_loan.status NOT IN ('DRAFT','RETURNED') THEN PERFORM app.fail('CHECK_FAILED','Only draft or returned loans can be submitted'); END IF;
+    IF v_loan.current_stage_code IS DISTINCT FROM p_from_stage_code THEN
+        PERFORM app.fail('CHECK_FAILED','The loan is no longer in the workflow stage being submitted');
+    END IF;
     SELECT d.id workflow_definition_id,v.id workflow_version_id INTO v_workflow
       FROM cfg.workflow_version v JOIN cfg.workflow_definition d
         ON d.tenant_id=v.tenant_id AND d.id=v.workflow_definition_id
      WHERE v.tenant_id=app.tenant_id() AND v.id=v_loan.workflow_version_id
        AND v.status IN ('PUBLISHED','RETIRED') AND d.code='LOAN_APPLICATION';
     IF NOT FOUND THEN RETURN NULL; END IF;
+    IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements((SELECT definition->'transitions' FROM cfg.workflow_version
+             WHERE tenant_id=app.tenant_id() AND id=v_loan.workflow_version_id)) t
+        WHERE t->>'from'=p_from_stage_code AND t->>'to'=p_approval_stage_code AND t->>'on'='SUBMIT') THEN
+        PERFORM app.fail('LOAN_WORKFLOW_NOT_CONFIGURED','The selected approval stage is not a configured next stage');
+    END IF;
     -- Approver roles come from the workflow's approval stage (no role in code).
-    v_config := wf.stage_approval_config(v_loan.workflow_version_id, 'MANAGER_APPROVAL', v_loan.requested_amount);
+    IF p_approval_stage_code IS NULL OR NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements((SELECT definition->'stages' FROM cfg.workflow_version
+             WHERE tenant_id=app.tenant_id() AND id=v_loan.workflow_version_id)) s
+         WHERE s->>'code'=p_approval_stage_code AND s ? 'approval') THEN
+        PERFORM app.fail('LOAN_WORKFLOW_NOT_CONFIGURED','The next workflow stage has no approval configuration');
+    END IF;
+    v_config := wf.stage_approval_config(v_loan.workflow_version_id, p_approval_stage_code, v_loan.requested_amount);
     SELECT id INTO v_role_id FROM iam.role WHERE tenant_id=app.tenant_id()
        AND role_code=v_config->'roles'->>0 AND status='ACTIVE' LIMIT 1;
     IF v_role_id IS NULL THEN RETURN NULL; END IF;
     SELECT id INTO v_policy_id FROM wf.approval_policy
      WHERE tenant_id=app.tenant_id() AND workflow_code='LOAN_APPLICATION'
-       AND stage_code='MANAGER_APPROVAL' AND status='ACTIVE' AND effective_from<=app.working_date()
+       AND stage_code=p_approval_stage_code AND status='ACTIVE' AND effective_from<=app.working_date()
      ORDER BY effective_from DESC LIMIT 1;
     v_request_no := acct.next_number('APPROVAL',app.working_date(),app.tenant_id());
-    INSERT INTO wf.workflow_instance (workflow_definition_id,workflow_version_id,entity_type,entity_id,
-        business_ref,current_stage_code,status,rule_set_versions,working_date,started_by)
-    VALUES (v_workflow.workflow_definition_id,v_workflow.workflow_version_id,'loan.loan',v_loan.id,
-        v_loan.loan_no,'MANAGER_APPROVAL','RUNNING',jsonb_build_object(v_loan.rule_code,v_loan.rule_set_version_id::text),
-        app.working_date(),app.user_id()) RETURNING id INTO v_instance_id;
+    v_instance_id:=v_loan.workflow_instance_id;
+    IF v_instance_id IS NULL THEN PERFORM app.fail('LOAN_WORKFLOW_NOT_CONFIGURED','The application has no initialized workflow'); END IF;
     INSERT INTO wf.approval_request (request_no,approval_policy_id,workflow_instance_id,stage_code,
         entity_type,entity_id,business_ref,summary,amount,requested_by,required_role_id)
-    VALUES (v_request_no,v_policy_id,v_instance_id,'MANAGER_APPROVAL','loan.loan',v_loan.id,
+    VALUES (v_request_no,v_policy_id,v_instance_id,p_approval_stage_code,'loan.loan',v_loan.id,
         v_loan.loan_no,'Loan application '||v_loan.loan_no||' for '||v_loan.full_name,
         v_loan.requested_amount,app.user_id(),v_role_id) RETURNING id INTO v_approval_id;
     PERFORM wf.configure_approval_request(v_approval_id,
@@ -467,15 +511,38 @@ BEGIN
         approval_request_id,assigned_role_id,priority)
     VALUES ('APPROVAL','Review loan application '||v_loan.loan_no,'loan.loan',v_loan.id,
         v_loan.loan_no,v_instance_id,v_approval_id,v_role_id,'NORMAL');
-    INSERT INTO wf.workflow_history (workflow_instance_id,from_stage_code,to_stage_code,trigger_event,
-        acted_by,acted_role_code,working_date,remarks)
-    VALUES (v_instance_id,'DRAFT','MANAGER_APPROVAL','SUBMIT',app.user_id(),app.role_code(),
-        app.working_date(),'Submitted for Manager approval');
-    UPDATE loan.loan SET status='UNDER_APPROVAL',status_date=app.working_date(),
-        workflow_instance_id=v_instance_id,approval_request_id=v_approval_id,
+    SELECT s->'statuses'->>'entityStatus' INTO v_entity_status
+      FROM cfg.workflow_version v,jsonb_array_elements(v.definition->'stages') s
+     WHERE v.tenant_id=app.tenant_id() AND v.id=v_loan.workflow_version_id AND s->>'code'=p_approval_stage_code;
+    UPDATE loan.loan SET status=coalesce(v_entity_status,status),status_date=app.working_date(),
+        approval_request_id=v_approval_id,
         updated_at=now(),updated_by=app.user_id(),row_version=row_version+1
      WHERE tenant_id=app.tenant_id() AND id=v_loan.id;
     RETURN v_approval_id;
+END
+$$;
+
+-- Compatibility wrapper for older clients; it still derives the approval
+-- destination from the current workflow document rather than a fixed stage.
+CREATE OR REPLACE FUNCTION loan.submit_application(p_loan_id uuid)
+RETURNS uuid LANGUAGE plpgsql AS
+$$
+DECLARE v_from text; v_to text; v_workflow_id uuid;
+BEGIN
+    SELECT wi.current_stage_code,l.workflow_version_id INTO v_from,v_workflow_id
+      FROM loan.loan l LEFT JOIN wf.workflow_instance wi
+        ON wi.tenant_id=l.tenant_id AND wi.id=l.workflow_instance_id
+     WHERE l.tenant_id=app.tenant_id() AND l.id=p_loan_id;
+    SELECT t->>'to' INTO v_to
+      FROM cfg.workflow_version v,jsonb_array_elements(v.definition->'transitions') t
+     WHERE v.tenant_id=app.tenant_id() AND v.id=v_workflow_id AND t->>'from'=v_from AND t->>'on'='SUBMIT'
+       AND EXISTS (SELECT 1 FROM jsonb_array_elements(v.definition->'stages') s
+                    WHERE s->>'code'=t->>'to' AND s ? 'approval')
+     ORDER BY coalesce((t->>'priority')::integer,0) DESC LIMIT 1;
+    IF v_from IS NULL OR v_to IS NULL THEN
+        PERFORM app.fail('LOAN_WORKFLOW_NOT_CONFIGURED','No approval stage is configured after the current stage');
+    END IF;
+    RETURN loan.submit_application(p_loan_id,v_from,v_to);
 END
 $$;
 

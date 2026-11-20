@@ -16,10 +16,12 @@ if sys.platform == "win32":
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers, localisation
 from app.db.pool import Database
+from app.repositories.workflow import WorkflowRepository
 from app.routers import (
     auth, dashboard, health, loan_reports, loan_servicing, loans, members, nominees, roles, super_admin,
-    tenant_settings, users,
+    tenant_settings, users, workflow_actions,
 )
+from app.workflow.actions import discover
 
 
 @asynccontextmanager
@@ -28,6 +30,12 @@ async def lifespan(app: FastAPI):
     database = Database(settings)
     app.state.database = database
     await database.open()
+    try:
+        actions = [action.describe() for action in discover().values()]
+        async with database.pool.connection() as conn:
+            await WorkflowRepository(conn).sync_actions(actions)
+    except Exception:
+        logging.getLogger("cfms.workflow").exception("Workflow action registry sync failed")
     try:
         await localisation.load(database.pool)
     except Exception:  # the API still starts; errors fall back to short codes
@@ -72,6 +80,7 @@ def create_app() -> FastAPI:
     application.include_router(dashboard.router, prefix=settings.api_prefix)
     application.include_router(roles.router, prefix=settings.api_prefix)
     application.include_router(nominees.router, prefix=settings.api_prefix)
+    application.include_router(workflow_actions.router, prefix=settings.api_prefix)
     return application
 
 

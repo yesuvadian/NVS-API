@@ -193,10 +193,11 @@ class LoanRepository:
         return await cursor.fetchone()
 
     async def submit_application(
-        self, loan: dict[str, Any], workflow: dict[str, Any]
+        self, loan: dict[str, Any], workflow: dict[str, Any], from_stage: str, approval_stage: str
     ) -> dict[str, Any] | None:
         submitted = await (await self.conn.execute(
-            "SELECT loan.submit_application(%s) AS approval_request_id",(loan["id"],)
+            "SELECT loan.submit_application(%s,%s,%s) AS approval_request_id",
+            (loan["id"], from_stage, approval_stage),
         )).fetchone()
         if submitted is None or submitted["approval_request_id"] is None:
             return None

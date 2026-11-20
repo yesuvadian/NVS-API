@@ -73,6 +73,11 @@ BEGIN
     IF v_loan.status NOT IN ('APPROVED','ACTIVE','OVERDUE','RESTRUCTURED') THEN
         PERFORM app.fail('LOAN_NOT_APPROVED','Only approved loans can be disbursed');
     END IF;
+    IF EXISTS (SELECT 1 FROM loan.loan_application_fee f
+                WHERE f.tenant_id=app.tenant_id() AND f.loan_id=p_loan_id
+                  AND f.collect_timing='AFTER_APPROVAL' AND f.status='PENDING' AND f.fee_amount>0) THEN
+        PERFORM app.fail('FEE_UNPAID','The application fee must be paid or waived before disbursement');
+    END IF;
     -- the approved balance left after released and still-prepared disbursements
     IF p_gross_amount IS NULL OR p_gross_amount<=0 OR p_gross_amount>v_loan.approved_amount-v_loan.disbursed_amount
          - (SELECT coalesce(sum(gross_amount),0) FROM loan.loan_disbursement

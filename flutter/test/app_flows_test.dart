@@ -15,6 +15,10 @@ void main() {
     superAdminSeesPlatformOverview,
   );
   testWidgets(
+    'super admin creates, edits and publishes a Tamil language pack',
+    superAdminLanguagePackCrud,
+  );
+  testWidgets(
     'first login changes password then shows the tenant overview',
     firstLoginChangesPasswordThenShowsTenantOverview,
   );

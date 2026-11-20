@@ -52,10 +52,24 @@ BEGIN
         v_errors := v_errors || format('stage code %s is missing or duplicated', coalesce(r.code, '(null)'));
     END LOOP;
 
-    -- exactly one start stage that exists
+    -- The initialization stage is the first stage in every workflow document.
+    -- startStage names it; all later transitions leave it through workflow JSON.
     IF v_start IS NULL OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_definition -> 'stages') s
                                        WHERE s ->> 'code' = v_start) THEN
         v_errors := v_errors || format('startStage %s does not exist', coalesce(v_start, '(null)'));
+    ELSE
+        -- The workflow document is ordered intentionally: the initialization
+        -- stage is always the first stage and startStage must name it.
+        IF (p_definition -> 'stages' -> 0 ->> 'code') IS DISTINCT FROM v_start THEN
+            v_errors := v_errors || ARRAY['startStage must be the first workflow stage (initialization stage)'];
+        END IF;
+        IF p_definition->>'workflow' = 'LOAN_APPLICATION'
+           AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_definition -> 'stages') s
+                        WHERE s ->> 'code'=v_start AND s ? 'statuses'
+                          AND s -> 'statuses' ? 'initial'
+                          AND s -> 'statuses' ? 'entityStatus') THEN
+            v_errors := v_errors || format('startStage %s must define initial stage and entity statuses',v_start);
+        END IF;
     END IF;
 
     -- transitions reference existing stages
@@ -128,7 +142,7 @@ BEGIN
     END LOOP;
 
     -- actions registered, approved and enabled for the tenant
-    FOR r IN SELECT DISTINCT a ->> 'action' AS action_code
+    FOR r IN SELECT DISTINCT coalesce(a ->> 'code',a ->> 'action') AS action_code
                FROM jsonb_array_elements(p_definition -> 'stages') s,
                     jsonb_array_elements(coalesce(s -> 'actions', '[]'::jsonb)) a LOOP
         IF NOT EXISTS (SELECT 1 FROM platform.action_definition d
@@ -212,26 +226,10 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- engine: transition actions are registered, approved and enabled actions
-    FOR r IN SELECT t ->> 'on' AS ev, a
-               FROM jsonb_array_elements(p_definition -> 'transitions') t,
-                    jsonb_array_elements(CASE jsonb_typeof(t -> 'actions') WHEN 'array' THEN t -> 'actions'
-                                              ELSE '[]'::jsonb END) a LOOP
-        IF jsonb_typeof(r.a) <> 'object' OR r.a ->> 'action' IS NULL THEN
-            v_errors := v_errors || format('transition %s: each action needs an "action" code', r.ev);
-        ELSIF NOT EXISTS (SELECT 1 FROM platform.action_definition d
-                           WHERE d.action_code = r.a ->> 'action' AND d.status = 'APPROVED') THEN
-            v_errors := v_errors || format('transition %s: action %s is not a registered, approved action',
-                                           r.ev, r.a ->> 'action');
-        ELSIF p_tenant_id IS NOT NULL AND NOT EXISTS (
-                SELECT 1 FROM cfg.tenant_action ta
-                 WHERE ta.tenant_id = p_tenant_id AND ta.action_code = r.a ->> 'action' AND ta.is_enabled) THEN
-            v_errors := v_errors || format('transition %s: action %s is not enabled for this organisation',
-                                           r.ev, r.a ->> 'action');
-        ELSIF r.a ? 'params' AND jsonb_typeof(r.a -> 'params') <> 'object' THEN
-            v_errors := v_errors || format('transition %s: params of %s must be an object', r.ev, r.a ->> 'action');
-        END IF;
-    END LOOP;
+    -- engine: transition actions (registry codes, seq, onError, params) and
+    -- button metadata (db/31j)
+    v_errors := v_errors || cfg.validate_workflow_actions(p_definition, p_tenant_id)
+                         || cfg.validate_workflow_buttons(p_definition, p_tenant_id);
 
     -- engine: role lists (approval roles, offline recorders, amount bands,
     -- ROUTE_TO_ROLE) name active roles of the organisation

@@ -145,6 +145,25 @@ class FakeCfmsApi {
   final Map<String, int> moduleVersions = {};
   final List<http.Request> requests = [];
   final Map<String, Map<String, Object?>> _idempotent = {};
+  int translationVersion = 1;
+  String translationPackStatus = 'DRAFT';
+  final Map<String, Map<String, Object?>> translations = {
+    'nav_members': {
+      'text_id': 'nav_members', 'module_code': 'MEMBER', 'text_type': 'LABEL',
+      'english_text': 'Members', 'translated_text': 'உறுப்பினர்கள்',
+      'translation_status': 'APPROVED',
+    },
+    'nav_loans': {
+      'text_id': 'nav_loans', 'module_code': 'LOAN', 'text_type': 'LABEL',
+      'english_text': 'Loans', 'translated_text': 'கடன்கள்',
+      'translation_status': 'APPROVED',
+    },
+    'message_saved': {
+      'text_id': 'message_saved', 'module_code': 'COMMON', 'text_type': 'MESSAGE',
+      'english_text': 'Saved successfully', 'translated_text': '',
+      'translation_status': 'MISSING',
+    },
+  };
   int pageSize = 2;
 
   /// Paths this fake should answer with a server error (to test retries).
@@ -240,6 +259,12 @@ class FakeCfmsApi {
             'tenants:can_add',
             'tenants:can_edit',
             'tenants:can_view',
+            'config:can_view',
+            'config:can_edit',
+            'language_packs:can_view',
+            'language_packs:can_add',
+            'language_packs:can_edit',
+            'language_packs:can_approve',
           ],
         });
       case ('GET', '/auth/tenant-capabilities'):
@@ -283,6 +308,10 @@ class FakeCfmsApi {
             'status': 'ACTIVE',
           },
         ]);
+      case ('GET', '/super-admin/workflow-actions'):
+        return _json([{'code': 'POST_FEE', 'event': 'AFTER_APPROVAL', 'entity': 'loan'}]);
+      case ('GET', '/super-admin/app-rules'):
+        return _json([{'code': 'CHECK_ELIGIBILITY', 'description': 'Check loan eligibility'}]);
       case ('GET', '/tenant/summary'):
         final privileges = _privilegesOf(caller);
         return _json({
@@ -314,6 +343,45 @@ class FakeCfmsApi {
         return _listMembers(caller, request.url.queryParameters);
       case ('POST', '/members'):
         return _createMember(caller, request, body);
+    }
+    if (path == '/super-admin/language-packs/ta' && request.method == 'GET') {
+      return _json([{
+        'language_code': 'ta', 'version_no': translationVersion,
+        'status': translationPackStatus, 'approved_count': 2,
+      }]);
+    }
+    if (path == '/super-admin/language-packs/ta/draft' && request.method == 'POST') {
+      translationVersion++;
+      translationPackStatus = 'DRAFT';
+      for (final row in translations.values) {
+        row['translated_text'] = '';
+        row['translation_status'] = 'MISSING';
+      }
+      return _json({'language_code': 'ta', 'version_no': translationVersion, 'status': 'DRAFT'}, 201);
+    }
+    final translationList = RegExp(r'^/super-admin/language-packs/ta/(\d+)/translations$').firstMatch(path);
+    if (translationList != null && request.method == 'GET') {
+      final query = request.url.queryParameters['q']?.toLowerCase() ?? '';
+      final missingOnly = request.url.queryParameters['missing_only'] == 'true';
+      final rows = translations.values.where((row) =>
+        (query.isEmpty || '${row['english_text']} ${row['translated_text']}'.toLowerCase().contains(query)) &&
+        (!missingOnly || row['translation_status'] == 'MISSING')).toList();
+      final offset = int.tryParse(request.url.queryParameters['offset'] ?? '0') ?? 0;
+      final limit = int.tryParse(request.url.queryParameters['limit'] ?? '100') ?? 100;
+      return _json(rows.skip(offset).take(limit).toList());
+    }
+    final translationEntry = RegExp(r'^/super-admin/language-packs/ta/(\d+)/translations/([^/]+)$').firstMatch(path);
+    if (translationEntry != null && request.method == 'PUT') {
+      final row = translations[translationEntry.group(2)];
+      if (row == null) return _error(404, 'NOT_FOUND', 'Translation was not found.');
+      row['translated_text'] = body['translated_text'];
+      row['translation_status'] = body['status'];
+      return _json(row);
+    }
+    final translationPublish = RegExp(r'^/super-admin/language-packs/ta/(\d+)/publish$').firstMatch(path);
+    if (translationPublish != null && request.method == 'POST') {
+      translationPackStatus = 'PUBLISHED';
+      return _json({'language_code': 'ta', 'version_no': translationVersion, 'status': 'PUBLISHED'});
     }
     final memberMatch = RegExp(r'^/members/([^/]+)$').firstMatch(path);
     if (memberMatch != null) {

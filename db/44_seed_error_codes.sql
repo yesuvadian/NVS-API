@@ -15,7 +15,7 @@ INSERT INTO platform.error_code (code, short_code, module, category, severity, h
  ('CFMS-SYS-1002','INVALID_REFERENCE','SYS','VALIDATION','ERROR',422,false,false,'The selected {field} does not exist or is not available.','Choose a value from the list and try again.'),
  ('CFMS-SYS-1003','CHECK_FAILED','SYS','VALIDATION','ERROR',422,false,false,'The values entered are not allowed together.','Check the highlighted fields.'),
  ('CFMS-SYS-1004','REQUIRED_VALUE','SYS','VALIDATION','ERROR',400,false,false,'{field} is required.','Fill in the required field.'),
- ('CFMS-SYS-1005','INVALID_DATA','SYS','VALIDATION','ERROR',400,false,false,'{field} is not in the correct format.','Correct the value and try again.'),
+ ('CFMS-SYS-1005','INVALID_DATA','SYS','VALIDATION','ERROR',422,false,false,'{field} is not in the correct format.','Correct the value and try again.'),
  ('CFMS-SYS-3001','ACCESS_DENIED','SYS','AUTHORISATION','ERROR',403,false,false,'You do not have access to this record.','Ask your administrator for access.'),
  ('CFMS-SYS-4001','NOT_FOUND','SYS','NOT_FOUND','ERROR',404,false,false,'The record was not found.','Refresh the list; the record may have been closed or removed.'),
  ('CFMS-SYS-5001','DUPLICATE_RECORD','SYS','CONFLICT','ERROR',409,false,false,'A record with the same {field} already exists.','Search for the existing record instead of creating a new one.'),

@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS loan.loan_application_fee (
     fee_basis        text NOT NULL CHECK (fee_basis IN ('FIXED','PERCENT')),
     fee_rate         numeric(9,4),
     fee_amount       numeric(18,2) NOT NULL CHECK (fee_amount >= 0),
-    collect_timing   text NOT NULL DEFAULT 'BEFORE_SUBMISSION' CHECK (collect_timing IN ('BEFORE_SUBMISSION','AFTER_SUBMISSION','DEDUCT_FROM_DISBURSEMENT')),
+    collect_timing   text NOT NULL DEFAULT 'BEFORE_SUBMISSION' CHECK (collect_timing IN ('BEFORE_SUBMISSION','AFTER_SUBMISSION','AFTER_APPROVAL','DEDUCT_FROM_DISBURSEMENT')),
     status           text NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','PAID','WAIVED','DEDUCTED')),
     cash_receipt_id  uuid,
     waiver_reason    text,

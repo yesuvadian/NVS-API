@@ -14,17 +14,13 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.errors import AppError
+from app.rules import discover as discover_app_rules
+
+APP_RULES = discover_app_rules()
 
 # Eligibility reason codes per rule check (see LoanService.eligibility).
 ELIGIBILITY_CHECKS: dict[str, tuple[str, ...]] = {
-    "MEMBER_STATUS": ("MEMBER_NOT_ACTIVE", "MEMBER_RESTRICTED", "MEMBER_COOLING_OFF", "MEMBER_IN_COOLING_OFF"),
-    "MEMBERSHIP_PERIOD": ("MEMBERSHIP_DATE_REQUIRED", "MIN_MEMBERSHIP_PERIOD_NOT_MET"),
-    "CONCURRENT_LOANS": ("MAX_CONCURRENT_LOANS_REACHED", "MAX_LOANS_OF_TYPE_REACHED"),
-    "OVERDUE_DUES": ("OVERDUE_LOAN_INSTALMENT", "OVERDUE_CHIT_DUES", "OVERDUE_CONTRIBUTION_DUES"),
-    "AGE_LIMITS": ("DATE_OF_BIRTH_REQUIRED", "AGE_BELOW_MINIMUM", "AGE_ABOVE_MAXIMUM", "AGE_AT_MATURITY_ABOVE_MAXIMUM"),
-    "EXPOSURE_LIMITS": ("MEMBER_EXPOSURE_LIMIT_EXCEEDED", "HOUSEHOLD_EXPOSURE_LIMIT_EXCEEDED"),
-    "AMOUNT_LIMITS": ("AMOUNT_OUTSIDE_LOAN_TYPE_LIMITS",),
-    "TENURE_LIMITS": ("TENURE_OUTSIDE_LOAN_TYPE_LIMITS",),
+    code: rule.reason_codes for code, rule in APP_RULES.items() if hasattr(rule, "reason_codes")
 }
 RULE_CHECK_CODES: tuple[str, ...] = (*ELIGIBILITY_CHECKS, "GUARANTORS", "NOMINEE")
 
@@ -101,19 +97,30 @@ def assert_rule_checks(
     when the nominee rule is unmet and its onFail is REQUIRE_OVERRIDE (the
     caller records the override or refuses)."""
     outcomes = checks if isinstance(checks, dict) else {code: "BLOCK" for code in checks}
-    checks = tuple(code for code, on_fail in outcomes.items() if on_fail != "WARN")
-    if eligibility is not None:
-        failed = failed_eligibility(eligibility, checks)
-        if failed:
-            raise AppError("LOAN_INELIGIBLE", details={"reasons": failed})
-    if "GUARANTORS" in checks and eligibility is not None:
-        required = int(eligibility.get("guarantors_required") or 0)
-        if required and (active_guarantors or 0) < required:
-            raise AppError("GUARANTORS_REQUIRED", params={"required": required, "added": active_guarantors or 0})
-    if "NOMINEE" in checks and nominee_status is not None and not nominee_status.get("satisfied", True):
-        if outcomes["NOMINEE"] == "REQUIRE_OVERRIDE":
-            return "NOMINEE_OVERRIDE_NEEDED"
-        raise AppError("NOMINEE_REQUIRED")
+    context = {"eligibility": eligibility, "active_guarantors": active_guarantors,
+               "nominee_status": nominee_status}
+    eligibility_failures: list[str] = []
+    for code, on_fail in outcomes.items():
+        if on_fail in {"WARN", "ROUTE_TO_ROLE"}:
+            continue
+        rule = APP_RULES.get(code)
+        if rule is None:
+            raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED", details={"rule": code})
+        result = rule().evaluate(context)
+        if not result.passed and code in ELIGIBILITY_CHECKS:
+            eligibility_failures.extend(result.reasons)
+    if eligibility_failures:
+        raise AppError("LOAN_INELIGIBLE", details={"reasons": eligibility_failures})
+    if "GUARANTORS" in outcomes and outcomes["GUARANTORS"] not in {"WARN", "ROUTE_TO_ROLE"}:
+        result = APP_RULES["GUARANTORS"]().evaluate(context)
+        if not result.passed:
+            raise AppError("GUARANTORS_REQUIRED", params=result.params or {})
+    if "NOMINEE" in outcomes and outcomes["NOMINEE"] not in {"WARN", "ROUTE_TO_ROLE"}:
+        result = APP_RULES["NOMINEE"]().evaluate(context)
+        if not result.passed:
+            if outcomes["NOMINEE"] == "REQUIRE_OVERRIDE":
+                return "NOMINEE_OVERRIDE_NEEDED"
+            raise AppError("NOMINEE_REQUIRED")
     return None
 
 
@@ -123,17 +130,12 @@ def failing_checks(
 ) -> list[str]:
     """Which of the given rule checks fail (without raising)."""
     failing: list[str] = []
+    context = {"eligibility": eligibility, "active_guarantors": active_guarantors,
+               "nominee_status": nominee_status}
     for code in codes:
-        if code in ELIGIBILITY_CHECKS:
-            if eligibility is not None and failed_eligibility(eligibility, (code,)):
-                failing.append(code)
-        elif code == "GUARANTORS":
-            required = int((eligibility or {}).get("guarantors_required") or 0)
-            if required and (active_guarantors or 0) < required:
-                failing.append(code)
-        elif code == "NOMINEE":
-            if nominee_status is not None and not nominee_status.get("satisfied", True):
-                failing.append(code)
+        rule = APP_RULES.get(code)
+        if rule is not None and not rule().evaluate(context).passed:
+            failing.append(code)
     return failing
 
 

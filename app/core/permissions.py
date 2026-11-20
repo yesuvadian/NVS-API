@@ -21,6 +21,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
             "language_packs:can_add",
             "language_packs:can_edit",
             "language_packs:can_approve",
+            "config:can_view",
+            "config:can_edit",
         }
     ),
 }

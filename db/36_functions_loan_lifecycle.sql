@@ -166,6 +166,14 @@ BEGIN
             approved_at=now(),approved_by=v_approver,approval_expires_on=app.working_date()+cfg.require_setting_int('loans.disbursement_window_days'),
             updated_at=now(),updated_by=app.user_id(),row_version=row_version+1
          WHERE tenant_id=app.tenant_id() AND id=v_req.loan_id;
+        -- Percentage application fees for AFTER_APPROVAL are based on the
+        -- final approved loan amount, which can differ from the request.
+        UPDATE loan.loan_application_fee f
+           SET fee_amount=round(v_amount*f.fee_rate/100,2),updated_at=now(),
+               updated_by=app.user_id(),row_version=f.row_version+1
+         WHERE f.tenant_id=app.tenant_id() AND f.loan_id=v_req.loan_id
+           AND f.fee_basis='PERCENT' AND f.collect_timing='AFTER_APPROVAL'
+           AND f.status='PENDING' AND f.fee_rate IS NOT NULL;
         v_new_stage := 'APPROVED';
         v_instance_status := 'COMPLETED';
     ELSE

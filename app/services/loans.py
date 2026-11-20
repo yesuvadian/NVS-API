@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -8,9 +9,11 @@ from psycopg import AsyncConnection
 from app.core.errors import AppError
 from app.repositories.loans import LoanRepository
 from app.repositories.workflow import WorkflowRepository
-from app.services.loan_rules import (assert_rule_checks, build_criteria, failing_checks, interest_terms, required_field,
+from app.services.loan_rules import (assert_rule_checks, build_criteria, failed_eligibility, failing_checks,
+                                     interest_terms, required_field,
                                      required_rule, stage_of_checks, transition_rule_outcomes)
-from app.workflow.engine import TransitionContext, WorkflowEngine, route_rules
+from app.workflow.engine import (TransitionContext, WorkflowEngine, route_rules, transitions_for,
+                                 transition_matches_when)
 from app.repositories.loan_lifecycle import LoanLifecycleRepository
 
 CENT = Decimal("0.01")
@@ -154,12 +157,16 @@ class LoanService:
         self.lifecycle = LoanLifecycleRepository(conn)
         self.workflow = WorkflowRepository(conn)
 
-    def _engine(self, handlers) -> WorkflowEngine:
-        return WorkflowEngine(self.workflow, handlers)
+    failure_log = None              # set by the generic workflow API (autonomous failure record)
 
-    async def _run(self, ctx: TransitionContext, handlers, *, evaluate, default_actions, from_stage):
-        """Run a loan transition; statuses come from the workflow JSON."""
+    def _engine(self) -> WorkflowEngine:
+        return WorkflowEngine(self.workflow, failure_log=self.failure_log)
+
+    async def _run(self, ctx: TransitionContext, *, evaluate, default_actions, from_stage):
+        """Run a loan transition through the engine; actions come from the
+        registry (app/workflow/actions), statuses from the workflow JSON."""
         loan_id = ctx.entity["id"]
+        ctx.services.setdefault("loan", self)
 
         async def entity_state(_ctx):
             return await self.workflow.loan_state(loan_id)
@@ -167,10 +174,101 @@ class LoanService:
         async def apply_status(c, change):
             return await self.workflow.apply_loan_status(loan_id, change, c.workflow_instance_id)
 
-        await self._engine(handlers).run_transition(
+        await self._engine().run_transition(
             ctx, evaluate_rules=evaluate, default_actions=default_actions, from_stage=from_stage,
             entity_state=entity_state, apply_status=apply_status)
         return ctx
+
+    # -- registry actions (app/workflow/actions/loan.py call these) -----------
+    async def action_create_approval_request(self, ctx: TransitionContext):
+        loan = ctx.entity
+        missing = await self.lifecycle.missing_documents(loan["id"])
+        if missing:
+            raise AppError("DOCUMENTS_REQUIRED", params={"missing": ", ".join(missing)}, details={"missing": missing})
+        fee = await self.repository.application_fee(loan["id"])
+        if fee and fee["collect_timing"] == "BEFORE_SUBMISSION" and fee["status"] not in {"PAID", "WAIVED"}:
+            raise AppError("FEE_UNPAID")
+        workflow = ctx.params.get("workflow")
+        if workflow is None:
+            raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
+        approval_stage = ctx.params.get("approval_stage_code")
+        if not approval_stage:
+            ctx.workflow_instance_id = loan.get("workflow_instance_id")
+            return {"target_stage": ctx.params.get("target_stage"), "approval_request_id": None,
+                    "workflow_instance_id": ctx.workflow_instance_id}
+        # SQL creates the request with the approval stage's roles, minimum
+        # approvals, amount band and offline settings from the workflow.
+        submitted = await self.repository.submit_application(
+            loan, workflow, ctx.params["from_stage"], approval_stage)
+        if submitted is None:
+            raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
+        ctx.results["approval_request_id"] = submitted.get("approval_request_id")
+        ctx.workflow_instance_id = submitted.get("workflow_instance_id")
+        return submitted
+
+    async def action_record_decision(self, ctx: TransitionContext):
+        request_id = ctx.entity["approval_request_id"]
+        if ctx.routes:
+            # A ROUTE_TO_ROLE check failed: the request moves to those roles
+            # and their approver decides; nothing is decided now.
+            return {"approval_request_id": request_id, "loan_id": ctx.entity["id"], "decision": "ROUTED",
+                    "routed_to": sorted({r for route in ctx.routes for r in route["roles"]}),
+                    "checks": [route["check"] for route in ctx.routes]}
+        values = ctx.params["decision"]
+        if ctx.params.get("offline"):
+            result = await self.lifecycle.record_offline_approval(request_id, values)
+        else:
+            result = await self.lifecycle.decide(request_id, values)
+        if result is None:
+            raise AppError("APPROVAL_REQUEST_NOT_FOUND")
+        return result
+
+    async def action_release_disbursement(self, ctx: TransitionContext):
+        values = ctx.params.get("input") or ctx.params
+        result = await self.lifecycle.release_disbursement(
+            ctx.entity["id"], values["disbursement_id"], values["ack_type"]
+        )
+        if result is None:
+            raise AppError("DISBURSEMENT_NOT_FOUND")
+        return result
+
+    async def action_withdraw(self, ctx: TransitionContext):
+        reason = (ctx.params.get("input") or {}).get("reason")
+        row = await (await self.lifecycle.conn.execute(
+            "SELECT loan.withdraw_application(%s,%s) AS result", (ctx.entity["id"], reason))).fetchone()
+        return row["result"] if row else None
+
+    async def action_notify(self, ctx: TransitionContext, template: str):
+        row = await (await self.lifecycle.conn.execute(
+            "SELECT loan.notify_member(%s,%s,%s::jsonb) AS id",
+            (template, ctx.entity["id"], json.dumps({"loan_no": ctx.entity.get("loan_no")})))).fetchone()
+        return {"notification_id": row["id"] if row else None}
+
+    async def process_deferred(self, limit: int) -> dict[str, int]:
+        """Run deferred actions (outbox) of the current organisation. A failure
+        is retried while the action's params allow (retryCount), then FAILED."""
+        engine = self._engine()
+        done = failed = retried = 0
+        for row in await self.workflow.due_deferred(limit):
+            loan = await self.repository.get_application(row["entity_id"]) if row["entity_id"] else None
+            ctx = TransitionContext("DEFERRED", {**(loan or {}), "id": row["entity_id"]}, None,
+                                    services={"loan": self}, workflow_instance_id=row["workflow_instance_id"])
+            params = row["params"] or {}
+            try:
+                async with self.workflow.savepoint():
+                    result = await engine.action(row["action_code"]).execute(ctx, params)
+                await self.workflow.finish_deferred(row["id"], "SUCCESS", result.as_dict())
+                done += 1
+            except Exception as exc:                                   # noqa: BLE001 - recorded on the row
+                from app.workflow.engine import _error
+                allowed = int(params.get("retryCount") or 0)
+                if row["attempt"] <= allowed:
+                    await self.workflow.finish_deferred(row["id"], "RETRYING", error=_error(exc), retry=True)
+                    retried += 1
+                else:
+                    await self.workflow.finish_deferred(row["id"], "FAILED", error=_error(exc))
+                    failed += 1
+        return {"done": done, "retrying": retried, "failed": failed}
 
     @staticmethod
     def _type_out(row: dict[str, Any]) -> dict[str, Any]:
@@ -340,13 +438,21 @@ class LoanService:
                 "fee_amount": eligibility["application_fee"],
                 "collect_timing": eligibility["fee_timing"],
             }
-        return await self.repository.create_application(
+        created = await self.repository.create_application(
             values=values,
             product=product,
             workflow=workflow,
             member_context=member,
             fee=fee,
         )
+        definition = (workflow or {}).get("definition") or {}
+        start_stage = definition.get("startStage")
+        if start_stage and created.get("workflow_instance_id"):
+            context = TransitionContext(
+                "INIT", created, definition, workflow_instance_id=created["workflow_instance_id"],
+                services={"loan": self})
+            await self._engine().run_stage_event(context, start_stage, "onEnter")
+        return created
 
     async def collect_application_fee(self, loan_id: UUID, **values):
         result = await self.lifecycle.collect_fee(loan_id, **values)
@@ -354,35 +460,34 @@ class LoanService:
             raise AppError("LOAN_APPLICATION_NOT_FOUND")
         return result
 
-    async def decide(self, request_id: UUID, values: dict[str, Any]):
+    async def decide(self, request_id: UUID, values: dict[str, Any], *, code: str | None = None):
         """Online approval decision through the workflow engine (APPROVE /
         REJECT / RETURN transition: rule checks, then RECORD_APPROVAL_DECISION)."""
-        async def record(_ctx, _params):
-            return await self.lifecycle.decide(request_id, values)
-
-        return await self._run_decision(request_id, values, record)
+        return await self._run_decision(request_id, values, offline=False, code=code)
 
     async def record_offline_decision(self, request_id: UUID, details: dict[str, Any]):
         """Offline decision recorded on the approver's behalf: the same
         transition, rule checks and log as an online decision."""
-        async def record(_ctx, _params):
-            return await self.lifecycle.record_offline_approval(request_id, details)
-
         values = {**details, "decision": str(details.get("decision", "")).upper()}
-        return await self._run_decision(request_id, values, record)
+        return await self._run_decision(request_id, values, offline=True, raw=details)
 
-    async def _run_decision(self, request_id: UUID, values: dict[str, Any], record):
+    async def _run_decision(self, request_id: UUID, values: dict[str, Any], *, offline: bool,
+                            raw: dict[str, Any] | None = None, code: str | None = None):
         event = DECISION_EVENTS.get(values.get("decision"))
         loan_id = await self.repository.loan_for_approval_request(request_id)
         loan = await self.repository.get_application(loan_id) if loan_id else None
         if loan is None and event == "APPROVE":
             raise AppError("APPROVAL_REQUEST_NOT_FOUND")
+        sql_values = raw if offline else values
         if loan is None or event is None:
-            result = await record(None, {})          # refused by SQL with the precise error
+            # refused by SQL with the precise error
+            result = (await self.lifecycle.record_offline_approval(request_id, sql_values) if offline
+                      else await self.lifecycle.decide(request_id, sql_values))
             if result is None:
                 raise AppError("APPROVAL_REQUEST_NOT_FOUND")
             return result
         workflow = await self.repository.workflow_version(loan["workflow_version_id"])
+        workflow_state = await self.workflow.loan_state(loan["id"])
 
         async def evaluate(_ctx):
             if event != "APPROVE":
@@ -393,23 +498,13 @@ class LoanService:
                                                  nominee_override_reason=values.get("nominee_override_reason"),
                                                  approval_request_id=request_id)
 
-        async def handler(ctx, params):
-            if ctx.routes:
-                # A ROUTE_TO_ROLE check failed: the request moves to those roles
-                # and their approver decides; nothing is decided now.
-                return {"approval_request_id": request_id, "loan_id": loan["id"], "decision": "ROUTED",
-                        "routed_to": sorted({r for route in ctx.routes for r in route["roles"]}),
-                        "checks": [route["check"] for route in ctx.routes]}
-            result = await record(ctx, params)
-            if result is None:
-                raise AppError("APPROVAL_REQUEST_NOT_FOUND")
-            return result
-
         ctx = TransitionContext(event, {**loan, "approval_request_id": request_id},
-                                (workflow or {}).get("definition"))
-        await self._run(ctx, {"RECORD_APPROVAL_DECISION": handler}, evaluate=evaluate,
-                        default_actions=["RECORD_APPROVAL_DECISION"], from_stage="MANAGER_APPROVAL")
-        return ctx.results["RECORD_APPROVAL_DECISION"]
+                                (workflow or {}).get("definition"), code=code,
+                                params={"decision": sql_values, "offline": offline, "input": values})
+        await self._run(ctx, evaluate=evaluate, default_actions=["RECORD_APPROVAL_DECISION"],
+                        from_stage=workflow_state.get("stage")
+                        or ((workflow or {}).get("definition") or {}).get("startStage"))
+        return ctx.results.get("RECORD_APPROVAL_DECISION")
 
     async def prepare_disbursement(self, loan_id: UUID, amount: Decimal, payment_mode: str = "CASH",
                                    payment_reference: str | None = None):
@@ -421,24 +516,21 @@ class LoanService:
     async def release_disbursement(self, loan_id: UUID, disbursement_id: UUID, ack_type: str):
         """DISBURSE transition: rule checks, then RELEASE_DISBURSEMENT (the SQL
         release posts the journal, receipt and SMS exactly as before)."""
-        async def release(_ctx, _params):
+        loan = await self.repository.get_application(loan_id)
+        if loan is None:
             result = await self.lifecycle.release_disbursement(loan_id, disbursement_id, ack_type)
             if result is None:
                 raise AppError("DISBURSEMENT_NOT_FOUND")
             return result
-
-        loan = await self.repository.get_application(loan_id)
-        if loan is None:
-            return await release(None, {})
         workflow = await self.repository.workflow_version(loan["workflow_version_id"])
-        ctx = TransitionContext("DISBURSE", loan, (workflow or {}).get("definition"))
+        ctx = TransitionContext("DISBURSE", loan, (workflow or {}).get("definition"),
+                                params={"disbursement_id": disbursement_id, "ack_type": ack_type})
 
         async def evaluate(_ctx):
             return await self.enforce_transition(loan, "DISBURSE", workflow=workflow)
 
-        await self._run(ctx, {"RELEASE_DISBURSEMENT": release}, evaluate=evaluate,
-                        default_actions=["RELEASE_DISBURSEMENT"], from_stage="APPROVED")
-        return ctx.results["RELEASE_DISBURSEMENT"]
+        await self._run(ctx, evaluate=evaluate, default_actions=["RELEASE_DISBURSEMENT"], from_stage="APPROVED")
+        return ctx.results.get("RELEASE_DISBURSEMENT")
 
     async def collect_repayment(self, loan_id: UUID, **values):
         result = await self.lifecycle.collect_repayment(loan_id, **values)
@@ -532,43 +624,44 @@ class LoanService:
             raise AppError("NOMINEE_NOT_ACTIVE")
         return await self.lifecycle.update_application(loan_id, changes, expected_version)
 
-    async def submit_application(self, loan_id: UUID):
+    async def submit_application(self, loan_id: UUID, *, code: str | None = None):
         loan = await self.repository.get_application(loan_id, lock=True)
         if loan is None:
             raise AppError("LOAN_APPLICATION_NOT_FOUND")
-        if loan["status"] not in {"DRAFT", "RETURNED"}:
-            raise AppError("LOAN_NOT_SUBMITTABLE")
-
         workflow = await self.repository.workflow_version(loan["workflow_version_id"])
-
-        async def create_approval_request(ctx, _params):
-            missing = await self.lifecycle.missing_documents(loan_id)
-            if missing:
-                raise AppError("DOCUMENTS_REQUIRED", params={"missing": ", ".join(missing)},
-                               details={"missing": missing})
-            fee = await self.repository.application_fee(loan_id)
-            if fee and fee["collect_timing"] != "DEDUCT_FROM_DISBURSEMENT" and fee["status"] not in {"PAID", "WAIVED"}:
-                raise AppError("FEE_UNPAID")
-            if workflow is None:
-                raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
-            # SQL creates the request with the approval stage's roles, minimum
-            # approvals, amount band and offline settings from the workflow.
-            submitted = await self.repository.submit_application(loan, workflow)
-            if submitted is None:
-                raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
-            ctx.results["approval_request_id"] = submitted.get("approval_request_id")
-            ctx.workflow_instance_id = submitted.get("workflow_instance_id")
-            return submitted
+        if workflow is None:
+            raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
+        state = await self.workflow.loan_state(loan_id)
+        from_stage = state.get("stage") or ((workflow or {}).get("definition") or {}).get("startStage")
+        if not from_stage:
+            raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
+        fee = await self.repository.application_fee(loan_id)
+        fee_required = bool(fee and fee.get("fee_amount") and fee.get("collect_timing") in {
+            "BEFORE_SUBMISSION", "AFTER_SUBMISSION"
+        } and fee.get("status") not in {"PAID", "WAIVED"})
 
         async def evaluate(_ctx):
             return await self.enforce_transition(loan, "SUBMIT", workflow=workflow)
 
-        # A returned loan resubmits into a new approval request and instance.
-        ctx = TransitionContext("SUBMIT", {**loan, "approval_request_id": None, "workflow_instance_id": None},
-                                (workflow or {}).get("definition"))
-        await self._run(ctx, {"CREATE_APPROVAL_REQUEST": create_approval_request}, evaluate=evaluate,
-                        default_actions=["CREATE_APPROVAL_REQUEST"], from_stage="DRAFT")
-        return ctx.results["CREATE_APPROVAL_REQUEST"]
+        condition_context = {"loan": loan, "fee": {"required": fee_required}}
+        definition = (workflow or {}).get("definition") or {}
+        candidates = transitions_for(definition, "SUBMIT", from_stage, code)
+        if len(candidates) > 1 and any("when" in transition for transition in candidates):
+            candidates = [transition for transition in candidates
+                          if transition_matches_when(transition.get("when"), condition_context)]
+        if not candidates:
+            raise AppError("LOAN_NOT_SUBMITTABLE")
+        target_stage = candidates[0].get("to")
+        target = next((stage for stage in definition.get("stages", []) if stage.get("code") == target_stage), {})
+        approval_stage = target_stage if target.get("approval") else None
+        ctx = TransitionContext("SUBMIT", {**loan, "approval_request_id": state.get("approval_request_id"),
+                                            "workflow_instance_id": state.get("workflow_instance_id")},
+                                definition, code=code,
+                                params={"workflow": workflow, "from_stage": from_stage,
+                                        "target_stage": target_stage, "approval_stage_code": approval_stage,
+                                        "condition_context": condition_context})
+        await self._run(ctx, evaluate=evaluate, default_actions=["CREATE_APPROVAL_REQUEST"], from_stage=from_stage)
+        return ctx.results.get("CREATE_APPROVAL_REQUEST")
 
     async def enforce_transition(
         self, loan: dict[str, Any], event: str, *, workflow: dict[str, Any] | None = None,
@@ -622,6 +715,70 @@ class LoanService:
             await self.repository.record_nominee_override(loan["id"], reason)
             outcome["nominee_override"] = True
         return outcome
+
+    async def preview_rule_checks(self, loan: dict[str, Any], event: str,
+                                  workflow: dict[str, Any] | None) -> dict[str, Any]:
+        """Rule checks of a transition without acting: what blocks it (with the
+        reasons), whether a nominee override is needed, which checks would
+        route the request, and warnings. Used to enable or disable buttons."""
+        definition = (workflow or {}).get("definition")
+        checks = transition_rule_outcomes(definition, event)
+        preview: dict[str, Any] = {"blocked": [], "needs_override": False, "routes": [], "warnings": []}
+        if not checks:
+            return preview
+        try:
+            eligibility = await self.eligibility(
+                member_id=loan["member_id"], loan_type_id=loan["loan_type_id"],
+                requested_amount=loan.get("approved_amount") or loan["requested_amount"],
+                requested_tenure_months=loan.get("tenure_months") or loan["requested_tenure_months"],
+                first_loan=loan["is_first_loan"],
+            ) if any(c != "NOMINEE" for c in checks) else None
+        except AppError as exc:
+            preview["blocked"].append({"code": exc.short_code, "params": exc.params})
+            return preview
+        active_guarantors = None
+        if "GUARANTORS" in checks and eligibility and eligibility.get("guarantors_required"):
+            active_guarantors = len([g for g in await self.lifecycle.guarantors(loan["id"]) or []
+                                     if g["status"] == "ACTIVE"])
+        nominee_status = await self.repository.nominee_status(loan["id"]) if "NOMINEE" in checks else None
+        failing = failing_checks(list(checks), eligibility=eligibility, active_guarantors=active_guarantors,
+                                 nominee_status=nominee_status)
+        roles = route_rules(definition, event)
+        for code in failing:
+            on_fail = checks[code]
+            if on_fail == "WARN":
+                preview["warnings"].append({"code": code})
+            elif on_fail == "ROUTE_TO_ROLE":
+                preview["routes"].append({"check": code, "roles": roles.get(code) or []})
+            elif on_fail == "REQUIRE_OVERRIDE" and (nominee_status or {}).get("override_allowed") is True:
+                preview["needs_override"] = True
+            else:
+                if code == "NOMINEE":
+                    reasons = (nominee_status or {}).get("required_because") or []
+                elif code == "GUARANTORS":
+                    reasons = [{"required": (eligibility or {}).get("guarantors_required"), "added": active_guarantors or 0}]
+                else:
+                    reasons = failed_eligibility(eligibility or {}, (code,))
+                preview["blocked"].append({"code": code, "reasons": reasons})
+        return preview
+
+    async def run_transition_by_code(self, loan: dict[str, Any], workflow: dict[str, Any] | None, *,
+                                     code: str, event: str, from_stage: str, input: dict[str, Any]):
+        """Any other button: its rule checks, its configured actions (from the
+        registry) and its statuses; a transition with no actions only changes
+        statuses, so new statuses need no code."""
+        state = await self.workflow.loan_state(loan["id"])
+        ctx = TransitionContext(event, {**loan, "approval_request_id": state.get("approval_request_id"),
+                                        "workflow_instance_id": state.get("workflow_instance_id")},
+                                (workflow or {}).get("definition"), code=code,
+                                params={"input": input, "workflow": workflow})
+
+        async def evaluate(_ctx):
+            return await self.enforce_transition(loan, event, workflow=workflow,
+                                                 nominee_override_reason=input.get("nominee_override_reason"))
+
+        await self._run(ctx, evaluate=evaluate, default_actions=[], from_stage=from_stage)
+        return {key: value for key, value in ctx.results.items() if key != "approval_request_id"}
 
     async def eligibility_view(self, **values) -> dict[str, Any]:
         """Eligibility plus the criteria list, grouped by the transition of the

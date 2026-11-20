@@ -43,3 +43,11 @@ def test_workflow_schema_covers_engine_keys():
     assert defs["approval"]["required"] == ["roles", "minApprovals"]
     assert set(defs["ruleCheck"]["oneOf"][1]["properties"]["onFail"]["enum"]) == {
         "BLOCK", "REQUIRE_OVERRIDE", "ROUTE_TO_ROLE", "WARN"}
+    assert "x-sections" in defs["formInput"]["properties"]
+    assert {"code", "title", "fields"} <= set(defs["formSection"]["required"])
+    assert defs["formSection"]["properties"]["title"]["$ref"] == "#/$defs/formLabel"
+    labels = defs["label"]
+    assert labels["propertyNames"]["pattern"] == "^[a-z]{2,3}(-[A-Z]{2})?$"
+    assert labels["additionalProperties"]["type"] == "string"
+    assert defs["formField"]["properties"]["title"]["$ref"] == "#/$defs/formLabel"
+    assert defs["formLabel"]["required"] == ["en", "ta"]

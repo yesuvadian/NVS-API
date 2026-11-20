@@ -20,7 +20,15 @@
       "type": "object",
       "required": ["en"],
       "properties": {"en": {"type": "string", "minLength": 1}, "ta": {"type": "string"}},
+      "propertyNames": {"pattern": "^[a-z]{2,3}(-[A-Z]{2})?$"},
       "additionalProperties": {"type": "string"}
+    },
+    "formLabel": {
+      "type": "object",
+      "required": ["en", "ta"],
+      "properties": {"en": {"type": "string", "minLength": 1}, "ta": {"type": "string", "minLength": 1}},
+      "propertyNames": {"pattern": "^[a-z]{2,3}(-[A-Z]{2})?$"},
+      "additionalProperties": {"type": "string", "minLength": 1}
     },
     "stage": {
       "type": "object",
@@ -28,12 +36,31 @@
       "properties": {
         "code": {"$ref": "#/$defs/code"},
         "name": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["INIT", "NORMAL"], "description": "INIT is the workflow initialization stage; it must be first and match startStage."},
         "end": {"type": "boolean"},
         "role": {"$ref": "#/$defs/code", "description": "Legacy: the acting role. Maker stages use actorPrivilege; approval stages use approval.roles."},
         "actorPrivilege": {"type": "string", "pattern": "^[a-z_]+\\.[a-z_]+$"},
         "approval": {"$ref": "#/$defs/approval"},
         "statuses": {"$ref": "#/$defs/statuses"},
-        "actions": {"type": "array", "items": {"type": "object", "required": ["action"]}}
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["seq"],
+            "oneOf": [{"required": ["code"]}, {"required": ["action"]}],
+            "properties": {
+              "seq": {"type": "integer", "minimum": 1},
+              "code": {"$ref": "#/$defs/code"},
+              "action": {"$ref": "#/$defs/code"},
+              "event": {"enum": ["onEnter", "onExit"]},
+              "params": {"type": "object"},
+              "onError": {"enum": ["ROLLBACK", "CONTINUE", "DEFER"]},
+              "type": {"type": "string"},
+              "config": {"type": "object"}
+            },
+            "additionalProperties": true
+          }
+        }
       }
     },
     "approval": {
@@ -98,6 +125,44 @@
         }
       ]
     },
+    "formSection": {
+      "type": "object",
+      "required": ["code", "title", "fields"],
+      "properties": {
+        "code": {"$ref": "#/$defs/code"},
+        "title": {"$ref": "#/$defs/formLabel"},
+        "fields": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      },
+      "additionalProperties": false
+    },
+    "formInput": {
+      "type": "object",
+      "required": ["type", "properties"],
+      "properties": {
+        "type": {"const": "object"},
+        "required": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "properties": {"type": "object", "additionalProperties": {"$ref": "#/$defs/formField"}},
+        "x-sections": {"type": "array", "items": {"$ref": "#/$defs/formSection"}}
+      },
+      "additionalProperties": true
+    },
+    "formField": {
+      "type": "object",
+      "properties": {
+        "type": {"type": "string"},
+        "x-field": {"enum": ["text", "multiline", "number", "amount", "date", "enum", "boolean", "member", "nominee"]},
+        "title": {"$ref": "#/$defs/formLabel"},
+        "enum": {"type": "array", "items": {}},
+        "minLength": {"type": "integer", "minimum": 0},
+        "maxLength": {"type": "integer", "minimum": 0},
+        "minimum": {"type": "number"},
+        "maximum": {"type": "number"},
+        "exclusiveMinimum": {"type": "number"},
+        "x-maxFrom": {"type": "string"},
+        "x-showWhen": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
     "transition": {
       "type": "object",
       "required": ["from", "to", "on"],
@@ -106,6 +171,13 @@
         "to": {"$ref": "#/$defs/code"},
         "on": {"$ref": "#/$defs/code"},
         "when": {"type": "object"},
+        "code": {"$ref": "#/$defs/code"},
+        "label": {"$ref": "#/$defs/label"},
+        "style": {"enum": ["primary", "secondary", "danger"]},
+        "confirm": {"$ref": "#/$defs/label"},
+        "actor": {"type": "object"},
+        "fromStatuses": {"type": "array", "items": {"$ref": "#/$defs/code"}},
+        "input": {"$ref": "#/$defs/formInput"},
         "ruleChecks": {"type": "array", "items": {"$ref": "#/$defs/ruleCheck"}},
         "actions": {
           "type": "array",

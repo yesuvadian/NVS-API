@@ -93,6 +93,18 @@ def test_create_application_positive():
         loan = await db.create_loan(t)
         assert loan["status"] == "DRAFT" and loan["loan_no"]
         assert loan["requested_amount"] == D("12000.00") and loan["is_first_loan"] is True
+        await db.act(t, None, t.d0)
+        start = await db.row("""SELECT i.current_stage_code, i.current_stage_status, l.status
+                                  FROM wf.workflow_instance i JOIN loan.loan l ON l.workflow_instance_id=i.id
+                                 WHERE l.id=%s""", (loan["id"],))
+        workflow = await db.row("""SELECT v.definition FROM cfg.workflow_version v JOIN loan.loan l
+                                    ON l.workflow_version_id=v.id WHERE l.id=%s""", (loan["id"],))
+        initial = next(s for s in workflow["definition"]["stages"]
+                       if s["code"] == workflow["definition"]["startStage"])
+        assert workflow["definition"]["stages"][0]["code"] == workflow["definition"]["startStage"]
+        assert start == {"current_stage_code": workflow["definition"]["startStage"],
+                         "current_stage_status": initial["statuses"]["initial"],
+                         "status": initial["statuses"]["entityStatus"]}
         nominees = await db.val("SELECT count(*) FROM loan.loan_nominee WHERE loan_id=%s", (loan["id"],))
         assert nominees == 1
         history = await db.val("SELECT to_status FROM loan.loan_status_history WHERE loan_id=%s", (loan["id"],))
@@ -185,6 +197,30 @@ def test_application_fee_gate_and_collection():
         assert (await db.submit(t, loan["id"]))["status"] == "UNDER_APPROVAL"
         await db.act(t, "EMP", t.d0)
         await db.fails("SELECT loan.collect_application_fee(%s,'CASH')", (loan["id"],), code="LOAN_FEE_STATE")
+    run_db(scenario)
+
+
+def test_application_fee_after_approval_uses_final_approved_amount():
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+        loan = await db.create_loan(t, amount="12000.00")
+        # Percentage fee timing is configured by the versioned loan product rule.
+        # The final rate/amount are persisted on the application for auditability.
+        await db.conn.execute(
+            """INSERT INTO loan.loan_application_fee
+                   (tenant_id, loan_id, fee_basis, fee_rate, fee_amount, collect_timing, status)
+               VALUES (%s,%s,'PERCENT',1.5,180,'AFTER_APPROVAL','PENDING')""",
+            (t.id, loan["id"]))
+        await db.submit(t, loan["id"])
+        await db.approve(t, loan["id"], amount=Decimal("10000.00"))
+        fee = await db.row("SELECT fee_amount,status FROM loan.loan_application_fee WHERE loan_id=%s", (loan["id"],))
+        assert fee["fee_amount"] == D("150.00") and fee["status"] == "PENDING"
+        await db.fails("SELECT loan.prepare_disbursement(%s,10000)", (loan["id"],), code="FEE_UNPAID")
+        paid = await LoanService(db.conn).collect_application_fee(
+            loan["id"], payment_mode="CASH", payment_reference="AFTER-APPROVAL")
+        assert paid["status"] == "PAID" and D(str(paid["fee_amount"])) == D("150.00")
+        prepared = await db.prepare(t, loan["id"], "10000.00")
+        assert D(str(prepared["net_amount"])) == D("10000.00")
     run_db(scenario)
 
 

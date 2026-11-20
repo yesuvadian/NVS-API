@@ -227,6 +227,34 @@ def test_approval_roles_and_amount_bands_come_from_the_stage():
     run_db(scenario)
 
 
+def test_published_workflow_can_add_remove_rule_checks_and_change_approver_role():
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+
+        def require_nominee_and_set_approver_role(definition):
+            stage(definition, "MANAGER_APPROVAL")["approval"].update(roles=["MGR"])
+            transition(definition, "APPROVE")["ruleChecks"] = [
+                {"code": "NOMINEE", "onFail": "BLOCK"}
+            ]
+
+        await publish_workflow(db, t, require_nominee_and_set_approver_role)
+        _loan, first_request = await submitted_loan(db, t, member="A", nominee=False)
+        await db.app_fails("NOMINEE_REQUIRED", lambda: decide(db, t, "MGR", first_request))
+
+        def remove_check_and_change_role(definition):
+            stage(definition, "MANAGER_APPROVAL")["approval"].update(roles=["LDR"])
+            transition(definition, "APPROVE")["ruleChecks"] = []
+
+        await publish_workflow(db, t, remove_check_and_change_role)
+        loan, request = await submitted_loan(db, t, member="B", nominee=False)
+        await db.app_fails("APPROVER_ROLE_REQUIRED", lambda: decide(db, t, "MGR", request))
+        result = await decide(db, t, "LDR", request)
+        assert result["decision"] == "APPROVED"
+        assert await db.status(loan["id"]) == "APPROVED"
+
+    run_db(scenario)
+
+
 def test_band_approver_decides():
     async def scenario(db: LoanDb):
         t = await db.new_tenant()
@@ -348,6 +376,38 @@ def test_execution_log_and_statuses_follow_the_json():
     run_db(scenario)
 
 
+def test_every_workflow_initializes_in_its_first_configured_stage():
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+        workflow = await current_workflow(db, t)
+        definition = copy.deepcopy(workflow["definition"])
+        definition["stages"][0], definition["stages"][1] = definition["stages"][1], definition["stages"][0]
+        errors = await db.val("SELECT cfg.validate_workflow(%s::jsonb,%s)", (json.dumps(definition), t.id))
+        assert any("startStage must be the first workflow stage" in error for error in errors)
+
+        loan = await db.create_loan(t)
+        await db.act(t, None, t.d0)
+        state = await db.row("""SELECT i.current_stage_code, i.current_stage_status, l.status
+                                  FROM wf.workflow_instance i JOIN loan.loan l ON l.workflow_instance_id=i.id
+                                 WHERE l.id=%s""", (loan["id"],))
+        init = next(s for s in workflow["definition"]["stages"]
+                    if s["code"] == workflow["definition"]["startStage"])
+        assert state["current_stage_code"] == workflow["definition"]["startStage"]
+        assert state["current_stage_status"] == init["statuses"]["initial"]
+        assert state["status"] == init["statuses"]["entityStatus"]
+
+        await db.submit(t, loan["id"])
+        moved = await db.row("""SELECT i.current_stage_code, l.status FROM wf.workflow_instance i
+                                  JOIN loan.loan l ON l.workflow_instance_id=i.id WHERE l.id=%s""", (loan["id"],))
+        submit = next(x for x in workflow["definition"]["transitions"]
+                      if x["on"] == "SUBMIT" and x["from"] == workflow["definition"]["startStage"]
+                      and x.get("when", {}).get("all", [{}])[0].get("value") is False)
+        next_stage = next(s for s in workflow["definition"]["stages"] if s["code"] == submit["to"])
+        assert moved["current_stage_code"] == next_stage["code"]
+        assert moved["status"] == next_stage["statuses"]["entityStatus"]
+    run_db(scenario)
+
+
 def test_new_version_renames_stage_statuses_and_sets_entity_status():
     async def scenario(db: LoanDb):
         t = await db.new_tenant()
@@ -369,7 +429,8 @@ def test_new_version_renames_stage_statuses_and_sets_entity_status():
 
 @pytest.mark.parametrize(("change", "message"), [
     (lambda d: stage(d, "APPROVED")["statuses"].update(entityStatus="HALF_DONE"), "entityStatus HALF_DONE"),
-    (lambda d: stage(d, "DRAFT")["statuses"]["stageStatuses"].append({"code": "PENDING"}), "unique"),
+    (lambda d: stage(d, "DRAFT")["statuses"]["stageStatuses"].append(
+        {"code": stage(d, "DRAFT")["statuses"]["stageStatuses"][0]["code"]}), "unique"),
     (lambda d: stage(d, "DRAFT")["statuses"].update(initial="NOPE"), "initial NOPE"),
     (lambda d: transition(d, "APPROVE").update(stageStatus="FINISHED"), "stageStatus FINISHED"),
     (lambda d: transition(d, "RETURN").update(entityStatus="LOST"), "entityStatus LOST"),

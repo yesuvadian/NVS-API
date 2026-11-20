@@ -105,7 +105,7 @@ class FakeRepository:
     async def workflow_version(self, _id):
         return self.workflow
 
-    async def submit_application(self, loan, workflow):
+    async def submit_application(self, loan, workflow, from_stage=None, approval_stage=None):
         return self.submitted
 
 
@@ -293,13 +293,23 @@ def loan(**overrides) -> dict:
 
 
 def submit(repository: FakeRepository):
-    return run(service_with(repository, FakeLifecycle([])).submit_application(uuid4()))
+    current = repository.loan or {}
+    current_stage = "DRAFT" if current.get("status") in {"DRAFT", "RETURNED"} else current.get("status")
+    return run(service_with(repository, FakeLifecycle([]), FakeWorkflow(
+        {"stage": current_stage, "status": current.get("status"), "workflow_instance_id": uuid4()})).submit_application(uuid4()))
 
 
 def submit_repo(**overrides) -> FakeRepository:
     # the member already has this draft, so the history says "not first loan"
+    definition = {"startStage": "DRAFT", "stages": [
+        {"code": "DRAFT", "statuses": {"initial": "DRAFT", "entityStatus": "DRAFT", "stageStatuses": [{"code": "DRAFT"}]}},
+        {"code": "MANAGER_APPROVAL", "approval": {"roles": ["MGR"], "minApprovals": 1},
+         "statuses": {"initial": "UNDER_APPROVAL", "entityStatus": "UNDER_APPROVAL", "stageStatuses": [{"code": "UNDER_APPROVAL"}]}},
+        {"code": "APPROVED", "end": True, "statuses": {"initial": "APPROVED", "entityStatus": "APPROVED", "stageStatuses": [{"code": "APPROVED"}]}}],
+        "transitions": [{"from": "DRAFT", "to": "MANAGER_APPROVAL", "on": "SUBMIT"}]}
     values = {"product": product(), "member": member(is_first_loan=False), "settings": SETTINGS, "loan": loan(),
-              "nominees": 1, "fee": None, "workflow": {"id": uuid4()}, "submitted": {"status": "UNDER_APPROVAL"}}
+              "nominees": 1, "fee": None, "workflow": {"id": uuid4(), "definition": definition},
+              "submitted": {"status": "UNDER_APPROVAL"}}
     values.update(overrides)
     return FakeRepository(**values)
 
@@ -311,6 +321,8 @@ def test_submit_positive():
     assert submit(submit_repo(fee=paid))["status"] == "UNDER_APPROVAL"
     deducted = {"collect_timing": "DEDUCT_FROM_DISBURSEMENT", "status": "PENDING"}
     assert submit(submit_repo(fee=deducted))["status"] == "UNDER_APPROVAL"
+    after_approval = {"collect_timing": "AFTER_APPROVAL", "status": "PENDING", "fee_amount": Decimal("180.00")}
+    assert submit(submit_repo(fee=after_approval))["status"] == "UNDER_APPROVAL"
 
 
 @pytest.mark.parametrize(
@@ -339,7 +351,10 @@ def test_submit_ineligible_lists_reasons():
 
 
 # Rules linked to workflow transitions (app/services/loan_rules.py) ------------
-V2_WORKFLOW = {"definition": {"transitions": [
+V2_WORKFLOW = {"definition": {"startStage": "DRAFT", "stages": [
+    {"code": "DRAFT"},
+    {"code": "MANAGER_APPROVAL", "approval": {"roles": ["MGR"], "minApprovals": 1}},
+    {"code": "APPROVED"}, {"code": "DISBURSED", "end": True}], "transitions": [
     {"from": "DRAFT", "to": "MANAGER_APPROVAL", "on": "SUBMIT",
      "ruleChecks": ["MEMBER_STATUS", "MEMBERSHIP_PERIOD", "CONCURRENT_LOANS", "OVERDUE_DUES", "AGE_LIMITS",
                     "EXPOSURE_LIMITS", "AMOUNT_LIMITS", "TENURE_LIMITS", "GUARANTORS"]},

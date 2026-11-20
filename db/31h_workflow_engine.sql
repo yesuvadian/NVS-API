@@ -434,9 +434,9 @@ $$
                         WHEN 'MANAGER_APPROVAL' THEN 'UNDER_APPROVAL' WHEN 'APPROVED' THEN 'APPROVED'
                         WHEN 'DISBURSED' THEN 'ACTIVE' WHEN 'REJECTED' THEN 'REJECTED'
                         WHEN 'WITHDRAWN' THEN 'WITHDRAWN' WHEN 'CANCELLED' THEN 'CANCELLED' END,
-                   'initial', 'PENDING',
+                   'initial', CASE WHEN s ->> 'code'='DRAFT' THEN 'DRAFT' ELSE 'PENDING' END,
                    'stageStatuses', CASE s ->> 'code'
-                        WHEN 'DRAFT' THEN '[{"code":"PENDING","label":{"en":"Draft","ta":"வரைவு"}},
+                        WHEN 'DRAFT' THEN '[{"code":"DRAFT","label":{"en":"Draft","ta":"வரைவு"}},
                                             {"code":"SUBMITTED","label":{"en":"Submitted","ta":"சமர்ப்பிக்கப்பட்டது"}},
                                             {"code":"WITHDRAWN","label":{"en":"Withdrawn","ta":"திரும்பப் பெறப்பட்டது"}}]'::jsonb
                         WHEN 'FEE_COLLECTION' THEN '[{"code":"PENDING","label":{"en":"Fee due","ta":"கட்டணம் நிலுவை"}},

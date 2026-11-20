@@ -116,6 +116,39 @@ def test_organisation_list_routes_through_service_and_repository(api_setup) -> N
     assert connection.calls[0][1] == ("demo", "ACTIVE", 25, 50)
 
 
+def test_super_admin_configuration_endpoints_require_configuration_privileges(api_setup, monkeypatch) -> None:
+    client, connection, settings = api_setup
+    tenant_id = uuid4()
+    class ConfigurationServiceFake:
+        def __init__(self, _conn): pass
+        async def list_for_organisation(self, _tenant):
+            return {"workflows": [{"code": "LOAN_APPLICATION"}], "rule_sets": []}
+        async def validate(self, *_args):
+            return {"valid": True, "errors": []}
+        async def publish(self, *_args):
+            return {"status": "PUBLISHED", "version_no": 2}
+    monkeypatch.setattr("app.routers.super_admin.SuperAdminConfigurationService", ConfigurationServiceFake)
+
+    response = client.get(f"/api/v1/super-admin/organisations/{tenant_id}/configurations",
+                          headers=auth_headers(settings))
+    assert response.status_code == 200
+    assert response.json()["workflows"][0]["code"] == "LOAN_APPLICATION"
+    definition = {"startStage": "INIT", "stages": [{"code": "INIT"}], "transitions": []}
+    response = client.post(f"/api/v1/super-admin/organisations/{tenant_id}/configurations/validate",
+                           headers=auth_headers(settings),
+                           json={"kind": "WORKFLOW", "code": "LOAN_APPLICATION", "definition": definition})
+    assert response.status_code == 200 and response.json()["valid"] is True
+    response = client.post(f"/api/v1/super-admin/organisations/{tenant_id}/configurations/publish",
+                           headers=auth_headers(settings),
+                           json={"kind": "WORKFLOW", "code": "LOAN_APPLICATION", "definition": definition,
+                                 "reason": "Workflow stage update", "effective_from": "2026-11-20"})
+    assert response.status_code == 200 and response.json()["status"] == "PUBLISHED"
+
+    forbidden = client.get(f"/api/v1/super-admin/organisations/{tenant_id}/configurations",
+                           headers=auth_headers(settings, role="ORG_ADMIN"))
+    assert forbidden.status_code == 403
+
+
 def test_create_organisation_calls_provisioning_repository_and_returns_record(api_setup) -> None:
     client, connection, settings = api_setup
     tenant_id = uuid4()

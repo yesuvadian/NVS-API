@@ -276,6 +276,70 @@ void main() {
     skip: skip || !hasSuper,
   );
 
+  testWidgets(
+    'Super Admin creates, edits, and publishes a Tamil language pack in Flutter UI',
+    (tester) async {
+      await pumpLiveApp(tester);
+      await uiSignIn(tester, superUser, superPassword);
+      await tester.tap(navItem('Language packs'));
+      await tester.pumpAndSettle();
+
+      final existingRows = find.byType(ListTile);
+      expect(
+        existingRows,
+        findsWidgets,
+        reason: 'Seed platform.translation_text with translatable entries before live CRUD. Visible UI: ${tester.widgetList<Text>(find.byType(Text)).map((widget) => widget.data).whereType<String>().join(' | ')}',
+      );
+      final versionField = find.byType(DropdownButtonFormField<int>);
+      expect(versionField, findsOneWidget);
+      final previousVersion = tester
+          .widget<DropdownButtonFormField<int>>(versionField)
+          .initialValue;
+      await tester.tap(find.text('Create draft'));
+      await tester.pumpAndSettle();
+      for (var tick = 0; tick < 100; tick++) {
+        final currentVersion = tester
+            .widget<DropdownButtonFormField<int>>(versionField)
+            .initialValue;
+        if (currentVersion != previousVersion) break;
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final draftVersion = tester
+          .widget<DropdownButtonFormField<int>>(versionField)
+          .initialValue;
+      expect(draftVersion, isNot(previousVersion));
+
+      final entryRows = find.byType(ListTile);
+      await tester.tap(entryRows.last);
+      await tester.pumpAndSettle();
+
+      final translatedText = find.byType(TextField).last;
+      final existingTranslation =
+          tester.widget<TextField>(translatedText).controller?.text ?? '';
+      await tester.enterText(
+        translatedText,
+        existingTranslation.isEmpty ? 'சோதனை மொழிபெயர்ப்பு' : existingTranslation,
+      );
+      final statusField = find.byType(DropdownButtonFormField<String>).last;
+      await tester.tap(statusField);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Approved').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Publish').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Publish').last);
+      await tester.pumpAndSettle();
+      expect(find.text('PUBLISHED'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await captureScreen(tester, 'super-admin-tamil-language-pack-published');
+    },
+    skip: skip || !hasSuper,
+  );
+
   testWidgets('organisation admin sees the overview and menus', (tester) async {
     await pumpLiveApp(tester);
     await uiSignIn(tester, adminUser, adminPassword);

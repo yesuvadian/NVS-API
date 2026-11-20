@@ -89,6 +89,36 @@ Future<void> superAdminSeesPlatformOverview(WidgetTester tester) async {
   expect(navItem('Members'), findsNothing);
 }
 
+Future<void> superAdminLanguagePackCrud(WidgetTester tester) async {
+  final api = FakeCfmsApi();
+  await pumpApp(tester, api);
+  await signIn(tester, 'superadmin@example.com', 'Platform@123');
+  await openNav(tester, 'Language packs');
+
+  expect(find.text('தமிழ்'), findsOneWidget);
+  expect(find.text('v1'), findsOneWidget);
+  await tapOn(tester, find.widgetWithText(OutlinedButton, 'Create draft'));
+  expect(find.text('v2'), findsOneWidget);
+  expect(api.translationVersion, 2);
+
+  await tapOn(tester, find.text('Members').last);
+  final translationField = find.byType(TextField).last;
+  await typeInto(tester, translationField, 'உறுப்பினர் பட்டியல்');
+  await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+  await tester.pumpAndSettle();
+  await tapOn(tester, find.text('Approved').last);
+  await tapOn(tester, find.widgetWithText(FilledButton, 'Save'));
+  expect(api.translations['nav_members']?['translated_text'], 'உறுப்பினர் பட்டியல்');
+  expect(api.translations['nav_members']?['translation_status'], 'APPROVED');
+  expect(api.count('PUT', '/super-admin/language-packs/ta/2/translations/nav_members'), 1);
+
+  expect(find.text('Publish'), findsOneWidget);
+  await tapOn(tester, find.text('Publish'));
+  await tapOn(tester, find.text('Publish').last);
+  expect(api.translationPackStatus, 'PUBLISHED');
+  expect(api.count('POST', '/super-admin/language-packs/ta/2/publish'), 1);
+}
+
 Future<void> firstLoginChangesPasswordThenShowsTenantOverview(
   WidgetTester tester,
 ) async {

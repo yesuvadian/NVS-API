@@ -11,6 +11,10 @@ import '../tenant/tenant_dashboard.dart';
 import '../auth/password_change_screen.dart';
 import '../tenant/user_management_screen.dart';
 import '../super_admin/organisations_screen.dart';
+import '../super_admin/workflow_configuration_screen.dart';
+import '../super_admin/action_registry_screen.dart';
+import '../super_admin/default_org_settings_screen.dart';
+import '../super_admin/language_packs_screen.dart';
 import '../../services/organisation_service.dart';
 import '../../services/dashboard_service.dart';
 import '../../services/access_control_service.dart';
@@ -18,6 +22,10 @@ import '../tenant/roles_privileges_screen.dart';
 import '../tenant/members_screen.dart';
 import '../../services/member_service.dart';
 import '../../services/tenant_settings_service.dart';
+import '../../providers/super_admin_configuration_provider.dart';
+import '../../services/super_admin_configuration_service.dart';
+import '../../services/super_admin_catalogue_service.dart';
+import '../../services/translation_service.dart';
 import '../tenant/organisation_settings_screen.dart';
 
 /// Whether the session's privileges and enabled modules allow a menu item.
@@ -43,6 +51,21 @@ List<NavItem> navItemsFor(AuthSession session) {
             'nav_organisations',
             Icons.apartment_outlined,
             permission: 'tenants:can_view',
+          ),
+          NavItem(
+            'nav_workflows',
+            Icons.account_tree_outlined,
+            permission: 'config:can_view',
+          ),
+          NavItem(
+            'nav_actions',
+            Icons.bolt_outlined,
+            permission: 'config:can_view',
+          ),
+          NavItem(
+            'nav_defaults',
+            Icons.tune_outlined,
+            permission: 'tenants:can_add',
           ),
           NavItem(
             'nav_languages',
@@ -164,6 +187,21 @@ class _AppShellState extends State<AppShell> {
             onSessionExpired: (message, code) =>
                 widget.auth.expireSession(message, code: code),
           )
+        : selectedItem.key == 'nav_workflows'
+        ? WorkflowConfigurationScreen(
+            provider: SuperAdminConfigurationProvider(
+              organisationService: OrganisationService(widget.config),
+              configurationService: SuperAdminConfigurationService(
+                widget.config,
+              ),
+              token: widget.session.accessToken,
+              language: () => widget.locale.locale.languageCode,
+              onSessionExpired: (message, code) =>
+                  widget.auth.expireSession(message, code: code),
+            ),
+            locale: widget.locale,
+            canEdit: widget.session.permissions.contains('config:can_edit'),
+          )
         : selectedItem.key == 'nav_members'
         ? MembersScreen(
             service: MemberService(widget.config),
@@ -233,8 +271,34 @@ class _AppShellState extends State<AppShell> {
                   onSessionExpired: (message, code) =>
                       widget.auth.expireSession(message, code: code),
                 ))
+        : selectedItem.key == 'nav_actions'
+        ? ActionRegistryScreen(
+            service: SuperAdminCatalogueService(widget.config),
+            token: widget.session.accessToken,
+            language: () => widget.locale.locale.languageCode,
+          )
+        : selectedItem.key == 'nav_defaults'
+        ? DefaultOrgSettingsScreen(
+            service: OrganisationService(widget.config),
+            token: widget.session.accessToken,
+            language: () => widget.locale.locale.languageCode,
+          )
         : selectedItem.key == 'nav_languages'
-        ? _ModulePlaceholder(title: title)
+        ? LanguagePacksScreen(
+            service: TranslationService(widget.config),
+            token: widget.session.accessToken,
+            language: () => widget.locale.locale.languageCode,
+            canAdd: widget.session.permissions.contains(
+              'language_packs:can_add',
+            ),
+            canEdit: widget.session.permissions.contains(
+              'language_packs:can_edit',
+            ),
+            canApprove: widget.session.permissions.contains(
+              'language_packs:can_approve',
+            ),
+            pageSize: widget.config.defaultPageSize,
+          )
         : _ModulePlaceholder(title: title);
 
     return Scaffold(

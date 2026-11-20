@@ -12,10 +12,13 @@ from app.schemas.access_control import ModuleToggle, TenantModuleOut
 from app.schemas.dashboard import PlatformSummaryOut
 from app.schemas.organisations import OrganisationCreate, OrganisationOut, OrganisationStatusChange
 from app.schemas.translations import TranslationEntryUpdate, TranslationPackOut
+from app.schemas.super_admin_configuration import ConfigurationPublishRequest, ConfigurationValidationRequest
 from app.services.access_control import AccessControlService
 from app.services.dashboard import DashboardService
 from app.services.organisations import OrganisationService
 from app.services.translations import TranslationService
+from app.services.super_admin_configuration import SuperAdminConfigurationService
+from app.rules import registry as app_rule_registry
 
 router = APIRouter(prefix="/super-admin", tags=["super-admin"])
 
@@ -63,6 +66,45 @@ async def get_organisation(
     _permission: PlatformPrincipal = Depends(require_platform_permission("tenants:can_view")),
 ):
     return await _org_service(conn).get(tenant_id)
+
+
+@router.get("/organisations/{tenant_id}/configurations")
+async def get_organisation_configurations(
+    tenant_id: UUID,
+    conn: AsyncConnection = Depends(get_platform_db),
+    _permission: PlatformPrincipal = Depends(require_platform_permission("config:can_view")),
+):
+    return await SuperAdminConfigurationService(conn).list_for_organisation(tenant_id)
+
+
+@router.get("/app-rules")
+async def list_application_rule_registry(
+    _permission: PlatformPrincipal = Depends(require_platform_permission("config:can_view")),
+):
+    """Rule implementations the Super Admin may attach to workflow transitions."""
+    return app_rule_registry()
+
+
+@router.post("/organisations/{tenant_id}/configurations/validate")
+async def validate_organisation_configuration(
+    tenant_id: UUID,
+    payload: ConfigurationValidationRequest,
+    conn: AsyncConnection = Depends(get_platform_db),
+    _permission: PlatformPrincipal = Depends(require_platform_permission("config:can_edit")),
+):
+    return await SuperAdminConfigurationService(conn).validate(
+        tenant_id, payload.kind, payload.code, payload.definition)
+
+
+@router.post("/organisations/{tenant_id}/configurations/publish")
+async def publish_organisation_configuration(
+    tenant_id: UUID,
+    payload: ConfigurationPublishRequest,
+    conn: AsyncConnection = Depends(get_platform_db),
+    _permission: PlatformPrincipal = Depends(require_platform_permission("config:can_edit")),
+):
+    return await SuperAdminConfigurationService(conn).publish(
+        tenant_id, payload.kind, payload.code, payload.definition, payload.reason, payload.effective_from)
 
 
 @router.post("/organisations", response_model=OrganisationOut, status_code=status.HTTP_201_CREATED)

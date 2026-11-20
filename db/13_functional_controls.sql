@@ -185,7 +185,11 @@ CREATE CONSTRAINT TRIGGER payslip_totals AFTER INSERT OR UPDATE OR DELETE ON ops
 -- 3. Business rules on status changes
 -- =============================================================================
 -- 3a. Loan: no submission while a before-submission fee is unpaid; no approval
---     while any fee (other than one deducted from disbursement) is unpaid (6.2).
+--     while an after-submission fee is unpaid. AFTER_APPROVAL is collected
+--     between approval and disbursement; deduction fees are netted at payout.
+ALTER TABLE loan.loan_application_fee DROP CONSTRAINT IF EXISTS loan_application_fee_collect_timing_check;
+ALTER TABLE loan.loan_application_fee ADD CONSTRAINT loan_application_fee_collect_timing_check
+    CHECK (collect_timing IN ('BEFORE_SUBMISSION','AFTER_SUBMISSION','AFTER_APPROVAL','DEDUCT_FROM_DISBURSEMENT'));
 CREATE OR REPLACE FUNCTION loan.trg_loan_fee_gate()
 RETURNS trigger LANGUAGE plpgsql AS
 $$
@@ -202,7 +206,7 @@ BEGIN
     IF NEW.status = 'APPROVED' AND EXISTS (
            SELECT 1 FROM loan.loan_application_fee f
             WHERE f.tenant_id = NEW.tenant_id AND f.loan_id = NEW.id
-              AND f.collect_timing <> 'DEDUCT_FROM_DISBURSEMENT' AND f.status = 'PENDING') THEN
+              AND f.collect_timing IN ('AFTER_SUBMISSION','BEFORE_SUBMISSION') AND f.status = 'PENDING') THEN
         PERFORM app.fail('FEE_UNPAID', 'The application fee must be paid or waived before the loan is approved');
     END IF;
     RETURN NEW;
