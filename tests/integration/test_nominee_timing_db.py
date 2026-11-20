@@ -42,10 +42,12 @@ async def grant(db: LoanDb, t, role: str) -> None:
 
 
 async def publish_nominee_rule(db: LoanDb, t, value: dict) -> None:
-    rs = await db.val("SELECT rule_set_id FROM loan.loan_type WHERE id=%s", (t.loan_types["INTEREST_BEARING"],))
+    """The organisation-level NOMINEE rule (MEMBER_RULES), for every loan type."""
+    await db.act(t, None, t.d0)
+    rs = await db.val("SELECT id FROM cfg.rule_set WHERE tenant_id=%s AND code='MEMBER_RULES'", (t.id,))
     current = await db.row("SELECT definition, json_schema_id, version_no FROM cfg.rule_set_version "
                            "WHERE id = cfg.rule_set_version_at(%s,%s)", (rs, t.d0))
-    rules = [dict(r, value=value) if r["code"] == "NOMINEE" else r for r in current["definition"]["rules"]]
+    rules = [r for r in current["definition"]["rules"] if r["code"] != "NOMINEE"] + [{"code": "NOMINEE", "value": value}]
     await db.act(t, None, t.d0)
     await db.conn.execute("UPDATE cfg.rule_set_version SET status='RETIRED' WHERE rule_set_id=%s "
                           "AND status='PUBLISHED' AND effective_from=%s", (rs, t.d0))
@@ -61,11 +63,13 @@ def test_default_rule_and_workflow_for_new_organisations():
     async def scenario(db: LoanDb):
         t = await db.new_tenant()
         await db.act(t, None, t.d0)
-        rule = await db.val(
-            """SELECT r->'value' FROM loan.loan_type lt
+        rule = await db.val("SELECT cfg.general_rule('MEMBER_RULES','NOMINEE',%s)->'value'", (t.d0,))
+        type_rules = await db.val(
+            """SELECT count(*) FROM loan.loan_type lt
                  JOIN cfg.rule_set_version v ON v.id = cfg.rule_set_version_at(lt.rule_set_id, %s)
                  CROSS JOIN LATERAL jsonb_array_elements(v.definition->'rules') r
-                WHERE lt.id=%s AND r->>'code'='NOMINEE'""", (t.d0, t.loan_types["INTEREST_BEARING"]))
+                WHERE lt.tenant_id=%s AND r->>'code'='NOMINEE'""", (t.d0, t.id))
+        assert type_rules == 0                      # no nominee rule per loan type
         assert rule == {"conditions": {"firstLoan": True, "thresholdAmount": 100000,
                                        "defaulter": {"enabled": True, "lookbackMonths": 24}},
                         "allowOverride": True}
@@ -281,5 +285,65 @@ def test_moving_a_rule_check_in_a_new_workflow_version_moves_enforcement():
         await db.app_fails("NOMINEE_REQUIRED", lambda: service.submit_application(after["id"]))
         submitted = await service.submit_application(before["id"])  # keeps v2: nominee not needed at submit
         assert submitted["status"] in {"UNDER_APPROVAL", "SUBMITTED"}
+
+    run_db(scenario)
+
+
+def test_rule_without_allow_override_means_not_allowed():
+    """A NOMINEE rule that does not say allowOverride refuses overrides."""
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+        await publish_nominee_rule(db, t, {"conditions": {"firstLoan": True, "thresholdAmount": None,
+                                                          "defaulter": {"enabled": False}}})
+        loan = await db.create_loan(t, "A", nominee=False)
+        await submit(db, t, loan["id"])
+        await db.act(t, None, t.d0)
+        status = await db.val("SELECT loan.nominee_status(%s)", (loan["id"],))
+        assert status["override_allowed"] is False
+        request = await request_of(db, loan["id"])
+        await db.act(t, "MGR", t.d0)                                  # holds loan.nominee_override
+        await db.app_fails("NOMINEE_OVERRIDE_NOT_ALLOWED", lambda: LoanService(db.conn).decide(
+            request, {"decision": "APPROVED", "nominee_override_reason": "Member has no relatives"}))
+
+    run_db(scenario)
+
+
+def test_two_loan_types_get_the_same_nominee_decision():
+    """The NOMINEE rule is the organisation's (MEMBER_RULES), not the loan type's."""
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+        await publish_nominee_rule(db, t, {"conditions": {"firstLoan": False, "thresholdAmount": 10000,
+                                                          "defaulter": {"enabled": False}}, "allowOverride": True})
+        service = LoanService(db.conn)
+        decisions = {}
+        for loan_type in ("INTEREST_BEARING", "INTEREST_FREE"):
+            await db.act(t, "EMP", t.d0)
+            result = await service.eligibility(member_id=t.members["A"], loan_type_id=t.loan_types[loan_type],
+                                               requested_amount=Decimal("12000.00"), requested_tenure_months=12)
+            decisions[loan_type] = (result["nominee_required"], result["nominee_required_because"])
+            loan = await db.create_loan(t, "A", loan_type=loan_type, nominee=False)
+            await db.act(t, None, t.d0)
+            snapshot = await db.val("""SELECT r->'value' FROM loan.loan l,
+                                          jsonb_array_elements(l.rule_snapshot->'rules') r
+                                         WHERE l.id=%s AND r->>'code'='NOMINEE'""", (loan["id"],))
+            assert snapshot["conditions"]["thresholdAmount"] == 10000        # snapshot of the org rule
+            assert (await status(db, loan["id"]))["required_because"] == ["THRESHOLD"]
+        assert decisions["INTEREST_BEARING"] == decisions["INTEREST_FREE"] == (True, ["THRESHOLD"])
+
+    run_db(scenario)
+
+
+def test_existing_loans_keep_their_snapshot_when_the_org_rule_changes():
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+        await publish_nominee_rule(db, t, {"conditions": {"firstLoan": False, "thresholdAmount": 10000,
+                                                          "defaulter": {"enabled": False}}, "allowOverride": True})
+        old = await db.create_loan(t, "A", nominee=False)
+        await publish_nominee_rule(db, t, {"conditions": {"firstLoan": False, "thresholdAmount": None,
+                                                          "defaulter": {"enabled": False}}, "allowOverride": True})
+        new = await db.create_loan(t, "B", nominee=False, loan_type="INTEREST_FREE")
+        await db.act(t, None, t.d0)
+        assert (await status(db, old["id"]))["required"] is True
+        assert (await status(db, new["id"]))["required"] is False
 
     run_db(scenario)

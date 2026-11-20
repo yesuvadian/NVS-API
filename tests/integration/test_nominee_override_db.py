@@ -94,3 +94,29 @@ def test_nomination_limit_override_paths():
                        code="NOMINEE_OVERRIDE_NOT_ALLOWED")
 
     run_db(scenario)
+
+
+def test_nominations_rule_without_allow_override_means_not_allowed():
+    async def scenario(db: LoanDb):
+        t = await db.new_tenant()
+        await db.act(t, "EMP", t.d0)
+        for member in ("A", "B"):
+            await db.val("SELECT mbr.add_nominee(%s,%s,'SON')", (t.members[member], t.members["C"]))
+        rs = await db.val("SELECT id FROM cfg.rule_set WHERE tenant_id=%s AND code='MEMBER_RULES'", (t.id,))
+        await db.act(t, None, t.d0)
+        current = await db.row("SELECT definition, json_schema_id, version_no FROM cfg.rule_set_version "
+                               "WHERE id = cfg.rule_set_version_at(%s,%s)", (rs, t.d0))
+        rules = [dict(r, value={k: v for k, v in r["value"].items() if k != "allowOverride"})
+                 if r["code"] == "NOMINATIONS" else r for r in current["definition"]["rules"]]
+        await db.conn.execute(
+            """INSERT INTO cfg.rule_set_version (tenant_id, rule_set_id, version_no, status, definition, json_schema_id,
+                                                 effective_from, reason, source)
+               VALUES (%s,%s,%s,'PUBLISHED',%s::jsonb,%s,%s,'No allowOverride','DESIGNER')""",
+            (t.id, rs, current["version_no"] + 1, json.dumps(dict(current["definition"], rules=rules)),
+             current["json_schema_id"], t.d0))
+        await grant(db, t, "EMP")
+        await db.act(t, "EMP", t.d0)
+        await db.fails("SELECT mbr.add_nominee(%s,%s,'SON',%s)", (t.members["NEW"], t.members["C"], "Only relative"),
+                       code="NOMINEE_OVERRIDE_NOT_ALLOWED")
+
+    run_db(scenario)

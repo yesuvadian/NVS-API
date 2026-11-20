@@ -135,13 +135,11 @@ def test_new_organisations_get_the_nominee_rules_from_templates():
     async def scenario(db: LoanDb):
         t = await db.new_tenant()
         await db.act(t, None, t.d0)
-        rule = await db.val(
-            """SELECT r->'value' FROM loan.loan_type lt
-                 JOIN cfg.rule_set_version v ON v.id = cfg.rule_set_version_at(lt.rule_set_id, %s)
-                 CROSS JOIN LATERAL jsonb_array_elements(v.definition->'rules') r
-                WHERE lt.id=%s AND r->>'code'='NOMINEE'""", (t.d0, t.loan_types["INTEREST_BEARING"]))
-        assert rule["conditions"]["thresholdAmount"] == 100000      # db/49b (first loan / amount / past default)
-        assert "everyLoan" not in rule
+        rule = await db.val("SELECT cfg.general_rule('MEMBER_RULES','NOMINEE',%s)->'value'", (t.d0,))
+        assert rule["conditions"]["thresholdAmount"] == 100000      # org-level rule (db/49d)
+        assert "everyLoan" not in rule and rule["allowOverride"] is True
+        nominations = await db.val("SELECT cfg.general_rule('MEMBER_RULES','NOMINATIONS',%s)->'value'", (t.d0,))
+        assert nominations["allowOverride"] is True
         scope = await db.val("SELECT scope_type FROM cfg.rule_set WHERE tenant_id=%s AND code='MEMBER_RULES'", (t.id,))
         assert scope == "GENERAL"
 

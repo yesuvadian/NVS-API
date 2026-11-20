@@ -116,15 +116,16 @@ $$;
 
 -- Loan settings used by the eligibility check, with platform defaults when a
 -- tenant has not configured a value.
+-- The NOMINEE rule alone decides about nominees (loans.nominee_mandatory_first_loan
+-- is no longer read).
+DROP FUNCTION IF EXISTS loan.get_loan_settings();
 CREATE OR REPLACE FUNCTION loan.get_loan_settings()
 RETURNS TABLE (
-    min_membership_months integer, max_concurrent_loans integer,
-    nominee_mandatory_first_loan boolean, block_if_overdue_dues boolean)
+    min_membership_months integer, max_concurrent_loans integer, block_if_overdue_dues boolean)
 LANGUAGE sql STABLE AS
 $$
     SELECT cfg.require_setting_int('loans.min_membership_months'),
            cfg.require_setting_int('loans.max_concurrent_loans'),
-           cfg.require_setting_bool('loans.nominee_mandatory_first_loan'),
            cfg.require_setting_bool('loans.block_if_overdue_dues')
 $$;
 

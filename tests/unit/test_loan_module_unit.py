@@ -81,10 +81,10 @@ class FakeRepository:
         """Mimics loan.nominee_status from the product NOMINEE rule (db/31g)."""
         rule = next((r["value"] for r in self.product["definition"]["rules"] if r["code"] == "NOMINEE"), {})
         from app.services.loans import nominee_reasons
-        why = nominee_reasons(rule, first_loan=bool(self.loan and self.loan["is_first_loan"]), first_loan_setting=True,
+        why = nominee_reasons(rule, first_loan=bool(self.loan and self.loan["is_first_loan"]),
                               requested_amount=self.loan["requested_amount"] if self.loan else Decimal("0"))
         return {"required": bool(why), "required_because": why, "active_nominees": self.nominees,
-                "override_allowed": rule.get("allowOverride", True), "overridden": bool(self.overrides),
+                "override_allowed": rule.get("allowOverride") is True, "overridden": bool(self.overrides),
                 "satisfied": not why or self.nominees > 0 or bool(self.overrides)}
 
     async def record_nominee_override(self, loan_id, reason):
@@ -165,7 +165,7 @@ def member(**overrides) -> dict:
 
 
 SETTINGS = {"min_membership_months": 6, "max_concurrent_loans": 1,
-            "nominee_mandatory_first_loan": True, "block_if_overdue_dues": True}
+            "block_if_overdue_dues": True}
 
 
 def eligibility(service: LoanService, amount="12000.00", tenure=12, **kwargs):
@@ -370,7 +370,7 @@ def test_v2_workflow_submits_without_a_nominee():
 
 
 def test_approve_needs_nominee_or_privileged_override_with_reason():
-    repository = every_loan_repo()
+    repository = every_loan_repo(rule={"allowOverride": True})
     with pytest.raises(AppError) as error:
         enforce(repository, "APPROVE")
     assert error.value.short_code == "NOMINEE_REQUIRED"

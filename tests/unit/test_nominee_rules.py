@@ -11,20 +11,19 @@ from app.services.loans import nominee_requirement
 from app.services.nominees import NomineeService
 
 
-def required(rule, *, first=False, setting=True, amount="12000"):
-    return nominee_requirement(rule, first_loan=first, first_loan_setting=setting, requested_amount=Decimal(amount))
+def required(rule, *, first=False, amount="12000"):
+    return nominee_requirement(rule, first_loan=first, requested_amount=Decimal(amount))
 
 
 def test_every_loan_needs_a_nominee_when_every_loan_is_set():
     assert required({"everyLoan": True, "firstLoan": True}) is True
-    assert required({"everyLoan": True}, first=False, setting=False) is True
+    assert required({"everyLoan": True}, first=False) is True
 
 
-def test_first_loan_rule_needs_first_loan_and_setting():
+def test_first_loan_rule_alone_decides():
     assert required({"firstLoan": True}, first=True) is True
     assert required({"firstLoan": True}, first=False) is False
-    assert required({"firstLoan": True}, first=True, setting=False) is False
-    assert required({}, first=True) is True                       # firstLoan defaults to true
+    assert required({}, first=True) is False                      # absent = not a condition
     assert required({"firstLoan": False}, first=True) is False
 
 
@@ -98,10 +97,9 @@ COND = {"conditions": {"firstLoan": True, "thresholdAmount": 100000,
                        "defaulter": {"enabled": True, "lookbackMonths": 24}}, "allowOverride": True}
 
 
-def why(rule=COND, *, first=False, amount="50000", default=None, setting=True):
+def why(rule=COND, *, first=False, amount="50000", default=None):
     from app.services.loans import nominee_reasons
-    return nominee_reasons(rule, first_loan=first, first_loan_setting=setting,
-                           requested_amount=Decimal(amount), past_default_loan_no=default)
+    return nominee_reasons(rule, first_loan=first, requested_amount=Decimal(amount), past_default_loan_no=default)
 
 
 def test_no_condition_met_means_no_nominee_needed():
@@ -122,7 +120,6 @@ def test_combinations_list_every_reason():
 def test_disabled_conditions_are_ignored():
     rule = {"conditions": {"firstLoan": False, "thresholdAmount": None, "defaulter": {"enabled": False}}}
     assert why(rule, first=True, amount="999999", default="LN-1") == []
-    assert why(first=True, setting=False) == []                    # organisation setting off
 
 
 def test_older_snapshots_still_work():

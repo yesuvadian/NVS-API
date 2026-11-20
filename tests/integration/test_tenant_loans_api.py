@@ -105,7 +105,6 @@ def default_settings():
     return {
         "min_membership_months": 6,
         "max_concurrent_loans": 1,
-        "nominee_mandatory_first_loan": True,
         "block_if_overdue_dues": True,
     }
 

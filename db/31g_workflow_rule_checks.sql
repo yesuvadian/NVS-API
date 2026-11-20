@@ -332,7 +332,6 @@ DECLARE
     v_why       text[] := '{}';
     v_default   text;
     v_active    integer;
-    v_setting   boolean := cfg.require_setting_bool('loans.nominee_mandatory_first_loan');
 BEGIN
     SELECT * INTO v_loan FROM loan.loan l WHERE l.tenant_id = app.tenant_id() AND l.id = p_loan_id;
     IF NOT FOUND THEN
@@ -349,7 +348,7 @@ BEGIN
     IF coalesce((v_rule ->> 'everyLoan')::boolean, false) THEN
         v_why := array_append(v_why, 'EVERY_LOAN');
     END IF;
-    IF v_loan.is_first_loan AND v_setting AND coalesce((v_cond ->> 'firstLoan')::boolean, true) THEN
+    IF v_loan.is_first_loan AND coalesce((v_cond ->> 'firstLoan')::boolean, false) THEN
         v_why := array_append(v_why, 'FIRST_LOAN');
     END IF;
     IF v_threshold IS NOT NULL AND v_amount >= v_threshold THEN
@@ -371,7 +370,7 @@ BEGIN
         'default_loan_no', v_default,
         'active_nominees', v_active,
         'linked', v_active > 0,
-        'override_allowed', coalesce((v_rule ->> 'allowOverride')::boolean, true),
+        'override_allowed', coalesce((v_rule ->> 'allowOverride')::boolean, false),
         'overridden', v_loan.nominee_override_reason IS NOT NULL,
         'override_reason', v_loan.nominee_override_reason,
         'satisfied', cardinality(v_why) = 0 OR v_active > 0 OR v_loan.nominee_override_reason IS NOT NULL);

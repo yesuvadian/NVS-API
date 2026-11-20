@@ -479,6 +479,39 @@ BEGIN
 END
 $$;
 
+-- A rule of an organisation-level (GENERAL) rule set, from its version in
+-- force; NULL when the set or the rule is absent.
+CREATE OR REPLACE FUNCTION cfg.general_rule(p_rule_set_code text, p_rule_code text, p_on date DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql STABLE AS
+$$
+DECLARE v_rule jsonb;
+BEGIN
+    SELECT r INTO v_rule
+      FROM cfg.rule_set s
+      JOIN cfg.rule_set_version v ON v.id = cfg.rule_set_version_at(s.id, coalesce(p_on, app.working_date()))
+      CROSS JOIN LATERAL jsonb_array_elements(v.definition -> 'rules') r
+     WHERE s.tenant_id = app.tenant_id() AND s.code = p_rule_set_code AND s.status = 'ACTIVE'
+       AND r ->> 'code' = p_rule_code
+     LIMIT 1;
+    RETURN v_rule;
+END
+$$;
+
+-- The rules a loan type works with: its own rule set, with the NOMINEE rule
+-- taken from the organisation's MEMBER_RULES set (nominees depend on the
+-- organisation's rule, not on the loan type). New loans snapshot this.
+CREATE OR REPLACE FUNCTION loan.effective_type_rules(p_definition jsonb)
+RETURNS jsonb LANGUAGE plpgsql STABLE AS
+$$
+DECLARE v_nominee jsonb := cfg.general_rule('MEMBER_RULES', 'NOMINEE');
+BEGIN
+    RETURN jsonb_set(p_definition, '{rules}',
+        coalesce((SELECT jsonb_agg(r) FROM jsonb_array_elements(p_definition -> 'rules') r
+                   WHERE r ->> 'code' <> 'NOMINEE'), '[]'::jsonb)
+        || CASE WHEN v_nominee IS NULL THEN '[]'::jsonb ELSE jsonb_build_array(v_nominee) END);
+END
+$$;
+
 CREATE OR REPLACE FUNCTION loan.get_active_loan_types(p_loan_type_id uuid DEFAULT NULL)
 RETURNS TABLE (
     id uuid,code text,name text,description text,interest_method text,
@@ -489,7 +522,7 @@ LANGUAGE sql STABLE AS
 $$
     SELECT lt.id,lt.code,lt.name,lt.description,lt.interest_method,
            lt.is_interest_free,lt.allows_tranches,rs.code,
-           rv.id,rv.version_no,rv.effective_from,rv.definition
+           rv.id,rv.version_no,rv.effective_from,loan.effective_type_rules(rv.definition)
       FROM loan.loan_type lt
       JOIN cfg.rule_set rs ON rs.tenant_id=lt.tenant_id AND rs.id=lt.rule_set_id
       JOIN LATERAL (

@@ -118,11 +118,11 @@ def nominee_conditions(rule: dict[str, Any]) -> dict[str, Any]:
 
 
 def nominee_reasons(
-    rule: dict[str, Any], *, first_loan: bool, first_loan_setting: bool, requested_amount: Decimal,
+    rule: dict[str, Any], *, first_loan: bool, requested_amount: Decimal,
     past_default_loan_no: str | None = None,
 ) -> list[str]:
     """Why the NOMINEE rule needs a nominee; ANY enabled condition is enough:
-    FIRST_LOAN (firstLoan and the organisation setting), THRESHOLD (amount at
+    FIRST_LOAN (firstLoan: true), THRESHOLD (amount at
     or above thresholdAmount; null = off), PAST_DEFAULT (defaulter.enabled and
     a current or recent default, found by the caller). EVERY_LOAN only for
     older snapshots that still carry everyLoan."""
@@ -130,7 +130,7 @@ def nominee_reasons(
     why: list[str] = []
     if rule.get("everyLoan"):
         why.append("EVERY_LOAN")
-    if first_loan and first_loan_setting and conditions.get("firstLoan", True):
+    if first_loan and conditions.get("firstLoan") is True:
         why.append("FIRST_LOAN")
     threshold = conditions.get("thresholdAmount")
     if threshold is not None and requested_amount >= _decimal(threshold):
@@ -141,11 +141,11 @@ def nominee_reasons(
 
 
 def nominee_requirement(
-    rule: dict[str, Any], *, first_loan: bool, first_loan_setting: bool, requested_amount: Decimal,
+    rule: dict[str, Any], *, first_loan: bool, requested_amount: Decimal,
     past_default_loan_no: str | None = None,
 ) -> bool:
-    return bool(nominee_reasons(rule, first_loan=first_loan, first_loan_setting=first_loan_setting,
-                                requested_amount=requested_amount, past_default_loan_no=past_default_loan_no))
+    return bool(nominee_reasons(rule, first_loan=first_loan, requested_amount=requested_amount,
+                                past_default_loan_no=past_default_loan_no))
 
 
 class LoanService:
@@ -262,7 +262,6 @@ class LoanService:
         nominee_why = nominee_reasons(
             nominee_rule,
             first_loan=first_loan,
-            first_loan_setting=bool(settings["nominee_mandatory_first_loan"]),
             requested_amount=requested_amount,
             past_default_loan_no=past_default,
         )
@@ -294,8 +293,8 @@ class LoanService:
             "nominee_required_because": nominee_why,
             "nominee_threshold_amount": nominee_conditions(nominee_rule).get("thresholdAmount"),
             "nominee_default_loan_no": past_default,
-            # loan.nominee_override holders may approve without one, unless off.
-            "nominee_override_allowed": bool(nominee_rule.get("allowOverride", True)),
+            # loan.nominee_override holders may approve without one, only when the rule sets allowOverride: true (absent = not allowed).
+            "nominee_override_allowed": nominee_rule.get("allowOverride") is True,
             "guarantors_required": guarantors_required,
             "application_fee": fee_amount,
             "fee_timing": fee_timing,

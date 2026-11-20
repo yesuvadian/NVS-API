@@ -119,7 +119,7 @@ BEGIN
             PERFORM app.fail('NOMINATION_LIMIT_REACHED',
                 format('This person is already a nominee for %s members', v_per_person));
         END IF;
-        PERFORM mbr.assert_nominee_override(coalesce((v_rules ->> 'allowOverride')::boolean, true),
+        PERFORM mbr.assert_nominee_override(coalesce((v_rules ->> 'allowOverride')::boolean, false),
                                             p_override_reason, 'NOMINATION_LIMIT_REACHED');
         RETURN true;
     END IF;
