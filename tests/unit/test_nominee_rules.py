@@ -91,3 +91,40 @@ def test_service_passes_values_through():
         ("status", nominee_row, "INACTIVE", 3, "Moved away", False),
         ("add", member, nominee, "SON", "Only relative"),              # override reason trimmed
     ]
+
+
+# Conditions shape (db/49b): ANY enabled condition requires a nominee --------
+COND = {"conditions": {"firstLoan": True, "thresholdAmount": 100000,
+                       "defaulter": {"enabled": True, "lookbackMonths": 24}}, "allowOverride": True}
+
+
+def why(rule=COND, *, first=False, amount="50000", default=None, setting=True):
+    from app.services.loans import nominee_reasons
+    return nominee_reasons(rule, first_loan=first, first_loan_setting=setting,
+                           requested_amount=Decimal(amount), past_default_loan_no=default)
+
+
+def test_no_condition_met_means_no_nominee_needed():
+    assert why() == []
+
+
+def test_each_condition_alone():
+    assert why(first=True) == ["FIRST_LOAN"]
+    assert why(amount="100000") == ["THRESHOLD"]                  # at the threshold counts
+    assert why(amount="99999.99") == []
+    assert why(default="LN-2025-0007") == ["PAST_DEFAULT"]
+
+
+def test_combinations_list_every_reason():
+    assert why(first=True, amount="150000", default="LN-1") == ["FIRST_LOAN", "THRESHOLD", "PAST_DEFAULT"]
+
+
+def test_disabled_conditions_are_ignored():
+    rule = {"conditions": {"firstLoan": False, "thresholdAmount": None, "defaulter": {"enabled": False}}}
+    assert why(rule, first=True, amount="999999", default="LN-1") == []
+    assert why(first=True, setting=False) == []                    # organisation setting off
+
+
+def test_older_snapshots_still_work():
+    assert why({"everyLoan": True}) == ["EVERY_LOAN"]
+    assert why({"firstLoan": True, "thresholdAmount": 10000}, first=True, amount="20000") == ["FIRST_LOAN", "THRESHOLD"]

@@ -13,8 +13,9 @@ from app.schemas.loans import (
     LoanApplicationUpdate,
     LoanEligibilityOut,
     LoanEligibilityRequest,
+    LoanNomineeOverride,
+    LoanNomineesUpdate,
     LoanOut,
-    LoanSubmit,
     LoanTypeOut,
     LoanFeePayment,
     LoanDecision,
@@ -54,7 +55,7 @@ async def check_loan_eligibility(
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan.view")),
 ):
-    return await _service(conn).eligibility(**payload.model_dump())
+    return await _service(conn).eligibility_view(**payload.model_dump())
 
 
 @router.get("/loans")
@@ -110,15 +111,36 @@ async def get_loan_application(
 @router.post("/loans/{loan_id}/submit", response_model=LoanOut)
 async def submit_loan_application(
     loan_id: UUID,
-    payload: LoanSubmit | None = None,
     conn: AsyncConnection = Depends(get_tenant_db),
     _principal: TenantPrincipal = Depends(require_tenant_permission("loan.create")),
 ):
-    """Submit for approval. Without an ACTIVE nominee the NOMINEE rule refuses
-    (NOMINEE_REQUIRED) unless the user holds loan.nominee_override and gives
-    nominee_override_reason; the override is stored and shown to the approver."""
-    return await _service(conn).submit_application(
-        loan_id, nominee_override_reason=payload.nominee_override_reason if payload else None)
+    """Submit for approval; runs the SUBMIT rule checks of the loan's workflow."""
+    return await _service(conn).submit_application(loan_id)
+
+
+@router.put("/loans/{loan_id}/nominees")
+async def set_loan_nominees(
+    loan_id: UUID,
+    payload: LoanNomineesUpdate,
+    expected_version: int | None = Header(default=None, alias="X-Expected-Row-Version", ge=1),
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.edit")),
+):
+    """Link (or unlink) nominees on an application before approval, or after
+    approval until the first disbursement. Returns the nominee rule state."""
+    return await _service(conn).set_nominees(loan_id, payload.nominee_ids, expected_version)
+
+
+@router.post("/loans/{loan_id}/nominee-override")
+async def record_loan_nominee_override(
+    loan_id: UUID,
+    payload: LoanNomineeOverride,
+    conn: AsyncConnection = Depends(get_tenant_db),
+    _principal: TenantPrincipal = Depends(require_tenant_permission("loan.nominee_override")),
+):
+    """Record that the NOMINEE rule is overridden for this loan (reason 3-500),
+    before approval; the approver sees it. The rule must allow overrides."""
+    return await _service(conn).record_nominee_override(loan_id, payload.reason)
 
 
 @router.get("/loan-approvals/inbox")

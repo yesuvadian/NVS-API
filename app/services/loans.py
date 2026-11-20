@@ -7,6 +7,7 @@ from psycopg import AsyncConnection
 
 from app.core.errors import AppError
 from app.repositories.loans import LoanRepository
+from app.services.loan_rules import assert_rule_checks, build_criteria, stage_of_checks, transition_rule_outcomes
 from app.repositories.loan_lifecycle import LoanLifecycleRepository
 
 CENT = Decimal("0.01")
@@ -103,18 +104,42 @@ def exposure_reasons(*, definition: dict[str, Any], exposure: dict[str, Any] | N
     return reasons, required
 
 
-def nominee_requirement(
-    rule: dict[str, Any], *, first_loan: bool, first_loan_setting: bool, requested_amount: Decimal
-) -> bool:
-    """NOMINEE rule of the loan type: a nominee is needed for every loan
-    (everyLoan), for a member's first loan (firstLoan and the organisation
-    setting), or when the amount reaches thresholdAmount."""
+def nominee_conditions(rule: dict[str, Any]) -> dict[str, Any]:
+    """Conditions of the NOMINEE rule. Current shape:
+    {"conditions": {"firstLoan", "thresholdAmount", "defaulter": {"enabled", "lookbackMonths"}},
+     "allowOverride"}; older snapshots keep firstLoan/thresholdAmount at the top."""
+    return rule.get("conditions") if isinstance(rule.get("conditions"), dict) else rule
+
+
+def nominee_reasons(
+    rule: dict[str, Any], *, first_loan: bool, first_loan_setting: bool, requested_amount: Decimal,
+    past_default_loan_no: str | None = None,
+) -> list[str]:
+    """Why the NOMINEE rule needs a nominee; ANY enabled condition is enough:
+    FIRST_LOAN (firstLoan and the organisation setting), THRESHOLD (amount at
+    or above thresholdAmount; null = off), PAST_DEFAULT (defaulter.enabled and
+    a current or recent default, found by the caller). EVERY_LOAN only for
+    older snapshots that still carry everyLoan."""
+    conditions = nominee_conditions(rule)
+    why: list[str] = []
     if rule.get("everyLoan"):
-        return True
-    if first_loan and first_loan_setting and rule.get("firstLoan", True):
-        return True
-    threshold = rule.get("thresholdAmount")
-    return threshold is not None and requested_amount >= _decimal(threshold)
+        why.append("EVERY_LOAN")
+    if first_loan and first_loan_setting and conditions.get("firstLoan", True):
+        why.append("FIRST_LOAN")
+    threshold = conditions.get("thresholdAmount")
+    if threshold is not None and requested_amount >= _decimal(threshold):
+        why.append("THRESHOLD")
+    if (conditions.get("defaulter") or {}).get("enabled") and past_default_loan_no:
+        why.append("PAST_DEFAULT")
+    return why
+
+
+def nominee_requirement(
+    rule: dict[str, Any], *, first_loan: bool, first_loan_setting: bool, requested_amount: Decimal,
+    past_default_loan_no: str | None = None,
+) -> bool:
+    return bool(nominee_reasons(rule, first_loan=first_loan, first_loan_setting=first_loan_setting,
+                                requested_amount=requested_amount, past_default_loan_no=past_default_loan_no))
 
 
 class LoanService:
@@ -205,12 +230,17 @@ class LoanService:
             reasons.append("TENURE_OUTSIDE_LOAN_TYPE_LIMITS")
 
         first_loan = bool(member["is_first_loan"] if first_loan is None else first_loan)
-        nominee_required = nominee_requirement(
+        defaulter = nominee_conditions(nominee_rule).get("defaulter") or {}
+        past_default = (await self.repository.member_past_default(member_id, defaulter.get("lookbackMonths"))
+                        if defaulter.get("enabled") else None)
+        nominee_why = nominee_reasons(
             nominee_rule,
             first_loan=first_loan,
             first_loan_setting=bool(settings["nominee_mandatory_first_loan"]),
             requested_amount=requested_amount,
+            past_default_loan_no=past_default,
         )
+        nominee_required = bool(nominee_why)
         fee_enabled = bool(fee_rule.get("enabled", False))
         fee_amount = Decimal("0")
         fee_timing = None
@@ -237,7 +267,10 @@ class LoanService:
             "reasons": reasons,
             "first_loan": first_loan,
             "nominee_required": nominee_required,
-            # loan.nominee_override holders may submit without one, unless off.
+            "nominee_required_because": nominee_why,
+            "nominee_threshold_amount": nominee_conditions(nominee_rule).get("thresholdAmount"),
+            "nominee_default_loan_no": past_default,
+            # loan.nominee_override holders may approve without one, unless off.
             "nominee_override_allowed": bool(nominee_rule.get("allowOverride", True)),
             "guarantors_required": guarantors_required,
             "application_fee": fee_amount,
@@ -299,6 +332,15 @@ class LoanService:
         return result
 
     async def decide(self, request_id: UUID, values: dict[str, Any]):
+        if values.get("decision") == "APPROVED":
+            loan_id = await self.repository.loan_for_approval_request(request_id)
+            loan = await self.repository.get_application(loan_id) if loan_id else None
+            if loan is None:
+                raise AppError("APPROVAL_REQUEST_NOT_FOUND")
+            approved = {**loan, "approved_amount": values.get("approved_amount") or loan.get("approved_amount"),
+                        "tenure_months": values.get("tenure_months") or loan.get("tenure_months")}
+            await self.enforce_transition(approved, "APPROVE",
+                                          nominee_override_reason=values.get("nominee_override_reason"))
         result = await self.lifecycle.decide(request_id, values)
         if result is None:
             raise AppError("APPROVAL_REQUEST_NOT_FOUND")
@@ -312,6 +354,9 @@ class LoanService:
         return result
 
     async def release_disbursement(self, loan_id: UUID, disbursement_id: UUID, ack_type: str):
+        loan = await self.repository.get_application(loan_id)
+        if loan is not None:
+            await self.enforce_transition(loan, "DISBURSE")
         result = await self.lifecycle.release_disbursement(loan_id, disbursement_id, ack_type)
         if result is None:
             raise AppError("DISBURSEMENT_NOT_FOUND")
@@ -370,7 +415,20 @@ class LoanService:
         loan = await self.repository.get_application(loan_id)
         if loan is None:
             raise AppError("LOAN_APPLICATION_NOT_FOUND")
-        return loan
+        nominee_status = await self.repository.nominee_status(loan_id)
+        workflow = await self.repository.workflow_version(loan["workflow_version_id"])
+        try:
+            eligibility = await self.eligibility(
+                member_id=loan["member_id"], loan_type_id=loan["loan_type_id"],
+                requested_amount=loan.get("approved_amount") or loan["requested_amount"],
+                requested_tenure_months=loan.get("tenure_months") or loan["requested_tenure_months"],
+                first_loan=loan["is_first_loan"])
+        except AppError:
+            eligibility = None
+        guarantors = len([g for g in await self.lifecycle.guarantors(loan_id) or [] if g["status"] == "ACTIVE"])
+        criteria = build_criteria(eligibility, stages=stage_of_checks((workflow or {}).get("definition")),
+                                  nominee_status=nominee_status, active_guarantors=guarantors) if eligibility else []
+        return {**loan, "nominee_status": nominee_status, "criteria": criteria}
 
     async def update_application(self, loan_id: UUID, values: dict[str, Any], expected_version: int | None = None):
         """Change a draft or returned application after re-running the eligibility checks."""
@@ -396,36 +454,21 @@ class LoanService:
             raise AppError("NOMINEE_NOT_ACTIVE")
         return await self.lifecycle.update_application(loan_id, changes, expected_version)
 
-    async def submit_application(self, loan_id: UUID, nominee_override_reason: str | None = None):
+    async def submit_application(self, loan_id: UUID):
         loan = await self.repository.get_application(loan_id, lock=True)
         if loan is None:
             raise AppError("LOAN_APPLICATION_NOT_FOUND")
         if loan["status"] not in {"DRAFT", "RETURNED"}:
             raise AppError("LOAN_NOT_SUBMITTABLE")
 
-        eligibility = await self.eligibility(
-            member_id=loan["member_id"],
-            loan_type_id=loan["loan_type_id"],
-            requested_amount=loan["requested_amount"],
-            requested_tenure_months=loan["requested_tenure_months"],
-            first_loan=loan["is_first_loan"],
-        )
-        if not eligibility["eligible"]:
-            raise AppError("LOAN_INELIGIBLE", details={"reasons": eligibility["reasons"]})
-        if eligibility["nominee_required"] and await self.repository.application_nominee_count(loan_id) == 0:
-            await self._nominee_override(loan_id, eligibility, nominee_override_reason)
-        if eligibility["guarantors_required"]:
-            guarantors = [g for g in await self.lifecycle.guarantors(loan_id) or [] if g["status"] == "ACTIVE"]
-            if len(guarantors) < eligibility["guarantors_required"]:
-                raise AppError("GUARANTORS_REQUIRED",
-                               params={"required": eligibility["guarantors_required"], "added": len(guarantors)})
+        workflow = await self.repository.workflow_version(loan["workflow_version_id"])
+        await self.enforce_transition(loan, "SUBMIT", workflow=workflow)
         missing = await self.lifecycle.missing_documents(loan_id)
         if missing:
             raise AppError("DOCUMENTS_REQUIRED", params={"missing": ", ".join(missing)}, details={"missing": missing})
         fee = await self.repository.application_fee(loan_id)
         if fee and fee["collect_timing"] != "DEDUCT_FROM_DISBURSEMENT" and fee["status"] not in {"PAID", "WAIVED"}:
             raise AppError("FEE_UNPAID")
-        workflow = await self.repository.workflow_version(loan["workflow_version_id"])
         if workflow is None:
             raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
         submitted = await self.repository.submit_application(loan, workflow)
@@ -433,18 +476,54 @@ class LoanService:
             raise AppError("LOAN_WORKFLOW_NOT_CONFIGURED")
         return submitted
 
-    async def _nominee_override(self, loan_id: UUID, eligibility: dict[str, Any], reason: str | None) -> None:
-        """No ACTIVE nominee although the NOMINEE rule needs one. Without
-        loan.nominee_override: NOMINEE_REQUIRED. With it: the rule must allow
-        overrides and a reason (3-500) is required; it is stored and audited."""
-        if not await self.repository.has_privilege("loan.nominee_override"):
-            raise AppError("NOMINEE_REQUIRED")
-        if not eligibility.get("nominee_override_allowed", True):
-            raise AppError("NOMINEE_OVERRIDE_NOT_ALLOWED")
-        reason = (reason or "").strip()
-        if not 3 <= len(reason) <= 500:
-            raise AppError("NOMINEE_OVERRIDE_REASON_REQUIRED")
-        await self.repository.record_nominee_override(loan_id, reason, True)
+    async def enforce_transition(
+        self, loan: dict[str, Any], event: str, *, workflow: dict[str, Any] | None = None,
+        nominee_override_reason: str | None = None,
+    ) -> None:
+        """Evaluate the rule checks the loan's workflow version attaches to a
+        transition (SUBMIT, APPROVE, DISBURSE). An unmet NOMINEE rule can be
+        overridden at that point by a holder of loan.nominee_override with a
+        reason (stored, audited, shown to the approver)."""
+        if workflow is None:
+            workflow = await self.repository.workflow_version(loan["workflow_version_id"])
+        checks = transition_rule_outcomes((workflow or {}).get("definition"), event)
+        if not checks:
+            return
+        needs_eligibility = any(c not in {"NOMINEE"} for c in checks)
+        eligibility = await self.eligibility(
+            member_id=loan["member_id"], loan_type_id=loan["loan_type_id"],
+            requested_amount=loan.get("approved_amount") or loan["requested_amount"],
+            requested_tenure_months=loan.get("tenure_months") or loan["requested_tenure_months"],
+            first_loan=loan["is_first_loan"],
+        ) if needs_eligibility else None
+        active_guarantors = None
+        if "GUARANTORS" in checks and eligibility and eligibility.get("guarantors_required"):
+            active_guarantors = len([g for g in await self.lifecycle.guarantors(loan["id"]) or []
+                                     if g["status"] == "ACTIVE"])
+        nominee_status = await self.repository.nominee_status(loan["id"]) if "NOMINEE" in checks else None
+        if assert_rule_checks(checks, eligibility=eligibility, active_guarantors=active_guarantors,
+                              nominee_status=nominee_status):
+            reason = (nominee_override_reason or "").strip()
+            if not reason:
+                raise AppError("NOMINEE_REQUIRED")
+            # Privilege, allowOverride and reason length are checked in SQL.
+            await self.repository.record_nominee_override(loan["id"], reason)
+
+    async def eligibility_view(self, **values) -> dict[str, Any]:
+        """Eligibility plus the criteria list, grouped by the transition of the
+        current workflow version where each is checked."""
+        result = await self.eligibility(**values)
+        workflow = await self.repository.current_workflow()
+        stages = stage_of_checks((workflow or {}).get("definition"))
+        return {**result, "criteria": build_criteria(result, stages=stages)}
+
+    async def set_nominees(self, loan_id: UUID, nominee_ids: list[UUID], expected_version: int | None):
+        if expected_version is None:
+            raise AppError("ROW_VERSION_REQUIRED")
+        return await self.repository.set_application_nominees(loan_id, nominee_ids, expected_version)
+
+    async def record_nominee_override(self, loan_id: UUID, reason: str):
+        return await self.repository.record_nominee_override(loan_id, reason.strip())
 
     async def approval_inbox(self, *, limit: int, offset: int):
         rows = await self.repository.approval_inbox(limit=limit, offset=offset)

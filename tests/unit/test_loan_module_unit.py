@@ -64,6 +64,9 @@ class FakeRepository:
     async def get_application(self, _id, lock=False):
         return self.loan
 
+    async def loan_for_approval_request(self, _request_id):
+        return self.loan["id"] if self.loan else None
+
     async def application_nominee_count(self, _id):
         return self.nominees
 
@@ -74,8 +77,27 @@ class FakeRepository:
     async def has_privilege(self, code):
         return self.privileged and code == "loan.nominee_override"
 
-    async def record_nominee_override(self, loan_id, reason, allowed):
-        self.overrides = [*self.overrides, (loan_id, reason, allowed)]
+    async def nominee_status(self, _loan_id):
+        """Mimics loan.nominee_status from the product NOMINEE rule (db/31g)."""
+        rule = next((r["value"] for r in self.product["definition"]["rules"] if r["code"] == "NOMINEE"), {})
+        from app.services.loans import nominee_reasons
+        why = nominee_reasons(rule, first_loan=bool(self.loan and self.loan["is_first_loan"]), first_loan_setting=True,
+                              requested_amount=self.loan["requested_amount"] if self.loan else Decimal("0"))
+        return {"required": bool(why), "required_because": why, "active_nominees": self.nominees,
+                "override_allowed": rule.get("allowOverride", True), "overridden": bool(self.overrides),
+                "satisfied": not why or self.nominees > 0 or bool(self.overrides)}
+
+    async def record_nominee_override(self, loan_id, reason):
+        """Mimics loan.record_nominee_override's checks (privilege, allowOverride, reason)."""
+        status = await self.nominee_status(loan_id)
+        if not self.privileged:
+            raise AppError("NOMINEE_REQUIRED")
+        if not status["override_allowed"]:
+            raise AppError("NOMINEE_OVERRIDE_NOT_ALLOWED")
+        if not 3 <= len(reason.strip()) <= 500:
+            raise AppError("NOMINEE_OVERRIDE_REASON_REQUIRED")
+        self.overrides = [*self.overrides, (loan_id, reason)]
+        return status
 
     async def application_fee(self, _id):
         return self.fee
@@ -260,8 +282,14 @@ def test_submit_ineligible_lists_reasons():
     assert error.value.details == {"reasons": ["MEMBER_RESTRICTED"]}
 
 
-def submit_with_reason(repository: FakeRepository, reason):
-    return run(service_with(repository, FakeLifecycle([])).submit_application(uuid4(), reason))
+# Rules linked to workflow transitions (app/services/loan_rules.py) ------------
+V2_WORKFLOW = {"definition": {"transitions": [
+    {"from": "DRAFT", "to": "MANAGER_APPROVAL", "on": "SUBMIT",
+     "ruleChecks": ["MEMBER_STATUS", "MEMBERSHIP_PERIOD", "CONCURRENT_LOANS", "OVERDUE_DUES", "AGE_LIMITS",
+                    "EXPOSURE_LIMITS", "AMOUNT_LIMITS", "TENURE_LIMITS", "GUARANTORS"]},
+    {"from": "MANAGER_APPROVAL", "to": "APPROVED", "on": "APPROVE", "ruleChecks": ["NOMINEE", "GUARANTORS"]},
+    {"from": "APPROVED", "to": "DISBURSED", "on": "DISBURSE", "ruleChecks": ["NOMINEE"]},
+]}}
 
 
 def every_loan_repo(**overrides) -> FakeRepository:
@@ -269,37 +297,61 @@ def every_loan_repo(**overrides) -> FakeRepository:
                        nominees=0, **overrides)
 
 
-def test_nominee_override_needs_the_privilege():
-    repository = every_loan_repo()
+def enforce(repository, event, workflow=V2_WORKFLOW, reason=None):
+    service = service_with(repository, FakeLifecycle([]))
+    return run(service.enforce_transition(repository.loan, event, workflow=workflow, nominee_override_reason=reason))
+
+
+def test_legacy_workflow_still_needs_the_nominee_at_submit():
     with pytest.raises(AppError) as error:
-        submit_with_reason(repository, "Member has no family")
+        submit(every_loan_repo())                    # workflow without ruleChecks
     assert error.value.short_code == "NOMINEE_REQUIRED"
-    assert repository.overrides == []
 
 
-def test_nominee_override_with_privilege_and_reason_is_recorded():
+def test_v2_workflow_submits_without_a_nominee():
+    repository = every_loan_repo(workflow=V2_WORKFLOW)
+    assert submit(repository)["status"] == "UNDER_APPROVAL"
+
+
+def test_approve_needs_nominee_or_privileged_override_with_reason():
     repository = every_loan_repo()
-    repository.privileged = True
-    assert submit_with_reason(repository, "  Member has no family  ")["status"] == "UNDER_APPROVAL"
-    assert repository.overrides[0][1:] == ("Member has no family", True)
-
-
-@pytest.mark.parametrize("reason", [None, "", "  ", "ab", "x" * 501])
-def test_nominee_override_without_valid_reason_is_refused(reason):
-    repository = every_loan_repo()
+    with pytest.raises(AppError) as error:
+        enforce(repository, "APPROVE")
+    assert error.value.short_code == "NOMINEE_REQUIRED"
+    with pytest.raises(AppError) as error:
+        enforce(repository, "APPROVE", reason="Member has no family")      # no privilege
+    assert error.value.short_code == "NOMINEE_REQUIRED"
     repository.privileged = True
     with pytest.raises(AppError) as error:
-        submit_with_reason(repository, reason)
+        enforce(repository, "APPROVE", reason="ab")
     assert error.value.short_code == "NOMINEE_OVERRIDE_REASON_REQUIRED"
-    assert repository.overrides == []
+    enforce(repository, "APPROVE", reason="  Member has no family  ")
+    assert repository.overrides[0][1] == "Member has no family"
 
 
-def test_nominee_override_switched_off_by_the_rule():
+def test_approve_override_switched_off_by_the_rule():
     repository = every_loan_repo(rule={"allowOverride": False})
     repository.privileged = True
     with pytest.raises(AppError) as error:
-        submit_with_reason(repository, "Member has no family")
+        enforce(repository, "APPROVE", reason="Member has no family")
     assert error.value.short_code == "NOMINEE_OVERRIDE_NOT_ALLOWED"
+
+
+def test_disburse_blocks_without_active_nominee_even_for_privileged_users():
+    repository = every_loan_repo()
+    repository.privileged = True
+    with pytest.raises(AppError) as error:
+        enforce(repository, "DISBURSE", reason="Member has no family")
+    assert error.value.short_code == "NOMINEE_REQUIRED"
+    assert repository.overrides == []
+    repository.nominees = 1
+    enforce(repository, "DISBURSE")
+
+
+def test_warn_outcome_never_blocks():
+    workflow = {"definition": {"transitions": [
+        {"from": "A", "to": "B", "on": "APPROVE", "ruleChecks": [{"code": "NOMINEE", "onFail": "WARN"}]}]}}
+    enforce(every_loan_repo(), "APPROVE", workflow=workflow)
 
 
 def test_submit_without_nominee_allowed_when_not_first_loan():
@@ -326,7 +378,7 @@ def test_submit_without_nominee_allowed_when_not_first_loan():
 )
 def test_service_maps_missing_rows_to_not_found(method, args, code):
     with pytest.raises(AppError) as error:
-        run(getattr(service_with(lifecycle=FakeLifecycle(None)), method)(*args))
+        run(getattr(service_with(FakeRepository(), lifecycle=FakeLifecycle(None)), method)(*args))
     assert error.value.short_code == code
 
 

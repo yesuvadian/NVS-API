@@ -1,16 +1,15 @@
 """PostgreSQL integration tests for member nominees (db/31d) and the nominee
 rules (db/49a): nominee is a member of the same organisation, not self, ACTIVE
 or APPLIED, no duplicate active nomination, MEMBER_RULES / NOMINATIONS limits,
-row versions, and the loan-type NOMINEE rule (everyLoan, thresholdAmount)."""
+row versions. The loan-type NOMINEE rule and its timing are tested in
+test_nominee_timing_db.py."""
 
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 
 import pytest
 
-from app.services.loans import LoanService
 from tests.integration.loan_harness import LoanDb, run_db
 
 pytestmark = pytest.mark.postgres
@@ -132,48 +131,6 @@ def test_row_versions_and_status_rules():
     run_db(scenario)
 
 
-def test_every_new_loan_needs_an_active_nominee_and_threshold_is_evaluated():
-    async def scenario(db: LoanDb):
-        t = await db.new_tenant()
-        await db.act(t, "EMP", t.d0)
-        service = LoanService(db.conn)
-        later_loan = await service.eligibility(
-            member_id=t.members["A"], loan_type_id=t.loan_types["INTEREST_BEARING"],
-            requested_amount=Decimal("12000.00"), requested_tenure_months=12, first_loan=False)
-        assert later_loan["nominee_required"] is True                     # NOMINEE.everyLoan from template v2
-
-        # A nominee that became inactive no longer counts at submission.
-        loan = await db.create_loan(t, "A")
-        await db.conn.execute("UPDATE mbr.nominee SET status='INACTIVE' WHERE id=%s", (t.nominees["A"],))
-        await db.act(t, "EMP", t.d0)
-        await db.app_fails("NOMINEE_REQUIRED", lambda: service.submit_application(loan["id"]))
-
-        # thresholdAmount: switch the loan type to "nominee from 10000" only.
-        rs = await db.val("SELECT rule_set_id FROM loan.loan_type WHERE id=%s", (t.loan_types["INTEREST_BEARING"],))
-        current = await db.row("SELECT definition, json_schema_id, version_no FROM cfg.rule_set_version "
-                               "WHERE id = cfg.rule_set_version_at(%s,%s)", (rs, t.d0))
-        rules = [dict(r, value={"everyLoan": False, "firstLoan": False, "thresholdAmount": 10000})
-                 if r["code"] == "NOMINEE" else r for r in current["definition"]["rules"]]
-        await db.conn.execute(
-            """INSERT INTO cfg.rule_set_version (tenant_id, rule_set_id, version_no, status, definition, json_schema_id,
-                                                 effective_from, reason, source)
-               VALUES (%s,%s,%s,'PUBLISHED',%s::jsonb,%s,%s,'Threshold test','DESIGNER')""",
-            (t.id, rs, current["version_no"] + 1, json.dumps(dict(current["definition"], rules=rules)),
-             current["json_schema_id"], t.d0))
-        await db.act(t, "EMP", t.d0)
-
-        async def needs(amount: str) -> bool:
-            result = await service.eligibility(
-                member_id=t.members["B"], loan_type_id=t.loan_types["INTEREST_BEARING"],
-                requested_amount=Decimal(amount), requested_tenure_months=12, first_loan=True)
-            return result["nominee_required"]
-
-        assert await needs("12000.00") is True
-        assert await needs("6000.00") is False
-
-    run_db(scenario)
-
-
 def test_new_organisations_get_the_nominee_rules_from_templates():
     async def scenario(db: LoanDb):
         t = await db.new_tenant()
@@ -183,7 +140,8 @@ def test_new_organisations_get_the_nominee_rules_from_templates():
                  JOIN cfg.rule_set_version v ON v.id = cfg.rule_set_version_at(lt.rule_set_id, %s)
                  CROSS JOIN LATERAL jsonb_array_elements(v.definition->'rules') r
                 WHERE lt.id=%s AND r->>'code'='NOMINEE'""", (t.d0, t.loan_types["INTEREST_BEARING"]))
-        assert rule["everyLoan"] is True
+        assert rule["conditions"]["thresholdAmount"] == 100000      # db/49b (first loan / amount / past default)
+        assert "everyLoan" not in rule
         scope = await db.val("SELECT scope_type FROM cfg.rule_set WHERE tenant_id=%s AND code='MEMBER_RULES'", (t.id,))
         assert scope == "GENERAL"
 

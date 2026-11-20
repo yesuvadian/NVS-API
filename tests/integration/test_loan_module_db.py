@@ -142,9 +142,14 @@ def test_submit_negative():
         await db.act(t, "EMP", t.d0)
         service = LoanService(db.conn)
         await db.app_fails("LOAN_APPLICATION_NOT_FOUND", lambda: service.submit_application(uuid4()))
+        # Workflow v2: the nominee is checked at approval, not at submission.
         no_nominee = await db.create_loan(t, "A", nominee=False)
         await db.act(t, "EMP", t.d0)
-        await db.app_fails("NOMINEE_REQUIRED", lambda: service.submit_application(no_nominee["id"]))
+        await service.submit_application(no_nominee["id"])
+        request = await db.val("SELECT approval_request_id FROM loan.loan WHERE id=%s", (no_nominee["id"],))
+        await db.act(t, "MGR", t.d0)
+        await db.app_fails("NOMINEE_REQUIRED", lambda: service.decide(request, {"decision": "APPROVED"}))
+        await db.act(t, "EMP", t.d0)
         loan = await db.create_loan(t, "B")
         await db.conn.execute("UPDATE mbr.member SET loan_eligibility='RESTRICTED' WHERE id=%s", (t.members["B"],))
         await db.act(t, "EMP", t.d0)
@@ -816,7 +821,7 @@ def test_http_privileges_by_role():
         assert created.status_code == 201 and created.json()["status"] == "DRAFT"
         released = await api.call("MGR", "POST", f"/loans/{approved}/disbursements/{prepared['disbursement_id']}/release",
                                   json={"payee_ack_type": "SIGNATURE"})
-        assert released.status_code == 200 and released.json()["status"] == "PAID"
+        assert released.status_code == 200 and released.json()["status"] == "PAID", released.text
     run_db(scenario)
 
 

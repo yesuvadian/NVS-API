@@ -1,7 +1,6 @@
-"""PostgreSQL integration tests for the nominee override (db/31f):
-privilege loan.nominee_override with a mandatory reason, for loan submission
-without a nominee and for nominations beyond NOMINATIONS.maxPerPerson; the
-rule switch allowOverride; audit; approver-visible override; default grants."""
+"""PostgreSQL integration tests for the nominee override (db/31f): default
+grants, and nominations beyond NOMINATIONS.maxPerPerson with a reason. The
+loan-side override (at approval) is tested in test_nominee_timing_db.py."""
 
 from __future__ import annotations
 
@@ -9,7 +8,6 @@ import json
 
 import pytest
 
-from app.services.loans import LoanService
 from tests.integration.loan_harness import LoanDb, run_db
 
 pytestmark = pytest.mark.postgres
@@ -53,63 +51,6 @@ def test_default_grant_is_manager_only():
         in_ceiling = await db.val("SELECT count(*) FROM platform.tenant_privilege_ceiling WHERE tenant_id=%s "
                                   "AND privilege_code=%s", (t.id, OVERRIDE))
         assert in_ceiling == 1                     # grantable to any role through Roles & privileges
-
-    run_db(scenario)
-
-
-def test_loan_submission_override_paths():
-    async def scenario(db: LoanDb):
-        t = await db.new_tenant()
-        service = LoanService(db.conn)
-        loan = await db.create_loan(t, "A", nominee=False)
-
-        # No privilege: the nominee rule applies, a reason does not help.
-        await db.act(t, "EMP", t.d0)
-        await db.app_fails("NOMINEE_REQUIRED", lambda: service.submit_application(loan["id"], "No family"))
-
-        await grant(db, t, "EMP")
-        await db.act(t, "EMP", t.d0)
-        await db.app_fails("NOMINEE_OVERRIDE_REASON_REQUIRED", lambda: service.submit_application(loan["id"]))
-        await db.app_fails("NOMINEE_OVERRIDE_REASON_REQUIRED", lambda: service.submit_application(loan["id"], " x "))
-
-        submitted = await service.submit_application(loan["id"], "  Member has no living relatives  ")
-        assert submitted["status"] in {"UNDER_APPROVAL", "FEE_PENDING", "SUBMITTED"}
-        assert submitted["nominee_override"] is True
-        assert submitted["nominee_override_reason"] == "Member has no living relatives"
-        assert submitted["nominee_override_by"] == t.users["EMP"]
-
-        audit = await db.row("""SELECT reason, reference_type, user_id FROM audit.audit_event
-                                 WHERE tenant_id=%s AND entity_table='loan' AND reference_type='NOMINEE_OVERRIDE'
-                                 ORDER BY id DESC LIMIT 1""", (t.id,))
-        assert audit["reason"] == "Nominee rule overridden: Member has no living relatives"
-        assert audit["user_id"] == t.users["EMP"]
-
-        # The approver sees the override in the loan and in the inbox.
-        await db.act(t, "MGR", t.d0)
-        detail = await service.get_application(loan["id"])
-        assert detail["nominee_override"] is True and detail["nominee_override_by_name"] == "Test EMP"
-        inbox = await service.approval_inbox(limit=50, offset=0)
-        mine = [i for i in inbox["items"] if i["loan_id"] == loan["id"]]
-        assert mine and mine[0]["nominee_override"] is True
-        assert mine[0]["nominee_override_reason"] == "Member has no living relatives"
-
-    run_db(scenario)
-
-
-def test_allow_override_false_refuses_even_with_privilege():
-    async def scenario(db: LoanDb):
-        t = await db.new_tenant()
-        rs = await db.val("SELECT rule_set_id FROM loan.loan_type WHERE id=%s", (t.loan_types["INTEREST_BEARING"],))
-        await db.act(t, None, t.d0)
-        await publish_rule(db, t, rs, "NOMINEE", {"allowOverride": False})
-        loan = await db.create_loan(t, "A", nominee=False)
-        await grant(db, t, "EMP")
-        await db.act(t, "EMP", t.d0)
-        service = LoanService(db.conn)
-        await db.app_fails("NOMINEE_OVERRIDE_NOT_ALLOWED",
-                           lambda: service.submit_application(loan["id"], "Member has no family"))
-        detail = await service.get_application(loan["id"])
-        assert detail["nominee_override"] is False and detail["status"] == "DRAFT"
 
     run_db(scenario)
 

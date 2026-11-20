@@ -40,6 +40,26 @@ class LoanDecision(BaseModel):
     reason: str | None = Field(default=None, max_length=1000)
     approved_amount: Decimal | None = Field(default=None, gt=0, decimal_places=2, max_digits=18)
     tenure_months: int | None = Field(default=None, gt=0, le=600)
+    # Approver holding loan.nominee_override: approve although the NOMINEE rule
+    # is not met (reason stored and audited; the rule must allow overrides).
+    nominee_override_reason: str | None = Field(default=None, max_length=500)
+
+
+class LoanNomineesUpdate(BaseModel):
+    nominee_ids: list[UUID] = Field(default_factory=list, max_length=10)
+
+
+class LoanNomineeOverride(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class LoanCriterion(BaseModel):
+    code: str
+    label_key: str
+    required: bool
+    met: bool | None = None
+    detail: dict = Field(default_factory=dict)
+    stage: str | None = None
 
 
 class LoanDisbursementCreate(BaseModel):
@@ -93,6 +113,10 @@ class LoanEligibilityOut(BaseModel):
     first_loan: bool
     nominee_required: bool
     nominee_override_allowed: bool = True
+    nominee_required_because: list[str] = Field(default_factory=list)
+    nominee_threshold_amount: Decimal | None = None
+    nominee_default_loan_no: str | None = None
+    criteria: list[LoanCriterion] = Field(default_factory=list)
     guarantors_required: int = 0
     application_fee: Decimal
     fee_timing: str | None = None
@@ -102,13 +126,6 @@ class LoanEligibilityOut(BaseModel):
     estimated_instalment_amount: Decimal
     total_repayable: Decimal
     rule_set_version_id: UUID
-
-
-class LoanSubmit(BaseModel):
-    """Optional body of POST /loans/{id}/submit."""
-
-    # Holders of loan.nominee_override: why the loan goes without a nominee.
-    nominee_override_reason: str | None = Field(default=None, max_length=500)
 
 
 class LoanOut(BaseModel):
@@ -143,6 +160,8 @@ class LoanOut(BaseModel):
     nominee_override_by: UUID | None = None
     nominee_override_by_name: str | None = None
     nominee_override_at: datetime | None = None
+    nominee_status: dict | None = None
+    criteria: list[LoanCriterion] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime | None = None
     row_version: int

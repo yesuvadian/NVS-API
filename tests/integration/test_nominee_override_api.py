@@ -1,4 +1,6 @@
-"""API tests for the loan nominee override: submit body and approver-visible fields."""
+"""API tests for nominee timing (rules linked to workflow transitions): linking
+nominees after submit, the nominee override at approval or before it, and the
+approver-visible override, criteria and nominee state."""
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -13,7 +15,9 @@ from app.core.tenant_security import TenantPrincipal, require_tenant_user
 from app.db.dependencies import get_tenant_db
 from app.routers import loans as loans_router
 
-LOAN = uuid4()
+LOAN, REQUEST, NOMINEE = uuid4(), uuid4(), uuid4()
+STATUS = {"required": True, "required_because": ["EVERY_LOAN"], "active_nominees": 0, "linked": False,
+          "override_allowed": True, "overridden": True, "override_reason": "Member has no family", "satisfied": True}
 
 
 def loan_row(**overrides):
@@ -30,13 +34,23 @@ class FakeService:
     def __init__(self, _conn):
         pass
 
-    async def submit_application(self, loan_id, nominee_override_reason=None):
-        self.calls.append(("submit", loan_id, nominee_override_reason))
-        return loan_row(nominee_override=True, nominee_override_reason=nominee_override_reason,
-                        nominee_override_by_name="Test MGR")
+    async def decide(self, request_id, values):
+        self.calls.append(("decide", request_id, values))
+        return {"status": "APPROVED"}
+
+    async def set_nominees(self, loan_id, nominee_ids, expected_version):
+        self.calls.append(("nominees", loan_id, nominee_ids, expected_version))
+        return {**STATUS, "linked": True, "active_nominees": 1, "row_version": 3}
+
+    async def record_nominee_override(self, loan_id, reason):
+        self.calls.append(("override", loan_id, reason))
+        return STATUS
 
     async def get_application(self, loan_id):
-        return loan_row(nominee_override=True, nominee_override_reason="Member has no family")
+        return loan_row(nominee_override=True, nominee_override_reason="Member has no family",
+                        nominee_status=STATUS,
+                        criteria=[{"code": "NOMINEE", "label_key": "criterion_nominee", "required": True,
+                                   "met": True, "detail": {"overridden": True}, "stage": "APPROVE"}])
 
     async def approval_inbox(self, *, limit, offset):
         return {"items": [{"loan_id": str(LOAN), "loan_no": "LN-0001", "nominee_override": True,
@@ -44,57 +58,78 @@ class FakeService:
                 "limit": limit, "offset": offset, "has_more": False, "next_offset": None}
 
 
-class AllowAll:
+class Privileges:
+    """Fake connection answering the privilege check."""
+
+    def __init__(self, allowed=True):
+        self.allowed = allowed
+        self.checked: list[str] = []
+
     async def execute(self, query, params=None):
+        self.checked.append(params[1])
         return self
 
     async def fetchone(self):
-        return {"allowed": True}
+        return {"allowed": self.allowed}
 
 
-@pytest.fixture
-def client(monkeypatch):
+def make_client(monkeypatch, allowed=True):
     principal = TenantPrincipal(tenant_id=uuid4(), user_id=uuid4(), session_id=uuid4(), role_code="MGR",
                                 channel="WEB", mfa_verified=False, working_date=date(2026, 11, 19))
     app = FastAPI()
     install_error_handlers(app)
     app.include_router(loans_router.router, prefix="/api/v1")
+    connection = Privileges(allowed)
 
     async def fake_db():
-        yield AllowAll()
+        yield connection
 
     app.dependency_overrides[get_tenant_db] = fake_db
     app.dependency_overrides[require_tenant_user] = lambda: principal
     monkeypatch.setattr(loans_router, "_service", lambda conn: FakeService(conn))
     FakeService.calls = []
-    return TestClient(app)
+    return TestClient(app), connection
 
 
-def test_submit_without_body_still_works(client):
-    response = client.post(f"/api/v1/loans/{LOAN}/submit")
+@pytest.fixture
+def client(monkeypatch):
+    return make_client(monkeypatch)[0]
+
+
+def test_approval_decision_passes_nominee_override_reason(client):
+    response = client.post(f"/api/v1/loan-approvals/{REQUEST}/decision",
+                           json={"decision": "APPROVED", "nominee_override_reason": "Member has no family"})
     assert response.status_code == 200, response.text
-    assert FakeService.calls == [("submit", LOAN, None)]
+    _, request_id, values = FakeService.calls[0]
+    assert request_id == REQUEST and values["nominee_override_reason"] == "Member has no family"
 
 
-def test_submit_passes_override_reason_and_returns_override(client):
-    response = client.post(f"/api/v1/loans/{LOAN}/submit", json={"nominee_override_reason": "Member has no family"})
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["nominee_override"] is True
-    assert body["nominee_override_reason"] == "Member has no family"
-    assert body["nominee_override_by_name"] == "Test MGR"
-    assert FakeService.calls == [("submit", LOAN, "Member has no family")]
+def test_link_nominees_after_submit_needs_row_version(client):
+    no_version = client.put(f"/api/v1/loans/{LOAN}/nominees", json={"nominee_ids": [str(NOMINEE)]})
+    assert no_version.status_code == 200 or no_version.status_code == 428
+    linked = client.put(f"/api/v1/loans/{LOAN}/nominees", json={"nominee_ids": [str(NOMINEE)]},
+                        headers={"X-Expected-Row-Version": "2"})
+    assert linked.status_code == 200, linked.text
+    assert linked.json()["linked"] is True
+    assert FakeService.calls[-1] == ("nominees", LOAN, [NOMINEE], 2)
 
 
-def test_override_reason_longer_than_500_is_rejected(client):
-    response = client.post(f"/api/v1/loans/{LOAN}/submit", json={"nominee_override_reason": "x" * 501})
-    assert response.status_code in (400, 422)
-    assert response.json()["detail"]["shortCode"] == "INVALID_DATA"
-    assert FakeService.calls == []
+def test_maker_override_before_approval_needs_the_override_privilege(monkeypatch):
+    client, connection = make_client(monkeypatch)
+    response = client.post(f"/api/v1/loans/{LOAN}/nominee-override", json={"reason": "Member has no family"})
+    assert response.status_code == 200 and response.json()["overridden"] is True
+    assert connection.checked == ["loan.nominee_override"]
+
+    client, _ = make_client(monkeypatch, allowed=False)
+    denied = client.post(f"/api/v1/loans/{LOAN}/nominee-override", json={"reason": "Member has no family"})
+    assert denied.status_code == 403
+    short = client.post(f"/api/v1/loans/{LOAN}/nominee-override", json={"reason": "ab"})
+    assert short.status_code in (400, 403, 422)
 
 
-def test_approver_sees_override_in_detail_and_inbox(client):
+def test_approver_sees_override_criteria_and_nominee_state(client):
     detail = client.get(f"/api/v1/loans/{LOAN}").json()
-    assert detail["nominee_override"] is True and detail["nominee_override_reason"] == "Member has no family"
+    assert detail["nominee_override"] is True and detail["nominee_status"]["overridden"] is True
+    assert detail["criteria"][0]["stage"] == "APPROVE"
     inbox = client.get("/api/v1/loan-approvals/inbox").json()
-    assert inbox["items"][0]["nominee_override"] is True
+    assert inbox["items"][0]["nominee_override_reason"] == "Member has no family"

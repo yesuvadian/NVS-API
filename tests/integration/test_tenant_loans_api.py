@@ -170,6 +170,7 @@ def test_eligibility_quotes_flat_interest_and_checks_overdue_loans(loan_api, ove
             FakeResult(one=member),
             FakeResult(one=default_settings()),
             FakeResult(one={"exposure": None}),
+            FakeResult(one=None),                                   # loan.get_current_workflow
         ]
     )
 
@@ -189,6 +190,11 @@ def test_eligibility_quotes_flat_interest_and_checks_overdue_loans(loan_api, ove
     assert Decimal(result["estimated_total_interest"]) == Decimal("14400.00")
     assert Decimal(result["estimated_instalment_amount"]) == Decimal("11200.00")
     assert result["nominee_required"] is True
+    # Criteria list for the UI (legacy workflow: everything checked at SUBMIT).
+    codes = {c["code"]: c for c in result["criteria"]}
+    assert codes["OVERDUE_DUES"]["met"] is (not overdue)
+    assert codes["NOMINEE"]["required"] is True and codes["NOMINEE"]["met"] is None
+    assert codes["AMOUNT_LIMITS"]["stage"] == "SUBMIT"
 
 
 def test_submit_creates_manager_approval_request_and_task(loan_api):
@@ -209,13 +215,14 @@ def test_submit_creates_manager_approval_request_and_task(loan_api):
             FakeResult(one={"allowed": True}),
             FakeResult(one=loan),
             FakeResult(many=[]),                                    # loan.get_nominee_overrides
+            FakeResult(one=workflow),                               # loan's workflow version (legacy)
             FakeResult(one=product),
             FakeResult(one=member),
             FakeResult(one=default_settings()),
             FakeResult(one={"exposure": None}),
+            FakeResult(one={"result": {"satisfied": True}}),        # loan.nominee_status
             FakeResult(one={"result": []}),
             FakeResult(one=None),
-            FakeResult(one=workflow),
             FakeResult(one={"approval_request_id": approval_request_id}),
             FakeResult(one=loan_row(status="UNDER_APPROVAL", member_id=loan["member_id"], loan_type_id=loan["loan_type_id"])),
             FakeResult(many=[]),                                    # loan.get_nominee_overrides

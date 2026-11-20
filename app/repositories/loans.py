@@ -91,10 +91,39 @@ class LoanRepository:
         )).fetchone()
         return bool(row and row["allowed"])
 
-    async def record_nominee_override(self, loan_id: UUID, reason: str, allowed: bool) -> None:
-        await self.conn.execute(
-            "SELECT loan.record_nominee_override(%s,%s,%s)", (loan_id, reason, allowed)
-        )
+    async def record_nominee_override(self, loan_id: UUID, reason: str) -> dict[str, Any]:
+        row = await (await self.conn.execute(
+            "SELECT loan.record_nominee_override(%s,%s) AS result", (loan_id, reason)
+        )).fetchone()
+        return row["result"]
+
+    async def nominee_status(self, loan_id: UUID) -> dict[str, Any]:
+        row = await (await self.conn.execute(
+            "SELECT loan.nominee_status(%s) AS result", (loan_id,)
+        )).fetchone()
+        return row["result"]
+
+    async def set_application_nominees(
+        self, loan_id: UUID, nominee_ids: list[UUID], expected_version: int
+    ) -> dict[str, Any]:
+        row = await (await self.conn.execute(
+            "SELECT loan.set_application_nominees(%s,%s::uuid[],%s) AS result",
+            (loan_id, list(nominee_ids), expected_version),
+        )).fetchone()
+        return row["result"]
+
+    async def member_past_default(self, member_id: UUID, lookback_months: int | None) -> str | None:
+        """Loan number of the member's current or recent default (db/31g)."""
+        row = await (await self.conn.execute(
+            "SELECT loan.member_past_default(%s,%s) AS loan_no", (member_id, lookback_months)
+        )).fetchone()
+        return row["loan_no"] if row else None
+
+    async def loan_for_approval_request(self, request_id: UUID) -> UUID | None:
+        row = await (await self.conn.execute(
+            "SELECT loan.loan_for_approval_request(%s) AS loan_id", (request_id,)
+        )).fetchone()
+        return row["loan_id"] if row else None
 
     async def application_nominee_count(self, loan_id: UUID) -> int:
         cursor = await self.conn.execute(
